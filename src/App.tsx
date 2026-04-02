@@ -20,10 +20,11 @@ export default function App() {
       return;
     }
 
+    // Ищем сотрудника по auth_uid (связь с таблицей auth.users)
     const { data, error } = await supabase
       .from('employees')
       .select('id, full_name, age, access_level')
-      .eq('email', user.email)
+      .eq('auth_uid', user.id)   // ← заменили email на auth_uid
       .single();
 
     if (data) {
