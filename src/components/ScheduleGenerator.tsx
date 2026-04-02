@@ -6,7 +6,7 @@ import {
   Loader2, Wand2, Save, GripVertical,
   Plus, X, CheckSquare, Square, Info, AlertCircle
 } from 'lucide-react';
-import { format, addDays, parseISO } from 'date-fns';
+import { format, addDays, parseISO, isWeekend } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
 // Структура для одной записи в сгенерированном графике
@@ -23,6 +23,7 @@ interface ScheduleEntry {
 interface ScheduleAttractionRow {
   attractionId: number;
   attractionName: string;
+  minStaffRequired: number; // минимальное количество сотрудников для текущего дня
   employees: ScheduleEntry[];
 }
 
@@ -37,7 +38,7 @@ interface ScheduleGeneratorProps {
   isSuperAdmin?: boolean;
 }
 
-// SQL для создания таблицы work_schedules (для справки в UI)
+// SQL для создания таблицы work_schedules (для справки)
 const SCHEDULE_TABLE_SQL = `
 CREATE TABLE work_schedules (
   id            SERIAL PRIMARY KEY,
@@ -63,7 +64,7 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
   const [startDate, setStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [daysCount, setDaysCount] = useState<number>(1);
   const [selectedAttractionIds, setSelectedAttractionIds] = useState<Set<number>>(new Set());
-  const [minStaffPerAttraction, setMinStaffPerAttraction] = useState<number>(1);
+  const [minStaffPerAttraction, setMinStaffPerAttraction] = useState<number>(1); // запасной минимум
 
   // Результат
   const [schedule, setSchedule] = useState<ScheduleDay[]>([]);
@@ -74,9 +75,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showSqlInfo, setShowSqlInfo] = useState(false);
 
-  // Drag & Drop состояние (зарезервировано для расширения)
-  // const [dragging, setDragging] = useState<...>(null);
-
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -84,13 +82,17 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
   const fetchInitialData = async () => {
     setLoading(true);
 
-    const { data: attrData } = await supabase
+    // Запрашиваем актуальные поля из таблицы attractions
+    const { data: attrData, error: attrError } = await supabase
       .from('attractions')
-      .select('id, name, min_staff, max_staff')
+      .select('id, name, min_staff_weekday, min_staff_weekend')
       .order('name');
-    if (attrData) {
+    if (attrError) {
+      console.error('Ошибка загрузки аттракционов:', attrError);
+    } else if (attrData) {
       setAttractions(attrData);
-      setSelectedAttractionIds(new Set(attrData.map((a: Attraction) => a.id)));
+      // По умолчанию выбираем все аттракционы
+      setSelectedAttractionIds(new Set(attrData.map((a: any) => a.id)));
     }
 
     const { data: empData } = await supabase
@@ -137,13 +139,15 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
     const shifts = await fetchShiftsForDates(dates);
     setAvailableShifts(shifts);
 
-    const selectedAttractions = attractions.filter(a => selectedAttractionIds.has(a.id));
+    const selectedAttractionsFull = attractions.filter(a => selectedAttractionIds.has(a.id));
 
     const newSchedule: ScheduleDay[] = [];
     const allUnassigned: ScheduleEntry[] = [];
 
     for (const date of dates) {
       const dayShifts = shifts.filter(s => s.work_date === date);
+      const currentDate = parseISO(date);
+      const isWeekendDay = isWeekend(currentDate);
 
       // Все сотрудники, доступные в этот день
       const availableEmployees: ScheduleEntry[] = dayShifts.map(s => {
@@ -157,52 +161,65 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
         };
       });
 
-      // Распределяем сотрудников по аттракционам
-      const rows: ScheduleAttractionRow[] = selectedAttractions.map(attr => ({
-        attractionId: attr.id,
-        attractionName: attr.name,
-        employees: [],
-      }));
-
-      // Простой алгоритм: round-robin распределение
-      const shuffled = [...availableEmployees].sort(() => Math.random() - 0.5);
-      let attrIndex = 0;
-      const usedEmployeeIds = new Set<number>();
-      const dayUnassigned: ScheduleEntry[] = [];
-
-      for (const entry of shuffled) {
-        if (rows.length === 0) {
-          dayUnassigned.push(entry);
-          continue;
+      // Подготавливаем строки для аттракционов с требуемым минимумом
+      const rows: ScheduleAttractionRow[] = selectedAttractionsFull.map(attr => {
+        let minRequired = 1;
+        if (isWeekendDay) {
+          minRequired = (attr as any).min_staff_weekend ?? 1;
+        } else {
+          minRequired = (attr as any).min_staff_weekday ?? 1;
         }
-        // Ищем аттракцион, которому нужен сотрудник
+        // Если в настройках указан общий минимум, берём максимум
+        if (minStaffPerAttraction > minRequired) minRequired = minStaffPerAttraction;
+        return {
+          attractionId: attr.id,
+          attractionName: attr.name,
+          minStaffRequired: minRequired,
+          employees: [],
+        };
+      });
+
+      // Простой алгоритм распределения: сначала заполняем обязательный минимум, потом остальных
+      // Копируем список доступных сотрудников
+      let remainingEmployees = [...availableEmployees];
+      // Сначала обеспечиваем минимум для каждого аттракциона
+      for (const row of rows) {
+        for (let i = 0; i < row.minStaffRequired && remainingEmployees.length > 0; i++) {
+          const emp = remainingEmployees.shift();
+          if (emp) row.employees.push(emp);
+        }
+      }
+      // Затем оставшихся распределяем равномерно (round-robin) по всем аттракционам
+      let attrIndex = 0;
+      while (remainingEmployees.length > 0) {
+        const emp = remainingEmployees.shift();
+        if (!emp) break;
+        // Ищем аттракцион, который ещё не превысил разумный максимум (например, 5)
         let assigned = false;
         for (let attempt = 0; attempt < rows.length; attempt++) {
           const row = rows[(attrIndex + attempt) % rows.length];
-          const maxStaff = attractions.find(a => a.id === row.attractionId)?.max_staff ?? 3;
+          const maxStaff = 5; // временное ограничение, можно позже добавить поле в таблицу
           if (row.employees.length < maxStaff) {
-            row.employees.push(entry);
-            usedEmployeeIds.add(entry.employeeId);
+            row.employees.push(emp);
             attrIndex = (attrIndex + 1) % rows.length;
             assigned = true;
             break;
           }
         }
         if (!assigned) {
-          dayUnassigned.push(entry);
+          allUnassigned.push(emp);
         }
       }
 
       newSchedule.push({ date, rows });
-      allUnassigned.push(...dayUnassigned.filter(e => !usedEmployeeIds.has(e.employeeId)));
     }
 
-    setSchedule(newSchedule);
     // Дедупликация unassigned по employeeId
     const uniqueUnassigned = allUnassigned.filter(
       (e, i, arr) => arr.findIndex(x => x.employeeId === e.employeeId) === i
     );
     setUnassigned(uniqueUnassigned);
+    setSchedule(newSchedule);
     setIsGenerated(true);
     setGenerating(false);
 
@@ -254,7 +271,7 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
     setUnassigned(prev => prev.filter(e => e.employeeId !== employeeId));
   };
 
-  // Перемещение между ячейками
+  // Перемещение между ячейками (упрощённо — не используется в текущем UI, но оставлено)
   const moveBetweenAttractions = (
     employeeId: number,
     fromDate: string, fromAttractionId: number,
@@ -294,7 +311,7 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
   const handleSaveSchedule = async () => {
     setSaving(true);
     try {
-      const entries: object[] = [];
+      const entries: any[] = [];
       for (const day of schedule) {
         for (const row of day.rows) {
           for (const emp of row.employees) {
@@ -311,7 +328,11 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
         }
       }
 
-      // Попытка вставки (таблица может ещё не существовать)
+      if (entries.length === 0) {
+        alert('Нет данных для сохранения');
+        return;
+      }
+
       const { error } = await supabase.from('work_schedules').insert(entries);
       if (error) {
         console.error(error);
@@ -324,6 +345,7 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
           `График сохранён: ${schedule.length} дней, ${entries.length} записей`
         );
         setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
       }
     } finally {
       setSaving(false);
@@ -363,9 +385,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
         <div className="bg-gray-900 text-green-300 rounded-xl p-4 text-xs font-mono overflow-x-auto">
           <div className="text-gray-400 mb-2 font-sans text-sm">Предлагаемая структура таблицы <strong className="text-white">work_schedules</strong>:</div>
           <pre>{SCHEDULE_TABLE_SQL}</pre>
-          <div className="mt-3 text-gray-400 font-sans text-xs">
-            Колонки: <span className="text-yellow-300">id, schedule_date, attraction_id, employee_id, work_start, work_end, is_full_day, created_by, created_at, notes</span>
-          </div>
         </div>
       )}
 
@@ -396,7 +415,7 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Мин. сотрудников / аттракцион</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Мин. сотрудников / аттракцион (доп.)</label>
             <input
               type="number"
               min={1}
@@ -405,6 +424,7 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
               onChange={e => setMinStaffPerAttraction(Number(e.target.value))}
               className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
             />
+            <p className="text-xs text-gray-400 mt-1">Будет использовано максимум из указанного в БД и этого значения</p>
           </div>
         </div>
 
@@ -525,10 +545,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: ScheduleGen
                         unassigned={unassigned}
                         onRemoveEmployee={(empId) => moveToUnassigned(day.date, row.attractionId, empId)}
                         onAddFromUnassigned={(empId) => moveFromUnassigned(empId, day.date, row.attractionId)}
-                        schedule={schedule}
-                        onMoveBetween={(empId, fromAttr, toDate, toAttr) =>
-                          moveBetweenAttractions(empId, day.date, fromAttr, toDate, toAttr)
-                        }
                       />
                     ))}
                   </tbody>
@@ -590,8 +606,6 @@ interface ScheduleRowProps {
   unassigned: ScheduleEntry[];
   onRemoveEmployee: (empId: number) => void;
   onAddFromUnassigned: (empId: number) => void;
-  schedule: ScheduleDay[];
-  onMoveBetween: (empId: number, fromAttr: number, toDate: string, toAttr: number) => void;
 }
 
 function ScheduleRow({ row, unassigned, onRemoveEmployee, onAddFromUnassigned }: ScheduleRowProps) {
@@ -604,10 +618,10 @@ function ScheduleRow({ row, unassigned, onRemoveEmployee, onAddFromUnassigned }:
           <span className="w-2 h-2 bg-purple-400 rounded-full flex-shrink-0"></span>
           {row.attractionName}
         </div>
-        {row.employees.length === 0 && (
+        {row.employees.length < row.minStaffRequired && (
           <div className="mt-1 text-xs text-red-500 flex items-center gap-1">
             <AlertCircle className="h-3 w-3" />
-            Нет сотрудников
+            Нужно минимум {row.minStaffRequired} сотрудников
           </div>
         )}
       </td>
@@ -669,7 +683,7 @@ function ScheduleRow({ row, unassigned, onRemoveEmployee, onAddFromUnassigned }:
                           {emp.employeeName}
                           {!emp.isFullDay && (
                             <span className="text-gray-400 text-xs">
-                              {emp.startTime?.slice(0, 5)}–{emp.endTime?.slice(0, 5)}
+                              {emp.startTime?.slice(0,5)}–{emp.endTime?.slice(0,5)}
                             </span>
                           )}
                         </button>
@@ -693,5 +707,3 @@ function ScheduleRow({ row, unassigned, onRemoveEmployee, onAddFromUnassigned }:
     </tr>
   );
 }
-
-
