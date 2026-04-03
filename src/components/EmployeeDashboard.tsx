@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from './lib/supabase';
-import { logActivity } from './lib/activityLog';
-import { UserProfile, Shift, Priority } from './types';
-import { Loader2, Calendar, Trash2, Star, Map as MapIcon, ChevronLeft, ChevronRight, AlertCircle, Clock, X, Info, LayoutGrid, List, MessageSquare } from 'lucide-react';
-import { format, isBefore, startOfDay, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
-import { getRandomGreeting } from './utils/greetings';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../lib/activityLog';
+import { UserProfile, Shift, Priority } from '../types';
+import { getRandomGreeting } from '../utils/greetings';
+import { format, isBefore, startOfDay, parseISO } from 'date-fns';
+import { 
+  Loader2, Calendar, Star, Map, ChevronLeft, ChevronRight,
+  Plus, Trash2, X, AlertCircle, Clock, FileText
+} from 'lucide-react';
 
-// --- Constants ---
+// Доступные месяцы
 const AVAILABLE_MONTHS = [
   { value: 3, label: 'Апрель', year: 2025 },
   { value: 4, label: 'Май', year: 2025 },
@@ -16,9 +19,38 @@ const AVAILABLE_MONTHS = [
   { value: 8, label: 'Сентябрь', year: 2025 },
 ];
 
+// Временные интервалы для неполной смены (шаг 15 минут)
+const START_TIMES = (() => {
+  const times: string[] = [];
+  for (let h = 10; h <= 20; h++) {
+    for (let m of [0, 15, 30, 45]) {
+      if (h === 20 && m > 0) continue;
+      times.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    }
+  }
+  return times;
+})();
+
+const END_TIMES = (() => {
+  const times: string[] = [];
+  for (let h = 12; h <= 23; h++) {
+    for (let m of [0, 15, 30, 45]) {
+      if (h === 23 && m > 0) continue;
+      times.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    }
+  }
+  return times;
+})();
+
+// Вспомогательные функции
 function getYearForMonth(monthIndex: number): number {
   const m = AVAILABLE_MONTHS.find(m => m.value === monthIndex);
   return m?.year ?? new Date().getFullYear();
+}
+
+function formatDateStr(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-');
+  return `${d}.${m}.${y}`;
 }
 
 function canDeleteShift(shift: Shift): { allowed: boolean; reason?: string } {
@@ -28,7 +60,7 @@ function canDeleteShift(shift: Shift): { allowed: boolean; reason?: string } {
   const shiftDay = startOfDay(shiftDate);
 
   if (isBefore(shiftDay, today) || shiftDay.getTime() === today.getTime()) {
-    return { allowed: false, reason: 'Нельзя удалить прошедшую смену' };
+    return { allowed: false, reason: 'Нельзя удалить прошедшую или текущую смену' };
   }
 
   const startTimeStr = shift.is_full_day ? '00:00:00' : (shift.start_time || '00:00:00');
@@ -38,84 +70,77 @@ function canDeleteShift(shift: Shift): { allowed: boolean; reason?: string } {
   if (diffHours < 22) {
     return { allowed: false, reason: 'До начала смены менее 22 часов — удаление невозможно' };
   }
+
   return { allowed: true };
 }
 
-function generateTimeOptions(minH: number, maxH: number) {
-  const opts = [];
-  for (let h = minH; h <= maxH; h++) {
-    for (const m of ['00', '15', '30', '45']) {
-      if (h === maxH && m !== '00') continue;
-      opts.push(`${h.toString().padStart(2, '0')}:${m}`);
-    }
-  }
-  return opts;
+function isDateActive(dateStr: string): boolean {
+  const now = new Date();
+  const todayStr = format(now, 'yyyy-MM-dd');
+  if (dateStr < todayStr) return false;
+  if (dateStr === todayStr && now.getHours() >= 9) return false;
+  return true;
 }
 
-const START_TIME_OPTIONS = generateTimeOptions(10, 20);
-const END_TIME_OPTIONS = generateTimeOptions(12, 23);
+interface EmployeeDashboardProps {
+  profile: UserProfile;
+}
 
-export function EmployeeDashboard({ profile }: { profile: UserProfile }) {
+export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
+  // Состояния
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [priorities, setPriorities] = useState<Priority[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
   const [greeting, setGreeting] = useState('');
-  
-  // Mobile Tab state
-  const [activeTab, setActiveTab] = useState<'info' | 'shifts' | 'form'>('shifts');
-
-  // Month
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(() => {
     const currentMonth = new Date().getMonth();
     const found = AVAILABLE_MONTHS.find(m => m.value === currentMonth);
     return found ? found.value : AVAILABLE_MONTHS[0].value;
   });
 
-  // Modal State for Add Shift
-  const [selectedDateToAdd, setSelectedDateToAdd] = useState<Date | null>(null);
-  const [shiftType, setShiftType] = useState<'full' | 'partial'>('full');
-  const [startTime, setStartTime] = useState('10:00');
-  const [endTime, setEndTime] = useState('12:00');
+  // Модальное окно
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalDate, setModalDate] = useState('');
+  const [isFullDayModal, setIsFullDayModal] = useState(true);
+  const [modalStartTime, setModalStartTime] = useState(START_TIMES[0]);
+  const [modalEndTime, setModalEndTime] = useState(END_TIMES[0]);
+  const [modalError, setModalError] = useState('');
   const [savingShift, setSavingShift] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
 
-  // Ping for footer
-  const [ping, setPing] = useState(312);
+  // Мобильные табы
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'shifts' | 'priorities' | 'form'>('dashboard');
 
+  // Живой пинг (для футера)
+  const [ping, setPing] = useState(120);
+
+  // Живые часы
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Пинг-эффект
   useEffect(() => {
-    const timer = setInterval(() => {
+    const interval = setInterval(() => {
       setPing(prev => {
-        const change = Math.floor(Math.random() * 21) - 10;
-        let next = prev + change;
-        if (next < 78) next = 78;
-        if (next > 458) next = 458;
-        return next;
+        let newPing = prev + (Math.random() * 30) - 15;
+        newPing = Math.min(458, Math.max(78, newPing));
+        return Math.round(newPing);
       });
     }, 2000);
-    return () => clearInterval(timer);
+    return () => clearInterval(interval);
   }, []);
 
+  // Приветствие
   useEffect(() => {
     if (profile.full_name) {
       setGreeting(getRandomGreeting(profile.full_name, new Date()));
     }
   }, [profile.full_name]);
 
-  useEffect(() => {
-    fetchData();
-  }, [profile.id]);
-
-  useEffect(() => {
-    closeModal();
-  }, [selectedMonthIndex]);
-
-  const fetchData = async () => {
+  // Загрузка данных
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const { data: shiftData, error: shiftError } = await supabase
       .from('employee_availability')
@@ -136,110 +161,31 @@ export function EmployeeDashboard({ profile }: { profile: UserProfile }) {
     if (prioError) console.error(prioError);
 
     setLoading(false);
-  };
+  }, [profile.id]);
 
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Смены выбранного месяца
   const shiftsForMonth = useMemo(() => {
     return shifts.filter(s => {
       const d = parseISO(s.work_date);
-      return d.getMonth() === selectedMonthIndex && d.getFullYear() === getYearForMonth(selectedMonthIndex);
+      return d.getMonth() === selectedMonthIndex;
     });
   }, [shifts, selectedMonthIndex]);
 
-  const daysInMonth = useMemo(() => {
-    const year = getYearForMonth(selectedMonthIndex);
-    const start = startOfMonth(new Date(year, selectedMonthIndex));
-    const end = endOfMonth(start);
-    return eachDayOfInterval({ start, end });
-  }, [selectedMonthIndex]);
-
+  // Множество занятых дат
   const occupiedDates = useMemo(() => new Set(shifts.map(s => s.work_date)), [shifts]);
 
-  const isDateSelectable = (date: Date) => {
-    const dateStart = startOfDay(date);
-    const todayStart = startOfDay(now);
-    
-    if (isBefore(dateStart, todayStart)) return false; 
-    
-    if (dateStart.getTime() === todayStart.getTime()) {
-      if (now.getHours() >= 9) return false;
-    }
-    return true;
-  };
-
-  const handleDateClick = (date: Date) => {
-    if (!isDateSelectable(date)) return;
-    
-    const dateStr = format(date, 'yyyy-MM-dd');
-    if (occupiedDates.has(dateStr)) {
-      alert('Смена на эту дату уже установлена');
-      return;
-    }
-    
-    setSelectedDateToAdd(date);
-    setShiftType('full');
-    setStartTime('10:00');
-    setEndTime('12:00');
-    setFormError(null);
-  };
-
-  const closeModal = () => {
-    setSelectedDateToAdd(null);
-    setFormError(null);
-  };
-
-  const handleAddShift = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDateToAdd) return;
-    
-    setFormError(null);
-    const workDate = format(selectedDateToAdd, 'yyyy-MM-dd');
-
-    if (occupiedDates.has(workDate)) {
-      setFormError('На эту дату уже установлена смена.');
-      return;
-    }
-
-    if (shiftType === 'partial' && startTime >= endTime) {
-      setFormError('Время начала должно быть раньше времени конца');
-      return;
-    }
-
-    setSavingShift(true);
-
-    const isFullDay = shiftType === 'full';
-    const newShift = {
-      employee_id: profile.id,
-      work_date: workDate,
-      is_full_day: isFullDay,
-      start_time: isFullDay ? null : startTime,
-      end_time: isFullDay ? null : endTime,
-    };
-
-    const { error } = await supabase.from('employee_availability').insert([newShift]);
-
-    if (!error) {
-      await logActivity(
-        'employee',
-        profile.id,
-        'shift_add',
-        `Сотрудник ${profile.full_name} добавил смену на ${workDate}${!isFullDay ? ` (${startTime}–${endTime})` : ' (полный день)'}`
-      );
-      closeModal();
-      await fetchData();
-    } else {
-      console.error(error);
-      setFormError('Ошибка при добавлении смены. Попробуйте ещё раз.');
-    }
-    setSavingShift(false);
-  };
-
+  // Удаление смены
   const handleDeleteShift = async (shift: Shift) => {
     const { allowed, reason } = canDeleteShift(shift);
     if (!allowed) {
       alert(reason);
       return;
     }
-    if (!window.confirm('Удалить смену?')) return;
+    if (!confirm('Удалить смену?')) return;
 
     const { error } = await supabase.from('employee_availability').delete().eq('id', shift.id);
     if (!error) {
@@ -255,28 +201,245 @@ export function EmployeeDashboard({ profile }: { profile: UserProfile }) {
     }
   };
 
+  // Открыть модалку для добавления смены на конкретную дату
+  const openModal = (dateStr: string) => {
+    if (occupiedDates.has(dateStr)) {
+      alert('На эту дату уже установлена смена. Удалите её, чтобы добавить новую.');
+      return;
+    }
+    setModalDate(dateStr);
+    setIsFullDayModal(true);
+    setModalStartTime(START_TIMES[0]);
+    setModalEndTime(END_TIMES[0]);
+    setModalError('');
+    setIsModalOpen(true);
+  };
+
+  // Добавление смены
+  const handleAddShift = async () => {
+    setModalError('');
+    if (!modalDate) return;
+
+    if (!isFullDayModal && modalStartTime >= modalEndTime) {
+      setModalError('Время окончания должно быть позже начала');
+      return;
+    }
+
+    setSavingShift(true);
+    const newShift = {
+      employee_id: profile.id,
+      work_date: modalDate,
+      is_full_day: isFullDayModal,
+      start_time: isFullDayModal ? null : modalStartTime + ':00',
+      end_time: isFullDayModal ? null : modalEndTime + ':00',
+    };
+
+    const { error } = await supabase.from('employee_availability').insert([newShift]);
+    if (!error) {
+      await logActivity(
+        'employee',
+        profile.id,
+        'shift_add',
+        `Сотрудник ${profile.full_name} добавил смену на ${modalDate}${!isFullDayModal ? ` (${modalStartTime}–${modalEndTime})` : ' (полный день)'}`
+      );
+      await fetchData();
+      setIsModalOpen(false);
+    } else {
+      console.error(error);
+      setModalError('Ошибка при добавлении смены');
+    }
+    setSavingShift(false);
+  };
+
+  // Генерация сетки дней месяца
+  const renderMonthDays = () => {
+    const year = getYearForMonth(selectedMonthIndex);
+    const daysInMonth = new Date(year, selectedMonthIndex + 1, 0).getDate();
+    const weekdays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+    const days = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      const dateStr = `${year}-${String(selectedMonthIndex + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+      const dateObj = new Date(year, selectedMonthIndex, i);
+      const isToday = dateStr === todayStr;
+      const shift = shifts.find(s => s.work_date === dateStr);
+      const active = isDateActive(dateStr) && !occupiedDates.has(dateStr);
+
+      let bgClass = 'bg-white border-gray-100 shadow-sm';
+      if (shift) {
+        bgClass = shift.is_full_day ? 'bg-green-50 border-green-300' : 'bg-yellow-50 border-yellow-300';
+      } else if (!active) {
+        bgClass = 'opacity-40 bg-gray-50 border-gray-100 cursor-not-allowed';
+      } else {
+        bgClass = 'hover:border-blue-400 hover:bg-blue-50 cursor-pointer bg-white border-gray-100';
+      }
+
+      days.push(
+        <button
+          key={dateStr}
+          className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition relative overflow-hidden ${bgClass}`}
+          onClick={() => active && openModal(dateStr)}
+          disabled={!active && !shift}
+        >
+          <span className={`text-xl font-bold ${isToday ? 'text-blue-600' : 'text-gray-800'} z-10`}>{i}</span>
+          <span className="text-[10px] text-gray-500 font-bold uppercase mt-1 z-10">{weekdays[dateObj.getDay()]}</span>
+          {shift && (
+            <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${shift.is_full_day ? 'bg-green-500' : 'bg-yellow-500'}`} />
+          )}
+        </button>
+      );
+    }
+    return days;
+  };
+
+  // Таблица смен
+  const renderShiftsTable = () => {
+    if (shiftsForMonth.length === 0) {
+      return (
+        <div className="text-center py-10 bg-gray-50 rounded-lg border border-gray-100 border-dashed text-gray-400">
+          <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50" />
+          <p>Смен в этом месяце пока нет</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto hide-scrollbar">
+        <table className="min-w-full divide-y divide-gray-100">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Дата</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Тип</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Время</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Действие</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {shiftsForMonth.map(shift => {
+              const delCheck = canDeleteShift(shift);
+              return (
+                <tr key={shift.id} className="hover:bg-gray-50 transition">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
+                    {format(parseISO(shift.work_date), 'dd.MM.yyyy')}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {shift.is_full_day ? (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-green-100 text-green-800 border border-green-200">
+                        Полная
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">
+                        Неполная
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600 font-medium whitespace-nowrap">
+                    {shift.is_full_day ? 'Весь день' : `${shift.start_time?.slice(0,5)} – ${shift.end_time?.slice(0,5)}`}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {delCheck.allowed ? (
+                      <button
+                        onClick={() => handleDeleteShift(shift)}
+                        className="text-red-500 hover:text-white hover:bg-red-500 p-2 rounded-lg transition"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-gray-400 font-bold uppercase cursor-help bg-gray-100 px-2 py-1 rounded" title={delCheck.reason}>
+                        Блок
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  // Сводка
+  const renderSummary = () => (
+    <div className="space-y-2">
+      <div className="flex justify-between items-center py-1.5 border-b border-blue-100/50">
+        <span className="text-blue-800 text-sm font-medium">Всего смен:</span>
+        <span className="font-bold text-blue-900 bg-blue-100 px-2 py-0.5 rounded shadow-sm">{shiftsForMonth.length}</span>
+      </div>
+      <div className="flex justify-between items-center py-1.5 border-b border-blue-100/50">
+        <span className="text-blue-800 text-sm font-medium flex items-center">
+          <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>Полных:
+        </span>
+        <span className="font-bold text-blue-900">{shiftsForMonth.filter(s => s.is_full_day).length}</span>
+      </div>
+      <div className="flex justify-between items-center py-1.5">
+        <span className="text-blue-800 text-sm font-medium flex items-center">
+          <div className="w-2 h-2 rounded-full bg-yellow-500 mr-2"></div>Неполных:
+        </span>
+        <span className="font-bold text-blue-900">{shiftsForMonth.filter(s => !s.is_full_day).length}</span>
+      </div>
+    </div>
+  );
+
+  // Приоритеты
+  const renderPriorities = () => {
+    if (priorities.length === 0) {
+      return (
+        <div className="text-center py-6 text-gray-400">
+          <Map className="mx-auto h-8 w-8 mb-2 opacity-50" />
+          <p className="text-sm">Приоритеты не заданы</p>
+        </div>
+      );
+    }
+    return (
+      <ul className="divide-y divide-gray-100">
+        {priorities.map(prio => {
+          let badgeClass = 'bg-gray-100 text-gray-800';
+          if (prio.priority_level === 1) badgeClass = 'bg-green-100 text-green-800 border-green-200';
+          else if (prio.priority_level === 2) badgeClass = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+          else if (prio.priority_level === 3) badgeClass = 'bg-red-100 text-red-800 border-red-200';
+          return (
+            <li key={prio.id} className="py-3 flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-800 flex items-center">
+                <Map className="mr-2 h-4 w-4 text-gray-400" />
+                {prio.attractions?.name || 'Неизвестный'}
+              </span>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold border shadow-sm ${badgeClass}`}>
+                #{prio.priority_level}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
   const currentMonthLabel = AVAILABLE_MONTHS.find(m => m.value === selectedMonthIndex)?.label || '';
   const currentMonthIdx = AVAILABLE_MONTHS.findIndex(m => m.value === selectedMonthIndex);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <Loader2 className="animate-spin text-blue-600 h-10 w-10" />
+      <div className="flex justify-center items-center p-16">
+        <Loader2 className="animate-spin text-blue-600 h-8 w-8" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col pb-24 md:pb-6 font-sans">
-      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        
-        {/* Шапка */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center">
+    <div className="bg-gray-50 text-gray-900 font-sans pb-24 md:pb-0">
+      <div className="max-w-7xl mx-auto px-4 pt-6">
+        {/* Шапка профиля */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{greeting || profile.full_name}</h2>
-            <p className="text-gray-500 text-sm mt-1">{profile.full_name} • Возраст: {profile.age ?? 'Не указан'}</p>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {greeting || profile.full_name}
+            </h2>
+            <p className="text-gray-500 text-sm mt-1">
+              {profile.full_name} • Возраст: {profile.age ?? 'Не указан'}
+            </p>
           </div>
-          <div className="mt-4 md:mt-0 md:text-right">
+          <div className="mt-4 md:mt-0 text-right w-full md:w-auto flex flex-row md:flex-col justify-between items-center md:items-end">
             <div className="text-2xl font-mono text-blue-600 font-semibold tracking-tight">
               {now.toLocaleTimeString('ru-RU')}
             </div>
@@ -287,32 +450,32 @@ export function EmployeeDashboard({ profile }: { profile: UserProfile }) {
         </div>
 
         {/* Выбор месяца */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
+          <div className="flex items-center justify-between mb-3">
             <button
               onClick={() => currentMonthIdx > 0 && setSelectedMonthIndex(AVAILABLE_MONTHS[currentMonthIdx - 1].value)}
               disabled={currentMonthIdx === 0}
-              className="p-2 rounded-xl hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
             >
               <ChevronLeft className="h-5 w-5 text-gray-600" />
             </button>
-            <h3 className="text-base font-semibold text-gray-800">Выбор месяца</h3>
+            <h3 className="text-base font-semibold text-gray-700">Выбор месяца</h3>
             <button
               onClick={() => currentMonthIdx < AVAILABLE_MONTHS.length - 1 && setSelectedMonthIndex(AVAILABLE_MONTHS[currentMonthIdx + 1].value)}
               disabled={currentMonthIdx === AVAILABLE_MONTHS.length - 1}
-              className="p-2 rounded-xl hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
             >
               <ChevronRight className="h-5 w-5 text-gray-600" />
             </button>
           </div>
           <div className="flex flex-wrap gap-2 justify-center">
-            {AVAILABLE_MONTHS.map((m) => (
+            {AVAILABLE_MONTHS.map(m => (
               <button
                 key={m.value}
                 onClick={() => setSelectedMonthIndex(m.value)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   selectedMonthIndex === m.value
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-200/50'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -322,369 +485,231 @@ export function EmployeeDashboard({ profile }: { profile: UserProfile }) {
           </div>
         </div>
 
-        {/* Основной контент (Grid для ПК, Tabs для Мобильных) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Левая колонка (на мобилках - вкладка Смены) */}
-          <div className={`lg:col-span-2 space-y-6 ${activeTab !== 'shifts' ? 'hidden md:block' : 'block'}`}>
-            
-            {/* Блок дат (Новый) */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                <LayoutGrid className="mr-2 h-5 w-5 text-blue-500" />
-                Даты месяца — {currentMonthLabel}
-              </h3>
-              
-              <div className="grid grid-cols-7 gap-2 sm:gap-3">
-                {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
-                  <div key={day} className="text-center text-xs font-semibold text-gray-400 py-1">{day}</div>
-                ))}
-                
-                {daysInMonth.map((day, i) => {
-                  const dateStr = format(day, 'yyyy-MM-dd');
-                  const shiftOnDay = shiftsForMonth.find(s => s.work_date === dateStr);
-                  const selectable = isDateSelectable(day);
-                  
-                  // Сдвиг первого дня месяца
-                  const firstDayOffset = i === 0 ? (day.getDay() === 0 ? 6 : day.getDay() - 1) : 0;
-                  
-                  let btnColor = "bg-gray-50 text-gray-700 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 border border-transparent";
-                  if (shiftOnDay) {
-                    btnColor = shiftOnDay.is_full_day 
-                      ? "bg-green-100 text-green-800 font-bold border border-green-200" 
-                      : "bg-yellow-100 text-yellow-800 font-bold border border-yellow-200";
-                  } else if (!selectable) {
-                    btnColor = "bg-gray-100 text-gray-400 opacity-60 cursor-not-allowed border border-transparent";
-                  }
-
-                  return (
-                    <React.Fragment key={dateStr}>
-                      {i === 0 && Array.from({ length: firstDayOffset }).map((_, idx) => <div key={`empty-${idx}`} />)}
-                      <button
-                        onClick={() => handleDateClick(day)}
-                        disabled={!selectable && !shiftOnDay}
-                        className={`aspect-square flex flex-col items-center justify-center rounded-xl transition-all ${btnColor}`}
-                      >
-                        <span className="text-sm sm:text-base">{format(day, 'd')}</span>
-                        {shiftOnDay && (
-                          <span className="text-[10px] sm:text-xs leading-tight mt-0.5 opacity-80">
-                            {shiftOnDay.is_full_day ? 'Полная' : 'Неполная'}
-                          </span>
-                        )}
-                      </button>
-                    </React.Fragment>
-                  );
-                })}
+        <div className="md:grid md:grid-cols-3 md:gap-6">
+          {/* Левая колонка */}
+          <div className="md:col-span-2 space-y-6">
+            {/* Сетка дней месяца */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                  <Calendar className="mr-2 h-5 w-5 text-blue-500" />
+                  Даты месяца — {currentMonthLabel}
+                </h3>
+                <div className="flex gap-3 text-xs text-gray-500 font-medium">
+                  <span className="flex items-center"><div className="w-3 h-3 bg-green-100 border border-green-300 rounded mr-1.5"></div> Полная</span>
+                  <span className="flex items-center"><div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded mr-1.5"></div> Частичная</span>
+                </div>
               </div>
-
-              <div className="mt-6 flex flex-wrap gap-4 text-xs sm:text-sm text-gray-600">
-                <div className="flex items-center"><div className="w-3 h-3 rounded bg-green-100 border border-green-200 mr-2"></div>Полная смена</div>
-                <div className="flex items-center"><div className="w-3 h-3 rounded bg-yellow-100 border border-yellow-200 mr-2"></div>Неполная смена</div>
-                <div className="flex items-center"><div className="w-3 h-3 rounded bg-gray-50 border border-gray-200 mr-2"></div>Свободно</div>
-                <div className="flex items-center"><div className="w-3 h-3 rounded bg-gray-100 opacity-60 mr-2"></div>Недоступно</div>
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                {renderMonthDays()}
               </div>
             </div>
 
-            {/* Таблица смен */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            {/* Таблица "Мои смены" */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
               <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                <List className="mr-2 h-5 w-5 text-blue-500" />
-                Мои смены
+                <Calendar className="mr-2 h-5 w-5 text-blue-500" />
+                Мои смены — {currentMonthLabel}
               </h3>
-              
-              {shiftsForMonth.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                  <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50 text-gray-400" />
-                  <p>Смен в {currentMonthLabel.toLowerCase()} не найдено</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-100">
-                    <thead>
-                      <tr className="bg-gray-50/50">
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider rounded-tl-lg rounded-bl-lg">Дата</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Тип</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Время</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider rounded-tr-lg rounded-br-lg">Действие</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {shiftsForMonth.map(shift => {
-                        const { allowed } = canDeleteShift(shift);
-                        return (
-                          <tr key={shift.id} className="hover:bg-gray-50/80 transition">
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
-                              {format(parseISO(shift.work_date), 'dd.MM.yyyy')}
-                            </td>
-                            <td className="px-4 py-3 text-sm whitespace-nowrap">
-                              {shift.is_full_day ? (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-green-50 text-green-700 border border-green-200/50">
-                                  Полный день
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200/50">
-                                  Неполный день
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
-                              {shift.is_full_day
-                                ? 'Весь день'
-                                : `${shift.start_time?.slice(0, 5)} – ${shift.end_time?.slice(0, 5)}`}
-                            </td>
-                            <td className="px-4 py-3 text-right whitespace-nowrap">
-                              {allowed ? (
-                                <button
-                                  onClick={() => handleDeleteShift(shift)}
-                                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-xl transition"
-                                  title="Удалить смену"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              ) : (
-                                <span className="text-xs text-gray-400 italic">Недоступно</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              {renderShiftsTable()}
             </div>
           </div>
 
-          {/* Правая колонка (на мобилках - вкладки Инфо и Форма) */}
+          {/* Правая колонка */}
           <div className="space-y-6">
-            
-            {/* Блок Инфо */}
-            <div className={`space-y-6 ${activeTab !== 'info' ? 'hidden md:block' : 'block'}`}>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <Star className="mr-2 h-5 w-5 text-yellow-500" />
-                  Приоритеты аттракционов
-                </h3>
-                {priorities.length === 0 ? (
-                  <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                    <MapIcon className="mx-auto h-8 w-8 mb-2 opacity-50 text-gray-400" />
-                    <p className="text-sm">Приоритеты не заданы</p>
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-gray-100">
-                    {priorities.map(prio => (
-                      <li key={prio.id} className="py-3 flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900 flex items-center">
-                          <MapIcon className="mr-2 h-4 w-4 text-gray-400" />
-                          {prio.attractions?.name || 'Неизвестный'}
-                        </span>
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${
-                          prio.priority_level === 1 ? 'bg-green-50 text-green-700 border-green-200/50' :
-                          prio.priority_level === 2 ? 'bg-yellow-50 text-yellow-700 border-yellow-200/50' :
-                          'bg-red-50 text-red-700 border-red-200/50'
-                        }`}>
-                          #{prio.priority_level}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100/50">
-                <h3 className="text-sm font-semibold text-blue-900 mb-4 flex items-center">
-                  <Info className="mr-2 h-4 w-4 text-blue-600" /> Сводка
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm bg-white/50 px-3 py-2 rounded-lg">
-                    <span className="text-blue-800">Всего смен:</span>
-                    <span className="font-bold text-blue-900">{shiftsForMonth.length}</span>
-                  </div>
-                  <div className="flex justify-between text-sm bg-white/50 px-3 py-2 rounded-lg">
-                    <span className="text-blue-800">Полных дней:</span>
-                    <span className="font-bold text-blue-900">{shiftsForMonth.filter(s => s.is_full_day).length}</span>
-                  </div>
-                  <div className="flex justify-between text-sm bg-white/50 px-3 py-2 rounded-lg">
-                    <span className="text-blue-800">Неполных дней:</span>
-                    <span className="font-bold text-blue-900">{shiftsForMonth.filter(s => !s.is_full_day).length}</span>
-                  </div>
-                </div>
-              </div>
+            {/* Приоритеты */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                <Star className="mr-2 h-5 w-5 text-yellow-500" />
+                Приоритеты аттракционов
+              </h3>
+              {renderPriorities()}
             </div>
 
-            {/* Блок Форма (Google Forms) */}
-            <div className={`bg-white p-6 rounded-2xl shadow-sm border border-gray-100 ${activeTab !== 'form' ? 'hidden md:block' : 'block'}`}>
+            {/* Сводка */}
+            <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
+              <h3 className="text-sm font-semibold text-blue-800 mb-3">Сводка — {currentMonthLabel}</h3>
+              {renderSummary()}
+            </div>
+
+            {/* Google Форма (опрос) */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
               <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                <MessageSquare className="mr-2 h-5 w-5 text-indigo-500" />
-                Обратная связь
+                <FileText className="mr-2 h-5 w-5 text-purple-500" />
+                Опрос сотрудника
               </h3>
-              <div className="w-full h-[590px] rounded-xl overflow-hidden bg-gray-50 border border-gray-100">
-                <iframe 
-                  src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true" 
-                  width="100%" 
-                  height="100%" 
-                  frameBorder="0" 
-                  marginHeight={0} 
+              <div className="relative w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center" style={{ height: '590px' }}>
+                <iframe
+                  src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
+                  className="absolute top-0 left-0 w-full h-full"
+                  frameBorder="0"
+                  marginHeight={0}
                   marginWidth={0}
-                  className="w-full h-full"
+                  title="Google Form"
                 >
                   Загрузка…
                 </iframe>
               </div>
             </div>
-
           </div>
         </div>
+
+        {/* Футер */}
+        <footer className="mt-12 mb-24 md:mb-8 text-center text-xs text-gray-400 space-y-2">
+          <p>
+            Hand-coded by AlBars • Vite build: <span className="text-green-500 font-mono font-bold">{ping}</span> ms • Supabase realtime • Host: GitHub Pages • DB: PostgreSQL
+          </p>
+          <p>DeepSeek • Claude Sonnet 4-6 • Gemini 3.1 Pro Preview • ChatGPT • Qwen</p>
+          <p className="italic">Ни один искусственный интеллект не пострадал при создании</p>
+        </footer>
       </div>
 
       {/* Модальное окно добавления смены */}
-      {selectedDateToAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h3 className="text-lg font-bold text-gray-900">
-                Добавить смену: {format(selectedDateToAdd, 'dd.MM.yyyy')}
-              </h3>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-xl transition">
-                <X className="h-5 w-5" />
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md transform transition-all relative">
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <h3 className="text-xl font-bold text-gray-900 mb-5 pr-8">
+              Смена на {formatDateStr(modalDate)}
+            </h3>
+
+            {modalError && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start">
+                <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                {modalError}
+              </div>
+            )}
+
+            {/* Переключатель типа смены */}
+            <div className="flex gap-2 mb-5 p-1 bg-gray-100 rounded-lg">
+              <button
+                onClick={() => setIsFullDayModal(true)}
+                className={`flex-1 py-2 text-sm font-bold rounded-md shadow transition ${
+                  isFullDayModal ? 'bg-white text-blue-600 ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Полная смена
+              </button>
+              <button
+                onClick={() => setIsFullDayModal(false)}
+                className={`flex-1 py-2 text-sm font-bold rounded-md shadow transition ${
+                  !isFullDayModal ? 'bg-white text-blue-600 ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Неполная смена
               </button>
             </div>
-            
-            <div className="p-6">
-              <form onSubmit={handleAddShift} className="space-y-5">
-                
-                {/* Выбор типа смены */}
-                <div className="flex bg-gray-100 p-1 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setShiftType('full')}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition ${
-                      shiftType === 'full' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    Полная смена
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShiftType('partial')}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg transition ${
-                      shiftType === 'partial' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    Неполная смена
-                  </button>
+
+            {!isFullDayModal && (
+              <div className="space-y-5">
+                <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-lg text-xs leading-relaxed flex items-start">
+                  <AlertCircle className="w-5 h-5 mr-2 text-yellow-600 shrink-0" />
+                  Для создания графика работы используются алгоритмы, приоритет которых отдается всегда полной смене.
                 </div>
 
-                {shiftType === 'partial' && (
-                  <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
-                    <div className="bg-yellow-50 text-yellow-800 text-xs p-3 rounded-xl border border-yellow-200/60 flex gap-2">
-                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-yellow-600" />
-                      <p>Для создания графика работы используются алгоритмы, приоритет которых отдается всегда полной смене.</p>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center">
-                          <Clock className="h-3 w-3 mr-1 text-gray-400"/> Начало
-                        </label>
-                        <select
-                          required
-                          value={startTime}
-                          onChange={(e) => setStartTime(e.target.value)}
-                          className="block w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
-                        >
-                          {START_TIME_OPTIONS.map(time => <option key={time} value={time}>{time}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center">
-                          <Clock className="h-3 w-3 mr-1 text-gray-400"/> Окончание
-                        </label>
-                        <select
-                          required
-                          value={endTime}
-                          onChange={(e) => setEndTime(e.target.value)}
-                          className="block w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
-                        >
-                          {END_TIME_OPTIONS.map(time => <option key={time} value={time}>{time}</option>)}
-                        </select>
-                      </div>
-                    </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1.5">Начало</label>
+                    <select
+                      value={modalStartTime}
+                      onChange={(e) => {
+                        setModalStartTime(e.target.value);
+                        if (e.target.value >= modalEndTime) {
+                          const newEnd = END_TIMES.find(t => t > e.target.value);
+                          if (newEnd) setModalEndTime(newEnd);
+                        }
+                      }}
+                      className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      {START_TIMES.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
                   </div>
-                )}
-
-                {formError && (
-                  <div className="bg-red-50 text-red-700 text-sm p-3 rounded-xl border border-red-200/60">
-                    {formError}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 uppercase mb-1.5">Окончание</label>
+                    <select
+                      value={modalEndTime}
+                      onChange={(e) => setModalEndTime(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      {END_TIMES.filter(t => t > modalStartTime).map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
                   </div>
-                )}
+                </div>
+              </div>
+            )}
 
-                <button
-                  type="submit"
-                  disabled={savingShift}
-                  className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-sm shadow-blue-200 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  {savingShift ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Добавить смену'}
-                </button>
-              </form>
+            <div className="mt-8">
+              <button
+                onClick={handleAddShift}
+                disabled={savingShift}
+                className="w-full flex justify-center items-center py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md shadow-blue-200 hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {savingShift ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Добавить смену
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Подвал с динамической информацией */}
-      <div className="mt-auto px-4 py-8 flex flex-col items-center justify-center text-center space-y-2 border-t border-gray-200/60 bg-white/50">
-        <div className="text-xs text-gray-500 font-medium">
-          Hand-coded by AlBars • Vite build: <span className="font-mono text-green-500 font-bold bg-green-50 px-1.5 py-0.5 rounded shadow-sm border border-green-100">{ping} ms</span> • Supabase realtime • Host: GitHub Pages • DB: PostgreSQL
-        </div>
-        <div className="text-xs text-gray-400">
-          DeepSeek • Claude Sonnet 4-6 • Gemini 3.1 Pro Preview • ChatGPT • Qwen
-        </div>
-        <div className="text-[11px] text-gray-400 italic font-medium opacity-70">
-          Ни один искусственный интеллект не пострадал при создании
-        </div>
-      </div>
-
       {/* Мобильное нижнее меню */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-6 pb-6 flex justify-between items-center z-40 shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.1)]">
+      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 flex justify-around items-center h-16 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
         <button
-          onClick={() => setActiveTab('info')}
-          className={`flex flex-col items-center p-2 transition ${activeTab === 'info' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex flex-col items-center justify-center w-1/4 ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-gray-400'}`}
         >
-          <Info className="h-6 w-6 mb-1" />
-          <span className="text-[10px] font-medium">Инфо</span>
+          <Calendar className="h-5 w-5" />
+          <span className="text-[10px] mt-1 font-medium">Сводка</span>
         </button>
-        
         <button
           onClick={() => setActiveTab('shifts')}
-          className="relative -top-5 flex flex-col items-center group"
+          className={`flex flex-col items-center justify-center w-1/4 ${activeTab === 'shifts' ? 'text-blue-600' : 'text-gray-400'}`}
         >
-          <div className={`h-14 w-14 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-105 group-active:scale-95 ${activeTab === 'shifts' ? 'bg-blue-600 shadow-blue-300' : 'bg-gray-800 shadow-gray-300'}`}>
-            <Calendar className="h-6 w-6" />
-          </div>
-          <span className={`text-[11px] font-bold mt-1 ${activeTab === 'shifts' ? 'text-blue-600' : 'text-gray-800'}`}>Смены</span>
+          <Clock className="h-5 w-5" />
+          <span className="text-[10px] mt-1 font-medium">Смены</span>
         </button>
-
+        <button
+          onClick={() => setActiveTab('priorities')}
+          className={`flex flex-col items-center justify-center w-1/4 ${activeTab === 'priorities' ? 'text-blue-600' : 'text-gray-400'}`}
+        >
+          <Star className="h-5 w-5" />
+          <span className="text-[10px] mt-1 font-medium">Приоритеты</span>
+        </button>
         <button
           onClick={() => setActiveTab('form')}
-          className={`flex flex-col items-center p-2 transition ${activeTab === 'form' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+          className={`flex flex-col items-center justify-center w-1/4 ${activeTab === 'form' ? 'text-blue-600' : 'text-gray-400'}`}
         >
-          <MessageSquare className="h-6 w-6 mb-1" />
-          <span className="text-[10px] font-medium">Форма</span>
+          <FileText className="h-5 w-5" />
+          <span className="text-[10px] mt-1 font-medium">Опрос</span>
         </button>
-      </div>
+      </nav>
 
+      {/* CSS для скрытия скроллбара */}
+      <style>{`
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @media (max-width: 767px) {
+          .mobile-tab-dashboard, .mobile-tab-shifts, .mobile-tab-priorities, .mobile-tab-form { display: none; }
+          body[data-tab="dashboard"] .mobile-tab-dashboard { display: block; }
+          body[data-tab="shifts"] .mobile-tab-shifts { display: block; }
+          body[data-tab="priorities"] .mobile-tab-priorities { display: block; }
+          body[data-tab="form"] .mobile-tab-form { display: block; }
+        }
+      `}</style>
     </div>
   );
-}
-
-// Entry point wrapper to render the app independently
-export default function App() {
-  const dummyProfile = {
-    id: 'user-1',
-    full_name: 'Сотрудник Тестов',
-    age: 25,
-  };
-
-  return <EmployeeDashboard profile={dummyProfile} />;
 }
