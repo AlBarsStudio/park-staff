@@ -35,23 +35,18 @@ interface ActualWorkLog {
 interface StudyGoal {
   id: number;
   attraction_id: number;
-  change_count: number;
-  change_history: number[];
   attractions?: { name: string };
 }
 
-// Расширенный профиль с базовой ставкой
 interface EmployeeProfile extends UserProfile {
   base_hourly_rate: number;
 }
 
-// Вспомогательные функции
 function formatDateStr(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
   return `${d}.${m}.${y}`;
 }
 
-// Ограничения на удаление старых смен (employee_availability)
 function canDeleteShift(shift: Shift): { allowed: boolean; reason?: string } {
   const now = new Date();
   const today = startOfDay(now);
@@ -87,9 +82,8 @@ interface EmployeeDashboardProps {
 }
 
 export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
-  // ------ Состояния для дат и загрузки ------
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [shifts, setShifts] = useState<Shift[]>([]);               // старые смены employee_availability
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [priorities, setPriorities] = useState<Priority[]>([]);
   const [studyGoal, setStudyGoal] = useState<StudyGoal | null>(null);
   const [availableAttractions, setAvailableAttractions] = useState<{ id: number; name: string }[]>([]);
@@ -99,11 +93,10 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'shifts' | 'priorities' | 'form' | 'salary'>('dashboard');
   const [ping, setPing] = useState(120);
 
-  // ------ Новые данные (график от администратора и отметки) ------
   const [scheduleAssignments, setScheduleAssignments] = useState<ScheduleAssignment[]>([]);
   const [actualLogs, setActualLogs] = useState<ActualWorkLog[]>([]);
 
-  // ------ Модалки ------
+  // Модалки
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState('');
   const [isFullDayModal, setIsFullDayModal] = useState(true);
@@ -116,7 +109,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewShift, setViewShift] = useState<Shift | null>(null);
 
-  // Модалка для отметки фактического времени
   const [isTimeLogModalOpen, setIsTimeLogModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleAssignment | null>(null);
   const [actualStart, setActualStart] = useState('');
@@ -124,17 +116,14 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [timeLogError, setTimeLogError] = useState('');
   const [savingTimeLog, setSavingTimeLog] = useState(false);
 
-  // Состояния для цели изучения
   const [selectedAttractionId, setSelectedAttractionId] = useState<number | null>(null);
   const [savingGoal, setSavingGoal] = useState(false);
   const [goalError, setGoalError] = useState('');
 
-  // Состояния для расчёта зарплаты
-  const [salaryPeriod, setSalaryPeriod] = useState<'first' | 'second'>('first'); // first: 7-21, second: 22-6
+  const [salaryPeriod, setSalaryPeriod] = useState<'first' | 'second'>('first');
   const [salaryData, setSalaryData] = useState<{ days: any[]; total: number } | null>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
 
-  // Временные интервалы для выбора (10:00-20:00)
   const START_TIMES = (() => {
     const times: string[] = [];
     for (let h = 10; h <= 20; h++) {
@@ -157,7 +146,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     return times;
   })();
 
-  // Живые часы и пинг
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
@@ -180,7 +168,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   }, [profile.full_name]);
 
-  // Загрузка всех данных
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -200,10 +187,10 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         .order('priority_level');
       if (prioData) setPriorities(prioData as unknown as Priority[]);
 
-      // 3. Цель изучения
+      // 3. Цель изучения (без change_count и change_history)
       const { data: goalData } = await supabase
         .from('employee_study_goals')
-        .select('id, attraction_id, change_count, change_history, attractions(name)')
+        .select('id, attraction_id, attractions(name)')
         .eq('employee_id', profile.id)
         .maybeSingle();
       if (goalData) {
@@ -214,15 +201,33 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         setSelectedAttractionId(null);
       }
 
-      // 4. Доступные аттракционы (без приоритетов)
+      // 4. Доступные аттракционы: исключаем те, что уже в приоритетах, но добавляем текущую цель (если она есть)
       const attractionIdsWithPriority = prioData?.map(p => p.attraction_id) || [];
-      const { data: allAttractions } = await supabase
+      let { data: allAttractions } = await supabase
         .from('attractions')
         .select('id, name')
         .not('id', 'in', `(${attractionIdsWithPriority.join(',') || 0})`);
-      setAvailableAttractions(allAttractions || []);
 
-      // 5. График от администратора (schedule_assignments)
+      let available = allAttractions || [];
+
+      // Если у сотрудника уже есть цель, и её аттракцион не попал в список (например, он в приоритетах),
+      // добавляем его принудительно, чтобы можно было остаться на нём.
+      if (goalData && goalData.attraction_id) {
+        const alreadyInList = available.some(a => a.id === goalData.attraction_id);
+        if (!alreadyInList) {
+          const { data: currentGoalAttraction } = await supabase
+            .from('attractions')
+            .select('id, name')
+            .eq('id', goalData.attraction_id)
+            .single();
+          if (currentGoalAttraction) {
+            available = [currentGoalAttraction, ...available];
+          }
+        }
+      }
+      setAvailableAttractions(available);
+
+      // 5. График от администратора
       const { data: scheduleData } = await supabase
         .from('schedule_assignments')
         .select(`
@@ -234,7 +239,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         .order('work_date', { ascending: true });
       if (scheduleData) setScheduleAssignments(scheduleData as ScheduleAssignment[]);
 
-      // 6. Фактические отметки времени
+      // 6. Фактические отметки
       const { data: logsData } = await supabase
         .from('actual_work_log')
         .select('*')
@@ -252,7 +257,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     fetchData();
   }, [fetchData]);
 
-  // Фильтры для отображения
   const shiftsForMonth = useMemo(() => {
     return shifts.filter(s => {
       const d = parseISO(s.work_date);
@@ -269,7 +273,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
   const occupiedDates = useMemo(() => new Set(shifts.map(s => s.work_date)), [shifts]);
 
-  // --- Работа со старыми сменами (employee_availability) ---
   const handleDeleteShift = async (shift: Shift) => {
     const { allowed, reason } = canDeleteShift(shift);
     if (!allowed) { alert(reason); return; }
@@ -330,9 +333,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingShift(false);
   };
 
-  // --- Работа с графиком (отметка фактического времени) ---
   const openTimeLogModal = (schedule: ScheduleAssignment) => {
-    // Проверяем, можно ли отмечать (для сегодняшнего дня после 22:00, для прошлых всегда)
     const workDate = parseISO(schedule.work_date);
     const today = startOfDay(new Date());
     const nowTime = new Date();
@@ -346,7 +347,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       return;
     }
     setSelectedSchedule(schedule);
-    // Предзаполняем плановым временем для удобства
     setActualStart(schedule.start_time.slice(0,5));
     setActualEnd(schedule.end_time.slice(0,5));
     setTimeLogError('');
@@ -375,28 +375,21 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingTimeLog(false);
   };
 
-  // --- Расчёт зарплаты ---
   const calculateSalary = async (period: 'first' | 'second') => {
     setLoadingSalary(true);
     try {
       const nowDate = new Date();
       let startDate: Date, endDate: Date;
       if (period === 'first') {
-        // с 7 числа текущего месяца по 21 число
         startDate = new Date(nowDate.getFullYear(), nowDate.getMonth(), 7);
         endDate = new Date(nowDate.getFullYear(), nowDate.getMonth(), 21);
-        if (nowDate.getDate() > 21) {
-          // Если сегодня позже 21, то показываем текущий период, но данные могут быть неполными
-        }
       } else {
-        // с 22 числа текущего месяца по 6 число следующего
         startDate = new Date(nowDate.getFullYear(), nowDate.getMonth(), 22);
         endDate = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 6);
       }
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
-      // Получаем все назначения за период
       const { data: schedules } = await supabase
         .from('schedule_assignments')
         .select(`
@@ -412,7 +405,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         return;
       }
 
-      // Получаем все логи для этих назначений
       const scheduleIds = schedules.map(s => s.id);
       const { data: logs } = await supabase
         .from('actual_work_log')
@@ -428,14 +420,11 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       for (const s of schedules) {
         const workDate = s.work_date;
         const log = logsMap.get(s.id);
-        if (!log) continue; // не отметил — не оплачиваем
+        if (!log) continue;
 
         let actualStartTime = log.actual_start;
         let actualEndTime = log.actual_end;
 
-        // Корректировка начала оплаты: если пришёл до 11:00 -> оплата с 11:00
-        // если пришёл с 11:00 до 12:00 -> оплата с 11:00
-        // если после 12:00 -> оплата с фактического
         let payStartHour = parseInt(actualStartTime.split(':')[0]);
         let payStartMin = parseInt(actualStartTime.split(':')[1]);
         if (payStartHour < 11 || (payStartHour === 11 && payStartMin === 0)) {
@@ -444,11 +433,11 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         } else if (payStartHour < 12) {
           payStartHour = 11;
           payStartMin = 0;
-        } // иначе оставляем фактическое
+        }
 
         const payStart = new Date(`${workDate}T${String(payStartHour).padStart(2,'0')}:${String(payStartMin).padStart(2,'0')}:00`);
         const actualEnd = new Date(`${workDate}T${actualEndTime}`);
-        if (payStart >= actualEnd) continue; // нет отработанных часов
+        if (payStart >= actualEnd) continue;
 
         const minutesWorked = differenceInMinutes(actualEnd, payStart);
         const hoursWorked = minutesWorked / 60;
@@ -486,21 +475,20 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   }, [activeTab, salaryPeriod]);
 
-  // --- Цель изучения ---
+  // Упрощённое сохранение цели (без лимита изменений)
   const handleSaveStudyGoal = async () => {
-    if (!selectedAttractionId) { setGoalError('Выберите аттракцион'); return; }
+    if (!selectedAttractionId) {
+      setGoalError('Выберите аттракцион');
+      return;
+    }
     setSavingGoal(true);
     setGoalError('');
     try {
       if (studyGoal) {
-        if (studyGoal.change_count >= 3) throw new Error('Лимит изменений исчерпан');
-        const newHistory = [...(studyGoal.change_history || []), studyGoal.attraction_id];
         const { error } = await supabase
           .from('employee_study_goals')
           .update({
             attraction_id: selectedAttractionId,
-            change_count: studyGoal.change_count + 1,
-            change_history: newHistory,
             updated_at: new Date().toISOString(),
           })
           .eq('id', studyGoal.id);
@@ -511,8 +499,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
           .insert({
             employee_id: profile.id,
             attraction_id: selectedAttractionId,
-            change_count: 1,
-            change_history: [],
           });
         if (error) throw error;
       }
@@ -670,17 +656,17 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   };
 
   const renderStudyGoal = () => {
-    const remaining = studyGoal ? 3 - studyGoal.change_count : 3;
     return (
       <div className="bg-white p-6 rounded-xl shadow-sm border mt-6">
         <h3 className="text-lg font-bold flex items-center gap-2"><Star className="text-purple-500" /> Цель для изучения</h3>
-        <p className="text-xs text-gray-500 mb-2">Осталось изменений: {remaining}</p>
         {goalError && <div className="text-red-600 text-sm mb-2">{goalError}</div>}
         <select value={selectedAttractionId || ''} onChange={e => setSelectedAttractionId(Number(e.target.value))} className="w-full border rounded p-2 mb-2">
           <option value="">-- Выберите --</option>
           {availableAttractions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <button onClick={handleSaveStudyGoal} disabled={savingGoal || (studyGoal && studyGoal.change_count >= 3)} className="w-full bg-blue-600 text-white py-2 rounded">Сохранить цель</button>
+        <button onClick={handleSaveStudyGoal} disabled={savingGoal} className="w-full bg-blue-600 text-white py-2 rounded">
+          Сохранить цель
+        </button>
       </div>
     );
   };
