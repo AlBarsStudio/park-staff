@@ -5,6 +5,7 @@ import { Plus, Trash2, Loader2, X } from 'lucide-react';
 
 interface EmployeesListProps {
   isSuperAdmin: boolean;
+  currentUserId?: number; // id текущего сотрудника (из profile)
 }
 
 interface EmployeeWithAuth extends UserProfile {
@@ -15,7 +16,7 @@ interface EmployeeWithAuth extends UserProfile {
   last_sign_in_at?: string | null;
 }
 
-export function EmployeesList({ isSuperAdmin }: EmployeesListProps) {
+export function EmployeesList({ isSuperAdmin, currentUserId }: EmployeesListProps) {
   const [employees, setEmployees] = useState<EmployeeWithAuth[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -34,30 +35,48 @@ export function EmployeesList({ isSuperAdmin }: EmployeesListProps) {
 
   const fetchEmployees = async () => {
     setLoading(true);
-    // Получаем всех сотрудников из employees
-    const { data: empData, error: empError } = await supabase
+    let query = supabase
       .from('employees')
       .select('id, full_name, age, phone_number, telegram, max, vk, auth_uid, access_level');
+
+    // Если не суперадмин, показываем только текущего сотрудника
+    if (!isSuperAdmin && currentUserId) {
+      query = query.eq('id', currentUserId);
+    }
+
+    const { data: empData, error: empError } = await query;
     if (empError) {
       console.error(empError);
       setLoading(false);
       return;
     }
 
-    // Получаем last_sign_in_at из auth.users (через RPC или прямой запрос)
-    // В Supabase нельзя просто так SELECT из auth.users через клиент. Нужно использовать функцию.
-    // Создадим временное решение: будем хранить last_sign_in_at в отдельной таблице или запрашивать через RPC.
-    // Упростим: пока не будем выводить время, а сделаем позже. Сначала покажем сотрудников без last_sign_in_at.
+    // Загружаем last_sign_in_at для каждого сотрудника
+    const employeesWithLogin = await Promise.all(
+      (empData || []).map(async (emp) => {
+        const { data: loginData, error: loginError } = await supabase
+          .rpc('get_user_last_login', { user_auth_uid: emp.auth_uid });
+        if (loginError) {
+          console.error(loginError);
+          return { ...emp, last_sign_in_at: null };
+        }
+        return { ...emp, last_sign_in_at: loginData };
+      })
+    );
 
-    setEmployees(empData as EmployeeWithAuth[]);
+    setEmployees(employeesWithLogin as EmployeeWithAuth[]);
     setLoading(false);
   };
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [isSuperAdmin, currentUserId]);
 
   const handleDelete = async (id: number, authUid: string) => {
+    if (!isSuperAdmin) {
+      alert('Недостаточно прав');
+      return;
+    }
     if (!confirm('Удалить сотрудника? Он потеряет доступ к системе.')) return;
     // Удаляем из employees
     const { error: empError } = await supabase.from('employees').delete().eq('id', id);
@@ -65,15 +84,16 @@ export function EmployeesList({ isSuperAdmin }: EmployeesListProps) {
       alert('Ошибка удаления из employees');
       return;
     }
-    // Удаляем пользователя из auth (только для суперадмина, нужен специальный ключ)
-    // В Supabase удаление пользователя через клиент требует прав администратора.
-    // Проще: удаляем только из employees, а из auth оставляем (или удаляем вручную в панели Supabase).
-    // Для простоты оставим как есть.
+    // (Опционально) удалить из auth.users – требует прав суперадмина и service_role
     fetchEmployees();
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSuperAdmin) {
+      setFormError('Недостаточно прав');
+      return;
+    }
     setFormError('');
     // 1. Создаём пользователя в auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -110,6 +130,11 @@ export function EmployeesList({ isSuperAdmin }: EmployeesListProps) {
   };
 
   if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>;
+
+  // Если не суперадмин и список пуст (например, нет своего профиля) — показываем сообщение
+  if (!isSuperAdmin && employees.length === 0) {
+    return <div className="text-center py-8 text-gray-500">Нет данных о вашем профиле</div>;
+  }
 
   return (
     <div>
@@ -173,7 +198,7 @@ export function EmployeesList({ isSuperAdmin }: EmployeesListProps) {
                 <td className="px-4 py-2 text-sm">{emp.telegram || '—'}</td>
                 <td className="px-4 py-2 text-sm">{emp.max || '—'}</td>
                 <td className="px-4 py-2 text-sm">{emp.vk || '—'}</td>
-                <td className="px-4 py-2 text-sm">— (пока не реализовано)</td>
+                <td className="px-4 py-2 text-sm">{emp.last_sign_in_at ? new Date(emp.last_sign_in_at).toLocaleString() : '—'}</td>
                 {isSuperAdmin && (
                   <td className="px-4 py-2 text-right">
                     <button onClick={() => handleDelete(emp.id, emp.auth_uid)} className="text-red-600 hover:text-red-800">
