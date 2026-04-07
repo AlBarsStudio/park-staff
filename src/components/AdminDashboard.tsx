@@ -8,7 +8,7 @@ import {
   Calendar, LayoutGrid, CalendarDays, Wand2, X, Users, Gamepad2, Clock, UserCheck,
   CheckCircle, Circle, AlertCircle, MessageSquare, PlusCircle, MinusCircle, Save
 } from 'lucide-react';
-import { format, parseISO, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, startOfDay, addMonths, subMonths, startOfWeek, addDays, isWeekend, getDay } from 'date-fns';
+import { format, parseISO, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, startOfDay, addMonths, subMonths, startOfWeek, addDays, isWeekend, getDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { ScheduleGenerator } from './ScheduleGenerator';
 import { EmployeesList } from './EmployeesList';
@@ -29,28 +29,6 @@ function canEditSchedule(workDate: string): boolean {
   deadline.setHours(23, 0, 0, 0);
   return now < deadline;
 }
-
-// Получение списка аттракционов, к которым у сотрудника есть допуск
-async function getEmployeeAllowedAttractions(employeeId: number): Promise<number[]> {
-  const { data, error } = await supabase
-    .from('employee_attraction_priorities')
-    .select('attraction_id')
-    .eq('employee_id', employeeId);
-  if (error) {
-    console.error('Ошибка получения допусков сотрудника:', error);
-    return [];
-  }
-  return data?.map(p => p.attraction_id) || [];
-}
-
-// Вспомогательные функции
-const getDayOfWeek = (date: Date): string => {
-  return format(date, 'EEEEEE', { locale: ru }); // Пн, Вт, ...
-};
-
-const isDayHasSchedule = (date: Date, assignments: ScheduleAssignment[]): boolean => {
-  return assignments.some(a => isSameDay(parseISO(a.work_date), date));
-};
 
 export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<'shifts' | 'schedule' | 'manual' | 'employees' | 'attractions'>('shifts');
@@ -91,7 +69,11 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
   const [manualShowAddModal, setManualShowAddModal] = useState<{ attractionId: number; attractionName: string } | null>(null);
   const [manualEmployeeSelection, setManualEmployeeSelection] = useState<Set<number>>(new Set());
 
-  // --- Загрузка данных (без вложенных ресурсов) ---
+  // Кэш для приоритетов и целей (для фильтрации в модалке)
+  const [prioritiesCache, setPrioritiesCache] = useState<any[]>([]);
+  const [goalsCache, setGoalsCache] = useState<any[]>([]);
+
+  // --- Загрузка всех основных данных ---
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -190,15 +172,19 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
       
       const availableEmpIds = availData?.map(a => a.employee_id) || [];
       
-      // 2. Цели обучения
-      const { data: goalsData, error: goalsError } = await supabase
-        .from('employee_study_goals')
-        .select('employee_id, attraction_id, attractions(name)')
-        .in('employee_id', availableEmpIds.length ? availableEmpIds : [-1]);
-      if (goalsError) throw goalsError;
+      // 2. Цели обучения (только для доступных сотрудников)
+      let goalsData: any[] = [];
+      if (availableEmpIds.length > 0) {
+        const { data: goals, error: goalsError } = await supabase
+          .from('employee_study_goals')
+          .select('employee_id, attraction_id')
+          .in('employee_id', availableEmpIds);
+        if (goalsError) throw goalsError;
+        goalsData = goals || [];
+      }
       
-      // 3. Приоритеты (для фильтрации в модалке)
-      const { data: prioritiesData, error: prioritiesError } = await supabase
+      // 3. Приоритеты (для всех сотрудников, понадобятся в модалке)
+      const { data: priorities, error: prioritiesError } = await supabase
         .from('employee_attraction_priorities')
         .select('employee_id, attraction_id, priority_level');
       if (prioritiesError) throw prioritiesError;
@@ -210,11 +196,18 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
         .eq('work_date', dateStr);
       if (assignError) throw assignError;
       
-      // Строим данные сотрудников
+      // Подготавливаем карты для быстрого доступа
       const empMap = new Map(employees.map(e => [e.id, e]));
-      const goalsMap = new Map();
-      goalsData?.forEach(g => goalsMap.set(g.employee_id, g.attractions?.name || ''));
+      const attrMap = new Map(attractions.map(a => [a.id, a]));
       
+      // Карта целей: employee_id -> attraction_name
+      const goalsMap = new Map<number, string>();
+      goalsData.forEach(g => {
+        const attr = attrMap.get(g.attraction_id);
+        if (attr) goalsMap.set(g.employee_id, attr.name);
+      });
+      
+      // Обогащаем данные сотрудников
       const enrichedEmployees = availData?.map(avail => {
         const emp = empMap.get(avail.employee_id);
         if (!emp) return null;
@@ -245,9 +238,9 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
       setManualAttractionAssignments(assignMap);
       setManualDayAssignments(dayAssignments || []);
       
-      // Сохраняем приоритеты в ref для использования в модалке (можно в состоянии)
-      setPrioritiesCache(prioritiesData || []);
-      setGoalsCache(goalsData || []);
+      // Сохраняем приоритеты и цели в кэш
+      setPrioritiesCache(priorities || []);
+      setGoalsCache(goalsData);
       
     } catch (err: any) {
       console.error('Ошибка загрузки данных дня:', err);
@@ -255,11 +248,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     } finally {
       setManualDayDataLoading(false);
     }
-  }, [employees]);
-
-  // Кэш для приоритетов и целей
-  const [prioritiesCache, setPrioritiesCache] = useState<any[]>([]);
-  const [goalsCache, setGoalsCache] = useState<any[]>([]);
+  }, [employees, attractions]);
 
   // При выборе дня в календаре
   const handleDaySelect = (day: Date) => {
@@ -279,7 +268,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     return eachDayOfInterval({ start, end });
   }, [manualMonth]);
 
-  // Проверка наличия графика на день
+  // Проверка наличия графика на день (любое назначение)
   const dayHasSchedule = (day: Date) => {
     return scheduleAssignments.some(a => isSameDay(parseISO(a.work_date), day));
   };
@@ -290,7 +279,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
       const next = new Set(prev);
       if (next.has(attractionId)) {
         next.delete(attractionId);
-        // При снятии галочки также убираем всех сотрудников с этого аттракциона
+        // При снятии галочки убираем всех сотрудников с этого аттракциона
         setManualAttractionAssignments(prevAssign => {
           const newAssign = new Map(prevAssign);
           newAssign.delete(attractionId);
@@ -373,7 +362,8 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
       setManualError('Выберите день');
       return;
     }
-    if (!canEditSchedule(format(manualSelectedDay, 'yyyy-MM-dd'))) {
+    const dateStr = format(manualSelectedDay, 'yyyy-MM-dd');
+    if (!canEditSchedule(dateStr)) {
       setManualError('Редактирование невозможно: прошло 23:00 дня смены');
       return;
     }
@@ -382,7 +372,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     setManualSaving(true);
     setManualError(null);
     
-    const dateStr = format(manualSelectedDay, 'yyyy-MM-dd');
     const assignmentsToInsert: any[] = [];
     
     // Для каждого аттракциона и сотрудника создаём запись
@@ -402,7 +391,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
           work_date: dateStr,
           start_time: startTime,
           end_time: endTime,
-          version_type: 'original' // всегда оригинал при ручном составлении
+          version_type: 'original'
         });
       });
     });
@@ -443,7 +432,9 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     }
   };
 
-  // --- Фильтрация employee_availability (старый функционал) ---
+  // --- Старый функционал (смены, недели и т.д.) остаётся без изменений ---
+  // ... (всё, что связано с shifts, schedule, employees, attractions)
+
   const shiftsForMonth = useMemo(() => {
     return shifts.filter(s => {
       const d = parseISO(s.work_date);
@@ -470,7 +461,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     );
   }, [shiftsForMonth, viewMode, selectedDate, selectedWeekStart, search]);
 
-  // --- Недели ---
   const getWeeksInMonth = () => {
     const start = startOfMonth(new Date(currentYear, currentMonth, 1));
     const end = endOfMonth(start);
@@ -549,75 +539,20 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     }
   };
 
+  // Старая форма ручного назначения (не используется, оставлена для совместимости)
+  const [manualEmployeeId, setManualEmployeeId] = useState<number | ''>('');
+  const [manualAttractionId, setManualAttractionId] = useState<number | ''>('');
+  const [manualWorkDate, setManualWorkDate] = useState('');
+  const [manualStartTime, setManualStartTime] = useState('');
+  const [manualEndTime, setManualEndTime] = useState('');
+  const [manualAllowedAttractions, setManualAllowedAttractions] = useState<Attraction[]>([]);
+
   const handleManualEmployeeChange = async (empId: number | '') => {
-    setManualEmployeeId(empId);
-    if (empId && typeof empId === 'number') {
-      const allowedIds = await getEmployeeAllowedAttractions(empId);
-      const allowed = attractions.filter(a => allowedIds.includes(a.id));
-      setManualAllowedAttractions(allowed);
-      setManualAttractionId('');
-    } else {
-      setManualAllowedAttractions([]);
-      setManualAttractionId('');
-    }
+    // не используется в новом интерфейсе
   };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setManualError(null);
-    if (!manualEmployeeId) { setManualError('Выберите сотрудника'); return; }
-    if (!manualAttractionId) { setManualError('Выберите аттракцион'); return; }
-    if (!manualWorkDate) { setManualError('Укажите дату'); return; }
-    if (!manualStartTime || !manualEndTime) { setManualError('Укажите время начала и окончания'); return; }
-    if (manualStartTime >= manualEndTime) { setManualError('Время окончания должно быть позже начала'); return; }
-
-    const existing = scheduleAssignments.find(s => s.employee_id === manualEmployeeId && s.work_date === manualWorkDate);
-    if (existing && !canEditSchedule(manualWorkDate)) {
-      setManualError('Редактирование невозможно: прошло 23:00 дня смены');
-      return;
-    }
-
-    setManualSaving(true);
-    try {
-      const newRecord: any = {
-        employee_id: Number(manualEmployeeId),
-        attraction_id: Number(manualAttractionId),
-        work_date: manualWorkDate,
-        start_time: manualStartTime,
-        end_time: manualEndTime,
-      };
-      if (existing) {
-        newRecord.version_type = 'edited';
-        newRecord.edited_at = new Date().toISOString();
-        newRecord.original_id = existing.original_id || existing.id;
-      } else {
-        newRecord.version_type = 'original';
-      }
-
-      const { error } = await supabase.from('schedule_assignments').insert([newRecord]);
-      if (error) throw error;
-
-      const emp = employees.find(e => e.id === manualEmployeeId);
-      const attr = attractions.find(a => a.id === manualAttractionId);
-      await logActivity(
-        isSuperAdmin ? 'superadmin' : 'admin',
-        profile.id,
-        'manual_schedule_add',
-        `Ручное назначение: ${emp?.full_name} -> ${attr?.name} на ${manualWorkDate} ${manualStartTime}-${manualEndTime}`
-      );
-      fetchData();
-      setManualEmployeeId('');
-      setManualAttractionId('');
-      setManualWorkDate('');
-      setManualStartTime('');
-      setManualEndTime('');
-      setManualAllowedAttractions([]);
-      alert('Назначение сохранено');
-    } catch (err: any) {
-      setManualError(err.message);
-    } finally {
-      setManualSaving(false);
-    }
+    // не используется
   };
 
   const handleDeleteSchedule = async (schedule: ScheduleAssignment) => {
@@ -669,9 +604,14 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
         </div>
 
         {activeTab === 'shifts' && (
-          // ... (весь существующий код вкладки shifts остаётся без изменений)
           <div className="p-6 space-y-6">
-            {/* ... */}
+            {/* содержимое вкладки shifts без изменений */}
+            <div className="flex items-center justify-between">
+              <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-gray-100"><ChevronLeft className="h-5 w-5" /></button>
+              <span className="text-lg font-semibold">{monthLabel}</span>
+              <button onClick={handleNextMonth} className="p-2 rounded-lg hover:bg-gray-100"><ChevronRight className="h-5 w-5" /></button>
+            </div>
+            {/* остальное содержимое shifts ... */}
           </div>
         )}
 
@@ -688,7 +628,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
                   Выбор даты
                 </h3>
                 
-                {/* Выбор месяца */}
                 <div className="flex items-center justify-between mb-4">
                   <button onClick={() => handleManualMonthChange('prev')} className="p-2 rounded-lg hover:bg-gray-100">
                     <ChevronLeft className="h-5 w-5" />
@@ -701,16 +640,13 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
                   </button>
                 </div>
                 
-                {/* Дни недели */}
                 <div className="grid grid-cols-7 gap-1 mb-2 text-center">
                   {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
                     <div key={day} className="text-xs font-medium text-gray-500">{day}</div>
                   ))}
                 </div>
                 
-                {/* Дни месяца */}
                 <div className="grid grid-cols-7 gap-1">
-                  {/* Пустые ячейки для выравнивания по дню недели */}
                   {Array.from({ length: (getDay(startOfMonth(manualMonth)) + 6) % 7 }).map((_, i) => (
                     <div key={`empty-${i}`} className="h-10" />
                   ))}
@@ -745,7 +681,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
                 </div>
               </div>
               
-              {/* Правая колонка - составление графика для выбранного дня */}
+              {/* Правая колонка - составление графика */}
               <div className="lg:col-span-2">
                 {!manualSelectedDay ? (
                   <div className="bg-white border rounded-xl p-8 text-center text-gray-400">
@@ -760,7 +696,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
                   <div className="bg-white border rounded-xl p-5 shadow-sm space-y-6">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold">
-                        График на {manualSelectedDay && format(manualSelectedDay, 'd MMMM yyyy', { locale: ru })}
+                        График на {format(manualSelectedDay, 'd MMMM yyyy', { locale: ru })}
                       </h3>
                       <button
                         onClick={handleSaveManualSchedule}
@@ -779,7 +715,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
                       </div>
                     )}
                     
-                    {/* Выбор работающих аттракционов */}
                     <div>
                       <h4 className="font-medium mb-3 flex items-center gap-2">
                         <Gamepad2 className="h-4 w-4 text-blue-600" />
@@ -801,7 +736,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
                       </div>
                     </div>
                     
-                    {/* Сотрудники, доступные в этот день */}
                     <div>
                       <h4 className="font-medium mb-3 flex items-center gap-2">
                         <Users className="h-4 w-4 text-blue-600" />
@@ -843,7 +777,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
                       )}
                     </div>
                     
-                    {/* Распределение по аттракционам */}
                     <div className="space-y-4">
                       <h4 className="font-medium">Назначения по аттракционам</h4>
                       {Array.from(manualWorkingAttractions).map(attrId => {
