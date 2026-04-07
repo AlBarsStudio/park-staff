@@ -1,3 +1,4 @@
+// Auth.tsx
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Lock, Mail, Loader2, Calendar } from 'lucide-react';
