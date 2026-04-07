@@ -1,3 +1,4 @@
+// Dashboard.tsx
 import { LogOut, Calendar } from 'lucide-react';
 import { UserProfile } from '../types';
 import { EmployeeDashboard } from './EmployeeDashboard';
@@ -12,19 +13,27 @@ interface DashboardProps {
 export function Dashboard({ profile, onLogout }: DashboardProps) {
   const getRoleName = (level: number) => {
     switch (level) {
-      case 1: return 'Супер Администратор';
-      case 2: return 'Администратор';
-      case 3: return 'Сотрудник';
-      default: return 'Неизвестно';
+      case 1:
+        return 'Супер Администратор';
+      case 2:
+        return 'Администратор';
+      case 3:
+        return 'Сотрудник';
+      default:
+        return 'Неизвестно';
     }
   };
 
   const getRoleBadgeColor = (level: number) => {
     switch (level) {
-      case 1: return 'bg-red-100 text-red-700';
-      case 2: return 'bg-purple-100 text-purple-700';
-      case 3: return 'bg-blue-100 text-blue-700';
-      default: return 'bg-gray-100 text-gray-700';
+      case 1:
+        return 'bg-red-100 text-red-700';
+      case 2:
+        return 'bg-purple-100 text-purple-700';
+      case 3:
+        return 'bg-blue-100 text-blue-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
     }
   };
 
@@ -40,7 +49,11 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
             <div className="flex items-center space-x-4">
               <div className="text-right hidden sm:block">
                 <div className="text-sm font-semibold text-gray-900">{profile.full_name}</div>
-                <div className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block ${getRoleBadgeColor(profile.access_level)}`}>
+                <div
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block ${getRoleBadgeColor(
+                    profile.access_level
+                  )}`}
+                >
                   {getRoleName(profile.access_level)}
                 </div>
               </div>
