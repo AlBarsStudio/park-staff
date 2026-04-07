@@ -6,7 +6,7 @@ import {
   Loader2, Search, Edit2, Trash2, Plus, ChevronLeft, ChevronRight,
   Calendar, LayoutGrid, CalendarDays, Wand2, X, Users, Gamepad2, Clock
 } from 'lucide-react';
-import { format, parseISO, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, startOfDay, addMonths, subMonths } from 'date-fns';
+import { format, parseISO, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, startOfDay, addMonths, subMonths, startOfWeek, addDays } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { ScheduleGenerator } from './ScheduleGenerator';
 import { EmployeesList } from './EmployeesList';
