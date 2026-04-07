@@ -1,4 +1,22 @@
-// AdminDashboard.tsx
+/*
+ * =====================================================================
+ * ВНИМАНИЕ! Этот файл разбит на логические блоки с комментариями.
+ * Каждый блок начинается с // ===== БЛОК N: ... =====
+ * 
+ * ПРАВИЛА ЗАМЕНЫ БЛОКОВ:
+ * 1. Если нужно изменить код только в определённых блоках (например, блок 10),
+ *    вы должны полностью заменить содержимое этих блоков, включая комментарии.
+ * 2. Не удаляйте и не изменяйте комментарии-разделители блоков без необходимости.
+ * 3. Если изменяете несколько блоков, заменяйте каждый целиком, сохраняя их порядок.
+ * 4. Остальные блоки (не упомянутые в задании) должны оставаться нетронутыми.
+ * 5. В ответе укажите, какие именно блоки были изменены.
+ * =====================================================================
+ */
+// ============================================================
+// БЛОК 1: Импорты и типы
+// Описание: Импорт всех зависимостей, компонентов, утилит и типов.
+// При изменении: заменять целиком, если добавляются новые импорты.
+// ============================================================
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../lib/activityLog';
@@ -14,6 +32,11 @@ import { ScheduleGenerator } from './ScheduleGenerator';
 import { EmployeesList } from './EmployeesList';
 import { AttractionsList } from './AttractionsList';
 
+// ============================================================
+// БЛОК 2: Вспомогательные функции и интерфейс пропсов
+// Описание: Проверка возможности редактирования, типы пропсов компонента.
+// При изменении: если меняется логика canEditSchedule или добавляются пропсы.
+// ============================================================
 type ViewMode = 'day' | 'week' | 'month';
 
 interface AdminDashboardProps {
@@ -21,7 +44,6 @@ interface AdminDashboardProps {
   isSuperAdmin?: boolean;
 }
 
-// Проверка, можно ли редактировать график (до 23:00 дня смены)
 function canEditSchedule(workDate: string): boolean {
   const now = new Date();
   const date = parseISO(workDate);
@@ -30,6 +52,11 @@ function canEditSchedule(workDate: string): boolean {
   return now < deadline;
 }
 
+// ============================================================
+// БЛОК 3: Состояния компонента (useState)
+// Описание: Все локальные состояния для управления данными и UI.
+// При изменении: заменять целиком при добавлении/удалении состояний.
+// ============================================================
 export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<'shifts' | 'schedule' | 'manual' | 'employees' | 'attractions'>('shifts');
 
@@ -39,6 +66,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
   const [attractions, setAttractions] = useState<Attraction[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [employeeSearch, setEmployeeSearch] = useState(''); // Новое состояние для поиска сотрудников
 
   const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth());
@@ -56,31 +84,34 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
   const [showShiftForm, setShowShiftForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // --- Состояния для ручного составления смены ---
+  // Состояния для ручного составления смены
   const [manualMonth, setManualMonth] = useState<Date>(new Date());
   const [manualSelectedDay, setManualSelectedDay] = useState<Date | null>(null);
   const [manualWorkingAttractions, setManualWorkingAttractions] = useState<Set<number>>(new Set());
-  const [manualEmployeesForDay, setManualEmployeesForDay] = useState<any[]>([]); // с доп. полями
+  const [manualEmployeesForDay, setManualEmployeesForDay] = useState<any[]>([]);
   const [manualDayAssignments, setManualDayAssignments] = useState<ScheduleAssignment[]>([]);
-  const [manualAttractionAssignments, setManualAttractionAssignments] = useState<Map<number, number[]>>(new Map()); // attractionId -> employeeId[]
+  const [manualAttractionAssignments, setManualAttractionAssignments] = useState<Map<number, number[]>>(new Map());
   const [manualDayDataLoading, setManualDayDataLoading] = useState(false);
   const [manualSaving, setManualSaving] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualShowAddModal, setManualShowAddModal] = useState<{ attractionId: number; attractionName: string } | null>(null);
   const [manualEmployeeSelection, setManualEmployeeSelection] = useState<Set<number>>(new Set());
 
-  // Кэш для приоритетов и целей (для фильтрации в модалке)
   const [prioritiesCache, setPrioritiesCache] = useState<any[]>([]);
   const [goalsCache, setGoalsCache] = useState<any[]>([]);
 
-  // --- Загрузка всех основных данных ---
+  // ============================================================
+  // БЛОК 4: Загрузка данных (fetchData и useEffect)
+  // Описание: Основная функция получения данных из БД. Обновлена для загрузки доп. полей сотрудников.
+  // При изменении: заменять целиком при изменении запросов или логики обновления.
+  // ============================================================
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Сотрудники
+      // Сотрудники — добавлены phone_number, telegram, vk, max
       const { data: empData, error: empError } = await supabase
         .from('employees')
-        .select('id, full_name, age, base_hourly_rate, last_login')
+        .select('id, full_name, age, base_hourly_rate, last_login, phone_number, telegram, vk, max')
         .order('full_name');
       if (empError) throw empError;
       setEmployees(empData || []);
@@ -155,7 +186,11 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     fetchData();
   }, []);
 
-  // --- Загрузка данных для выбранного дня в ручном режиме ---
+  // ============================================================
+  // БЛОК 5: Вспомогательные функции для ручного составления смены
+  // Описание: Загрузка данных дня, календарь, проверка наличия графика.
+  // При изменении: заменять целиком при модификации ручного режима.
+  // ============================================================
   const fetchDayData = useCallback(async (date: Date) => {
     if (!date) return;
     setManualDayDataLoading(true);
@@ -163,7 +198,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     try {
       const dateStr = format(date, 'yyyy-MM-dd');
       
-      // 1. Доступность сотрудников на эту дату
       const { data: availData, error: availError } = await supabase
         .from('employee_availability')
         .select('employee_id, is_full_day, start_time, end_time, comment')
@@ -172,7 +206,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
       
       const availableEmpIds = availData?.map(a => a.employee_id) || [];
       
-      // 2. Цели обучения (только для доступных сотрудников)
       let goalsData: any[] = [];
       if (availableEmpIds.length > 0) {
         const { data: goals, error: goalsError } = await supabase
@@ -183,31 +216,26 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
         goalsData = goals || [];
       }
       
-      // 3. Приоритеты (для всех сотрудников, понадобятся в модалке)
       const { data: priorities, error: prioritiesError } = await supabase
         .from('employee_attraction_priorities')
         .select('employee_id, attraction_id, priority_level');
       if (prioritiesError) throw prioritiesError;
       
-      // 4. Существующие назначения на этот день
       const { data: dayAssignments, error: assignError } = await supabase
         .from('schedule_assignments')
         .select('id, employee_id, attraction_id, start_time, end_time, version_type')
         .eq('work_date', dateStr);
       if (assignError) throw assignError;
       
-      // Подготавливаем карты для быстрого доступа
       const empMap = new Map(employees.map(e => [e.id, e]));
       const attrMap = new Map(attractions.map(a => [a.id, a]));
       
-      // Карта целей: employee_id -> attraction_name
       const goalsMap = new Map<number, string>();
       goalsData.forEach(g => {
         const attr = attrMap.get(g.attraction_id);
         if (attr) goalsMap.set(g.employee_id, attr.name);
       });
       
-      // Обогащаем данные сотрудников
       const enrichedEmployees = availData?.map(avail => {
         const emp = empMap.get(avail.employee_id);
         if (!emp) return null;
@@ -225,9 +253,8 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
       
       setManualEmployeesForDay(enrichedEmployees);
       
-      // Инициализируем выбранные аттракционы из существующих назначений
       const workingAttrSet = new Set<number>();
-      const assignMap = new Map<number, number[]>(); // attractionId -> employeeIds
+      const assignMap = new Map<number, number[]>();
       dayAssignments?.forEach(a => {
         workingAttrSet.add(a.attraction_id);
         const list = assignMap.get(a.attraction_id) || [];
@@ -238,7 +265,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
       setManualAttractionAssignments(assignMap);
       setManualDayAssignments(dayAssignments || []);
       
-      // Сохраняем приоритеты и цели в кэш
       setPrioritiesCache(priorities || []);
       setGoalsCache(goalsData);
       
@@ -250,36 +276,35 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     }
   }, [employees, attractions]);
 
-  // При выборе дня в календаре
   const handleDaySelect = (day: Date) => {
     setManualSelectedDay(day);
     fetchDayData(day);
   };
 
-  // Переключение месяца в календаре
   const handleManualMonthChange = (direction: 'prev' | 'next') => {
     setManualMonth(prev => direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1));
   };
 
-  // Генерация дней месяца для календаря
   const monthDays = useMemo(() => {
     const start = startOfMonth(manualMonth);
     const end = endOfMonth(manualMonth);
     return eachDayOfInterval({ start, end });
   }, [manualMonth]);
 
-  // Проверка наличия графика на день (любое назначение)
   const dayHasSchedule = (day: Date) => {
     return scheduleAssignments.some(a => isSameDay(parseISO(a.work_date), day));
   };
 
-  // Обработка выбора аттракциона для работы
+  // ============================================================
+  // БЛОК 6: Обработчики для ручного составления
+  // Описание: Управление аттракционами, добавление/удаление сотрудников, сохранение.
+  // При изменении: заменять целиком при правках ручного режима.
+  // ============================================================
   const toggleAttractionWorking = (attractionId: number) => {
     setManualWorkingAttractions(prev => {
       const next = new Set(prev);
       if (next.has(attractionId)) {
         next.delete(attractionId);
-        // При снятии галочки убираем всех сотрудников с этого аттракциона
         setManualAttractionAssignments(prevAssign => {
           const newAssign = new Map(prevAssign);
           newAssign.delete(attractionId);
@@ -292,7 +317,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     });
   };
 
-  // Добавление сотрудников к аттракциону
   const handleAddEmployeesToAttraction = (attractionId: number, employeeIds: number[]) => {
     setManualAttractionAssignments(prev => {
       const newMap = new Map(prev);
@@ -305,7 +329,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     setManualEmployeeSelection(new Set());
   };
 
-  // Удаление сотрудника с аттракциона
   const removeEmployeeFromAttraction = (attractionId: number, employeeId: number) => {
     setManualAttractionAssignments(prev => {
       const newMap = new Map(prev);
@@ -320,16 +343,13 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     });
   };
 
-  // Получение списка доступных сотрудников для аттракциона (с учётом приоритетов)
   const getAvailableEmployeesForAttraction = (attractionId: number) => {
-    // Сотрудники, которые ещё не назначены ни на один аттракцион
     const assignedEmployeeIds = new Set<number>();
     manualAttractionAssignments.forEach(ids => ids.forEach(id => assignedEmployeeIds.add(id)));
     
     const available = manualEmployeesForDay.filter(emp => !assignedEmployeeIds.has(emp.id));
     
-    // Группируем по приоритетам
-    const priorityMap = new Map<number, number[]>(); // priority -> employeeIds
+    const priorityMap = new Map<number, number[]>();
     prioritiesCache.forEach(p => {
       if (p.attraction_id === attractionId) {
         const list = priorityMap.get(p.priority_level) || [];
@@ -338,12 +358,10 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
       }
     });
     
-    // Цели обучения
     const goalEmployeeIds = goalsCache
       .filter(g => g.attraction_id === attractionId)
       .map(g => g.employee_id);
     
-    // Функция получения сотрудников по ID
     const getEmpsByIds = (ids: number[]) => {
       return available.filter(emp => ids.includes(emp.id));
     };
@@ -356,7 +374,6 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     };
   };
 
-  // Сохранение графика
   const handleSaveManualSchedule = async () => {
     if (!manualSelectedDay) {
       setManualError('Выберите день');
@@ -374,10 +391,8 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     
     const assignmentsToInsert: any[] = [];
     
-    // Для каждого аттракциона и сотрудника создаём запись
     manualAttractionAssignments.forEach((employeeIds, attractionId) => {
       employeeIds.forEach(empId => {
-        // Используем время из доступности сотрудника, если неполный день, иначе полный день (например, 10:00-22:00)
         const empAvail = manualEmployeesForDay.find(e => e.id === empId);
         let startTime = '10:00';
         let endTime = '22:00';
@@ -397,14 +412,12 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     });
     
     try {
-      // Удаляем все существующие назначения на эту дату
       const { error: deleteError } = await supabase
         .from('schedule_assignments')
         .delete()
         .eq('work_date', dateStr);
       if (deleteError) throw deleteError;
       
-      // Вставляем новые
       if (assignmentsToInsert.length > 0) {
         const { error: insertError } = await supabase
           .from('schedule_assignments')
@@ -419,9 +432,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
         `Ручное составление графика на ${dateStr}`
       );
       
-      // Обновляем данные
       await fetchData();
-      // Перезагружаем данные для дня, чтобы обновить галочку
       fetchDayData(manualSelectedDay);
       
       alert('График сохранён');
@@ -432,9 +443,11 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     }
   };
 
-  // --- Старый функционал (смены, недели и т.д.) остаётся без изменений ---
-  // ... (всё, что связано с shifts, schedule, employees, attractions)
-
+  // ============================================================
+  // БЛОК 7: Обработчики для старых смен (shifts)
+  // Описание: Логика работы с вкладкой "Управление сменами".
+  // При изменении: заменять целиком при правках этой вкладки.
+  // ============================================================
   const shiftsForMonth = useMemo(() => {
     return shifts.filter(s => {
       const d = parseISO(s.work_date);
@@ -548,7 +561,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
   const [manualAllowedAttractions, setManualAllowedAttractions] = useState<Attraction[]>([]);
 
   const handleManualEmployeeChange = async (empId: number | '') => {
-    // не используется в новом интерфейсе
+    // не используется
   };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
@@ -580,8 +593,20 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
   };
   const monthLabel = format(new Date(currentYear, currentMonth, 1), 'LLLL yyyy', { locale: ru });
 
+  // ============================================================
+  // БЛОК 8: Вычисляемые значения и рендер календаря (общие)
+  // Описание: Вспомогательные функции для календаря вкладки "Управление сменами".
+  // При изменении: заменять целиком при изменении календаря смен.
+  // ============================================================
+  // (Весь код выше уже содержит вычисления)
+
   if (loading) return <div className="flex justify-center p-16"><Loader2 className="animate-spin text-blue-600 h-8 w-8" /></div>;
 
+  // ============================================================
+  // БЛОК 9: Рендер основного компонента (вкладки)
+  // Описание: Верхняя панель вкладок и условный рендер содержимого.
+  // При изменении: заменять только обёртку вкладок, не трогая внутренние блоки.
+  // ============================================================
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -970,24 +995,157 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
           </div>
         )}
 
+        {/* ============================================================ */}
+        {/* БЛОК 10: Вкладка "Сотрудники" (ПОЛНОСТЬЮ ПЕРЕРАБОТАН)        */}
+        {/* Описание: Отображает список сотрудников с поиском по ФИО,    */}
+        /*            возрастом, телефоном, соцсетями и последним входом.*/}
+        {/* При изменении: ЗАМЕНЯТЬ ВЕСЬ ЭТОТ БЛОК ЦЕЛИКОМ.              */}
+        {/* ============================================================ */}
         {activeTab === 'employees' && (
-          <div className="p-6">
-            <EmployeesList isSuperAdmin={isSuperAdmin} currentUserId={profile.id} onEmployeeUpdate={fetchData} />
-            <div className="mt-6 border rounded-xl overflow-hidden">
-              <div className="bg-gray-50 px-4 py-3 border-b"><h4 className="font-medium">Статистика входов</h4></div>
+          <div className="p-6 space-y-6">
+            {/* Заголовок и поиск */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h3 className="text-xl font-semibold">Сотрудники</h3>
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Поиск по имени, фамилии или отчеству..."
+                  value={employeeSearch}
+                  onChange={(e) => setEmployeeSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Таблица сотрудников */}
+            <div className="border rounded-xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">ФИО</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Возраст</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Телефон</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Соцсети</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Последний вход</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {employees
+                      .filter(emp => {
+                        if (!employeeSearch.trim()) return true;
+                        const query = employeeSearch.toLowerCase();
+                        return emp.full_name?.toLowerCase().includes(query) || false;
+                      })
+                      .map(emp => (
+                        <tr key={emp.id} className="hover:bg-gray-50 transition">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{emp.full_name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{emp.age || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{emp.phone_number || '—'}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <div className="flex items-center gap-3">
+                              {emp.telegram && (
+                                <a
+                                  href={emp.telegram.startsWith('http') ? emp.telegram : `https://t.me/${emp.telegram.replace('@', '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-500 hover:text-blue-700"
+                                  title="Telegram"
+                                >
+                                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.57-1.37-.93-2.22-1.49-.98-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.05-.2-.06-.06-.15-.04-.22-.02-.09.02-1.52.96-4.29 2.84-.41.28-.78.42-1.11.41-.37-.01-1.07-.21-1.59-.38-.64-.21-1.15-.32-1.1-.67.02-.18.27-.37.74-.56 2.88-1.25 4.8-2.08 5.76-2.48 2.74-1.14 3.31-1.34 3.68-1.34.08 0 .26.02.38.12.1.08.13.19.14.27.01.08.02.17 0 .24z"/>
+                                  </svg>
+                                </a>
+                              )}
+                              {emp.vk && (
+                                <a
+                                  href={emp.vk.startsWith('http') ? emp.vk : `https://vk.com/${emp.vk}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title="ВКонтакте"
+                                >
+                                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M21.579 6.855c.14-.465 0-.806-.662-.806h-2.193c-.558 0-.813.295-.953.62 0 0-1.115 2.719-2.695 4.482-.51.513-.743.675-1.021.675-.139 0-.341-.162-.341-.627V6.855c0-.558-.161-.806-.626-.806H9.642c-.348 0-.558.258-.558.504 0 .528.79.65.871 2.138v3.228c0 .707-.127.836-.407.836-.743 0-2.551-2.729-3.624-5.853-.209-.607-.42-.853-.98-.853H2.752c-.627 0-.752.295-.752.62 0 .582.743 3.462 3.462 7.271 1.812 2.601 4.363 4.011 6.687 4.011 1.393 0 1.565-.313 1.565-.852v-1.966c0-.626.133-.752.574-.752.324 0 .882.164 2.183 1.417 1.486 1.486 1.732 2.153 2.567 2.153h2.192c.626 0 .939-.313.759-.931-.197-.615-.907-1.51-1.849-2.569-.512-.604-1.277-1.254-1.51-1.579-.325-.419-.232-.604 0-.976.001.001 2.672-3.761 2.95-5.04z"/>
+                                  </svg>
+                                </a>
+                              )}
+                              {emp.max && (
+                                <a
+                                  href={emp.max.startsWith('http') ? emp.max : `https://max.ru/${emp.max}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-purple-600 hover:text-purple-800"
+                                  title="Max"
+                                >
+                                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
+                                    <text x="12" y="16" fontSize="10" textAnchor="middle" fill="currentColor" fontWeight="bold">M</text>
+                                  </svg>
+                                </a>
+                              )}
+                              {!emp.telegram && !emp.vk && !emp.max && <span className="text-gray-400 text-xs">—</span>}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {emp.last_login
+                              ? format(parseISO(emp.last_login), 'dd.MM.yyyy HH:mm')
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              {employees.length === 0 && (
+                <div className="p-8 text-center text-gray-500">Нет сотрудников</div>
+              )}
+              {employees.length > 0 && employees.filter(emp => emp.full_name?.toLowerCase().includes(employeeSearch.toLowerCase())).length === 0 && (
+                <div className="p-8 text-center text-gray-500">По запросу «{employeeSearch}» ничего не найдено</div>
+              )}
+            </div>
+
+            {/* Статистика входов (сохранена для обратной совместимости) */}
+            <div className="border rounded-xl overflow-hidden">
+              <div className="bg-gray-50 px-4 py-3 border-b">
+                <h4 className="font-medium">Статистика входов</h4>
+              </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gray-50"><tr><th className="px-4 py-3 text-left text-xs font-semibold">Сотрудник</th><th className="px-4 py-3 text-left text-xs font-semibold">Последний вход</th></tr></thead>
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold">Сотрудник</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold">Последний вход</th>
+                    </tr>
+                  </thead>
                   <tbody className="divide-y bg-white">
-                    {employees.map(emp => <tr key={emp.id}><td className="px-4 py-3 text-sm font-medium">{emp.full_name}</td><td className="px-4 py-3 text-sm">{emp.last_login ? format(parseISO(emp.last_login), 'dd.MM.yyyy HH:mm') : '—'}</td></tr>)}
+                    {employees.map(emp => (
+                      <tr key={emp.id}>
+                        <td className="px-4 py-3 text-sm font-medium">{emp.full_name}</td>
+                        <td className="px-4 py-3 text-sm">
+                          {emp.last_login ? format(parseISO(emp.last_login), 'dd.MM.yyyy HH:mm') : '—'}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
           </div>
         )}
+        {/* КОНЕЦ БЛОКА 10 */}
 
-        {activeTab === 'attractions' && <div className="p-6"><AttractionsList isSuperAdmin={isSuperAdmin} onAttractionUpdate={fetchData} /></div>}
+        {/* ============================================================ */}
+        {/* БЛОК 11: Вкладка "Аттракционы" (без изменений)               */}
+        {/* Описание: Отображает список аттракционов через компонент.    */}
+        {/* При изменении: заменять целиком при правках аттракционов.    */}
+        {/* ============================================================ */}
+        {activeTab === 'attractions' && (
+          <div className="p-6">
+            <AttractionsList isSuperAdmin={isSuperAdmin} onAttractionUpdate={fetchData} />
+          </div>
+        )}
       </div>
     </div>
   );
