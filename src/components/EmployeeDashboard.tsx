@@ -3,12 +3,12 @@ import { supabase } from '../lib/supabase';
 import { logActivity } from '../lib/activityLog';
 import { UserProfile, Shift, Priority } from '../types';
 import { getRandomGreeting } from '../utils/greetings';
-import { format, isBefore, startOfDay, parseISO, addMonths, subMonths, differenceInMinutes, differenceInHours } from 'date-fns';
+import { format, isBefore, startOfDay, parseISO, addMonths, subMonths, differenceInMinutes } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { 
   Loader2, Calendar, Star, Map, ChevronLeft, ChevronRight,
-  Plus, Trash2, X, AlertCircle, Clock, FileText, MessageCircle,
-  CheckCircle, DollarSign, History, User
+  Trash2, X, Clock, FileText, MessageCircle,
+  CheckCircle, DollarSign
 } from 'lucide-react';
 
 // ======================== ТИПЫ ========================
@@ -475,7 +475,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   }, [activeTab, salaryPeriod]);
 
-  // Упрощённое сохранение цели (без лимита изменений)
+  // ✨ UPSERT для цели изучения (без лимита изменений)
   const handleSaveStudyGoal = async () => {
     if (!selectedAttractionId) {
       setGoalError('Выберите аттракцион');
@@ -484,24 +484,16 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingGoal(true);
     setGoalError('');
     try {
-      if (studyGoal) {
-        const { error } = await supabase
-          .from('employee_study_goals')
-          .update({
-            attraction_id: selectedAttractionId,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', studyGoal.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('employee_study_goals')
-          .insert({
-            employee_id: profile.id,
-            attraction_id: selectedAttractionId,
-          });
-        if (error) throw error;
-      }
+      // Пытаемся обновить, если запись с таким employee_id существует – иначе вставляем
+      const { error } = await supabase
+        .from('employee_study_goals')
+        .upsert({
+          employee_id: profile.id,
+          attraction_id: selectedAttractionId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'employee_id' }); // уникальное ограничение на employee_id
+
+      if (error) throw error;
       await fetchData();
       alert('Цель изучения сохранена');
     } catch (err: any) {
