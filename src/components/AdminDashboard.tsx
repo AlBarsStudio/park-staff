@@ -666,7 +666,7 @@ const monthLabel = format(new Date(currentYear, currentMonth, 1), 'LLLL yyyy', {
 
   if (loading) return <div className="flex justify-center p-16"><Loader2 className="animate-spin text-blue-600 h-8 w-8" /></div>;
 
-  // ============================================================
+// ============================================================
 // БЛОК 9: Рендер основного компонента (вкладки)
 // Описание: Верхняя панель вкладок и условный рендер содержимого.
 // При изменении: заменять только обёртку вкладок, не трогая внутренние блоки.
@@ -692,7 +692,7 @@ return (
         </button>
       </div>
 
-      {/* ===== ВКЛАДКА "УПРАВЛЕНИЕ СМЕНАМИ" (ПОЛНОСТЬЮ ПЕРЕРАБОТАНА) ===== */}
+      {/* ===== ВКЛАДКА "УПРАВЛЕНИЕ СМЕНАМИ" ===== */}
       {activeTab === 'shifts' && (
         <div className="p-6 space-y-6">
           {/* Заголовок и выбор месяца */}
@@ -1037,13 +1037,16 @@ return (
         </div>
       )}
 
-      {/* ===== ВКЛАДКА "ГЕНЕРАТОР ГРАФИКА" (БЕЗ ИЗМЕНЕНИЙ) ===== */}
-      {activeTab === 'schedule' && <div className="p-6"><ScheduleGenerator profile={profile} isSuperAdmin={isSuperAdmin} onScheduleGenerated={fetchData} /></div>}
+      {/* ===== ВКЛАДКА "ГЕНЕРАТОР ГРАФИКА" ===== */}
+      {activeTab === 'schedule' && (
+        <div className="p-6">
+          <ScheduleGenerator profile={profile} isSuperAdmin={isSuperAdmin} onScheduleGenerated={fetchData} />
+        </div>
+      )}
 
-      {/* ===== ВКЛАДКА "РУЧНОЕ СОСТАВЛЕНИЕ СМЕНЫ" (БЕЗ ИЗМЕНЕНИЙ) ===== */}
+      {/* ===== ВКЛАДКА "РУЧНОЕ СОСТАВЛЕНИЕ СМЕНЫ" ===== */}
       {activeTab === 'manual' && (
         <div className="p-6 space-y-6">
-          {/* ... (весь оригинальный код ручного составления без изменений) ... */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Левая колонка - календарь */}
             <div className="lg:col-span-1 bg-white border rounded-xl p-4 shadow-sm">
@@ -1394,7 +1397,7 @@ return (
         </div>
       )}
 
-      {/* ===== ВКЛАДКА "СОТРУДНИКИ" (БЕЗ ИЗМЕНЕНИЙ) ===== */}
+      {/* ===== ВКЛАДКА "СОТРУДНИКИ" ===== */}
       {activeTab === 'employees' && (
         <div className="p-6 space-y-6">
           {/* Заголовок и поиск */}
@@ -1529,7 +1532,7 @@ return (
         </div>
       )}
 
-      {/* ===== ВКЛАДКА "АТТРАКЦИОНЫ" (БЕЗ ИЗМЕНЕНИЙ) ===== */}
+      {/* ===== ВКЛАДКА "АТТРАКЦИОНЫ" ===== */}
       {activeTab === 'attractions' && (
         <div className="p-6">
           <AttractionsList isSuperAdmin={isSuperAdmin} onAttractionUpdate={fetchData} />
