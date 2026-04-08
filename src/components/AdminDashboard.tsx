@@ -31,6 +31,7 @@ import { ru } from 'date-fns/locale';
 import { ScheduleGenerator } from './ScheduleGenerator';
 import { EmployeesList } from './EmployeesList';
 import { AttractionsList } from './AttractionsList';
+import { ScheduleViewBlock } from './ScheduleViewBlock';
 
 // ============================================================
 // БЛОК 2: Вспомогательные функции и интерфейс пропсов
@@ -58,7 +59,7 @@ function canEditSchedule(workDate: string): boolean {
 // При изменении: заменять целиком при добавлении/удалении состояний.
 // ============================================================
 export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'shifts' | 'schedule' | 'manual' | 'employees' | 'attractions'>('shifts');
+  const [activeTab, setActiveTab] = useState<'shifts' | 'schedule' | 'manual' | 'employees' | 'attractions' | 'scheduleView'>('shifts');
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<ShiftWithEmployee[]>([]);
@@ -105,6 +106,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
 
   const [prioritiesCache, setPrioritiesCache] = useState<any[]>([]);
   const [goalsCache, setGoalsCache] = useState<any[]>([]);
+  const [scheduleViewMonth, setScheduleViewMonth] = useState<Date>(new Date());
 
   // ============================================================
   // БЛОК 4: Загрузка данных (fetchData и useEffect)
@@ -683,6 +685,9 @@ return (
         </button>
         <button onClick={() => setActiveTab('manual')} className={`flex-1 sm:flex-none px-6 py-4 text-sm font-medium flex items-center justify-center gap-2 border-b-2 transition ${activeTab === 'manual' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
           <UserCheck className="h-4 w-4" /> Ручное составление смены
+        </button>
+        <button onClick={() => setActiveTab('scheduleView')} className={`flex-1 sm:flex-none px-6 py-4 text-sm font-medium flex items-center justify-center gap-2 border-b-2 transition ${activeTab === 'scheduleView' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
+          <LayoutGrid className="h-4 w-4" /> График смен
         </button>
         <button onClick={() => setActiveTab('employees')} className={`flex-1 sm:flex-none px-6 py-4 text-sm font-medium flex items-center justify-center gap-2 border-b-2 transition ${activeTab === 'employees' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
           <Users className="h-4 w-4" /> Сотрудники
@@ -1396,8 +1401,19 @@ return (
           )}
         </div>
       )}
-
-      {/* ===== БЛОК 13: Вкладка "Сотрудники" ===== */}
+      
+      {/* ===== БЛОК 13: Вкладка "График смен" ===== */}
+      {activeTab === 'scheduleView' && (
+        <ScheduleViewBlock
+          scheduleAssignments={scheduleAssignments}
+          attractions={attractions}
+          employees={employees}
+          scheduleViewMonth={scheduleViewMonth}
+          setScheduleViewMonth={setScheduleViewMonth}
+        />
+      )}
+      
+      {/* ===== БЛОК 14: Вкладка "Сотрудники" ===== */}
       {activeTab === 'employees' && (
         <div className="p-6 space-y-6">
           {/* Заголовок и поиск */}
@@ -1532,7 +1548,7 @@ return (
         </div>
       )}
 
-      {/* ===== БЛОК 14: Вкладка "Аттракционы" ===== */}
+      {/* ===== БЛОК 15: Вкладка "Аттракционы" ===== */}
       {activeTab === 'attractions' && (
         <div className="p-6">
           <AttractionsList isSuperAdmin={isSuperAdmin} onAttractionUpdate={fetchData} />
