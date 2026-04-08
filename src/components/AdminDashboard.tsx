@@ -12,25 +12,27 @@
  * 5. В ответе укажите, какие именно блоки были изменены.
  * =====================================================================
  */
+
 // ============================================================
 // БЛОК 1: Импорты и типы
 // Описание: Импорт всех зависимостей, компонентов, утилит и типов.
 // При изменении: заменять целиком, если добавляются новые импорты.
 // ============================================================
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../lib/activityLog';
 import { UserProfile, ShiftWithEmployee, Employee, ScheduleAssignment, Attraction } from '../types';
 import {
   Loader2, Search, Edit2, Trash2, Plus, ChevronLeft, ChevronRight,
   Calendar, LayoutGrid, CalendarDays, Wand2, X, Users, Gamepad2, Clock, UserCheck,
-  CheckCircle, Circle, AlertCircle, MessageSquare, PlusCircle, MinusCircle, Save
+  CheckCircle, Circle, AlertCircle, MessageSquare, PlusCircle, MinusCircle, Save, Download
 } from 'lucide-react';
 import { format, parseISO, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, startOfDay, addMonths, subMonths, startOfWeek, addDays, isWeekend, getDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { ScheduleGenerator } from './ScheduleGenerator';
 import { EmployeesList } from './EmployeesList';
 import { AttractionsList } from './AttractionsList';
+import html2canvas from 'html2canvas';
 
 // ============================================================
 // БЛОК 2: Вспомогательные функции и интерфейс пропсов
@@ -58,7 +60,7 @@ function canEditSchedule(workDate: string): boolean {
 // При изменении: заменять целиком при добавлении/удалении состояний.
 // ============================================================
 export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'shifts' | 'schedule' | 'manual' | 'employees' | 'attractions'>('shifts');
+  const [activeTab, setActiveTab] = useState<'shifts' | 'schedule' | 'manual' | 'employees' | 'attractions' | 'schedule_view'>('shifts');
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<ShiftWithEmployee[]>([]);
@@ -105,6 +107,13 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
 
   const [prioritiesCache, setPrioritiesCache] = useState<any[]>([]);
   const [goalsCache, setGoalsCache] = useState<any[]>([]);
+
+  // Новые состояния для вкладки "График"
+  const [scheduleViewMonth, setScheduleViewMonth] = useState<Date>(new Date());
+  const [scheduleViewDaysCount, setScheduleViewDaysCount] = useState<number>(1);
+  const [scheduleViewIsWeek, setScheduleViewIsWeek] = useState<boolean>(false);
+  const [scheduleViewWeekOffset, setScheduleViewWeekOffset] = useState<number>(0); // 0 = текущая неделя месяца
+  const scheduleExportRef = useRef<HTMLDivElement>(null);
 
   // ============================================================
   // БЛОК 4: Загрузка данных (fetchData и useEffect)
@@ -683,6 +692,9 @@ return (
         </button>
         <button onClick={() => setActiveTab('manual')} className={`flex-1 sm:flex-none px-6 py-4 text-sm font-medium flex items-center justify-center gap-2 border-b-2 transition ${activeTab === 'manual' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
           <UserCheck className="h-4 w-4" /> Ручное составление смены
+        </button>
+        <button onClick={() => setActiveTab('schedule_view')} className={`flex-1 sm:flex-none px-6 py-4 text-sm font-medium flex items-center justify-center gap-2 border-b-2 transition ${activeTab === 'schedule_view' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
+          <LayoutGrid className="h-4 w-4" /> График
         </button>
         <button onClick={() => setActiveTab('employees')} className={`flex-1 sm:flex-none px-6 py-4 text-sm font-medium flex items-center justify-center gap-2 border-b-2 transition ${activeTab === 'employees' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
           <Users className="h-4 w-4" /> Сотрудники
@@ -1394,6 +1406,187 @@ return (
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ===== ВКЛАДКА "ГРАФИК" ===== */}
+      {activeTab === 'schedule_view' && (
+        <div className="p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setScheduleViewMonth(prev => subMonths(prev, 1))}
+                className="p-2 rounded-lg hover:bg-gray-100"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <span className="text-xl font-semibold capitalize">
+                {format(scheduleViewMonth, 'LLLL yyyy', { locale: ru })}
+              </span>
+              <button
+                onClick={() => setScheduleViewMonth(prev => addMonths(prev, 1))}
+                className="p-2 rounded-lg hover:bg-gray-100"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={scheduleViewDaysCount}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setScheduleViewDaysCount(val);
+                  setScheduleViewIsWeek(false);
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                {[1,2,3,4,5,6,7].map(n => (
+                  <option key={n} value={n}>{n} {n === 1 ? 'день' : n < 5 ? 'дня' : 'дней'}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  setScheduleViewIsWeek(true);
+                  setScheduleViewWeekOffset(0);
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  scheduleViewIsWeek ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Неделя
+              </button>
+            </div>
+          </div>
+
+          {/* Навигация по неделям (только в режиме "Неделя") */}
+          {scheduleViewIsWeek && (
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setScheduleViewWeekOffset(prev => prev - 1)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-sm font-medium">
+                {format(addDays(startOfWeek(startOfMonth(scheduleViewMonth), { weekStartsOn: 1 }), scheduleViewWeekOffset * 7), 'd MMM')}
+                {' – '}
+                {format(addDays(addDays(startOfWeek(startOfMonth(scheduleViewMonth), { weekStartsOn: 1 }), scheduleViewWeekOffset * 7), 6), 'd MMM yyyy')}
+              </span>
+              <button
+                onClick={() => setScheduleViewWeekOffset(prev => prev + 1)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Кнопка экспорта */}
+          <div className="flex justify-end">
+            <button
+              onClick={async () => {
+                if (!scheduleExportRef.current) return;
+                try {
+                  const canvas = await html2canvas(scheduleExportRef.current, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                  });
+                  const link = document.createElement('a');
+                  const startDate = scheduleViewIsWeek
+                    ? addDays(startOfWeek(startOfMonth(scheduleViewMonth), { weekStartsOn: 1 }), scheduleViewWeekOffset * 7)
+                    : startOfDay(new Date());
+                  const endDate = scheduleViewIsWeek
+                    ? addDays(startDate, 6)
+                    : addDays(startDate, scheduleViewDaysCount - 1);
+                  const fileName = `График_смен_${format(startDate, 'dd.MM.yyyy')}-${format(endDate, 'dd.MM.yyyy')}.png`;
+                  link.download = fileName;
+                  link.href = canvas.toDataURL('image/png');
+                  link.click();
+                } catch (err) {
+                  console.error('Ошибка экспорта:', err);
+                  alert('Не удалось экспортировать график');
+                }
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700"
+            >
+              <Download className="h-4 w-4" />
+              Сохранить как PNG
+            </button>
+          </div>
+
+          {/* Область экспорта */}
+          <div ref={scheduleExportRef} className="bg-white rounded-xl border shadow-sm p-4">
+            {(() => {
+              // Определяем отображаемый период
+              let startDate: Date;
+              let endDate: Date;
+              if (scheduleViewIsWeek) {
+                const firstDayOfMonth = startOfMonth(scheduleViewMonth);
+                const baseWeekStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 1 });
+                startDate = addDays(baseWeekStart, scheduleViewWeekOffset * 7);
+                endDate = addDays(startDate, 6);
+              } else {
+                startDate = startOfDay(new Date());
+                endDate = addDays(startDate, scheduleViewDaysCount - 1);
+              }
+
+              const days = eachDayOfInterval({ start: startDate, end: endDate });
+              const dayAssignmentsMap = new Map<string, ScheduleAssignment[]>();
+              days.forEach(day => {
+                const dateStr = format(day, 'yyyy-MM-dd');
+                const dayAssignments = scheduleAssignments.filter(a => a.work_date === dateStr);
+                dayAssignmentsMap.set(dateStr, dayAssignments);
+              });
+
+              // Группируем по аттракционам для компактного отображения
+              const allAttractions = attractions.sort((a,b) => a.name.localeCompare(b.name));
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead>
+                      <tr>
+                        <th className="sticky left-0 bg-white px-3 py-2 text-left font-semibold text-gray-700 border-r">Аттракцион</th>
+                        {days.map(day => (
+                          <th key={day.toISOString()} className="px-3 py-2 text-center font-medium text-gray-700 min-w-[140px]">
+                            <div>{format(day, 'EEEE', { locale: ru })}</div>
+                            <div className="text-xs text-gray-500">{format(day, 'dd.MM.yyyy')}</div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {allAttractions.map(attr => (
+                        <tr key={attr.id}>
+                          <td className="sticky left-0 bg-white px-3 py-2 font-medium border-r">{attr.name}</td>
+                          {days.map(day => {
+                            const dateStr = format(day, 'yyyy-MM-dd');
+                            const dayAssignments = dayAssignmentsMap.get(dateStr) || [];
+                            const attrAssignments = dayAssignments.filter(a => a.attraction_id === attr.id);
+                            if (attrAssignments.length === 0) {
+                              return <td key={day.toISOString()} className="px-3 py-2 text-center text-gray-400">—</td>;
+                            }
+                            return (
+                              <td key={day.toISOString()} className="px-3 py-2">
+                                {attrAssignments.map((a, idx) => (
+                                  <div key={a.id} className="text-xs">
+                                    <span className="font-medium">{a.employees?.full_name || '?'}</span>
+                                    <span className="text-gray-500 ml-1">{a.start_time?.slice(0,5)}-{a.end_time?.slice(0,5)}</span>
+                                    {idx < attrAssignments.length - 1 && <br />}
+                                  </div>
+                                ))}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
