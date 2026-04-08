@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/shift-schedule-test/',
+  base: '/park-staff/',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
