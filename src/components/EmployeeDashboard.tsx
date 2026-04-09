@@ -99,6 +99,12 @@ function isDateActive(dateStr: string): boolean {
   return true;
 }
 
+// Вспомогательная функция для получения первого доступного конечного времени
+function getFirstAvailableEndTime(startTime: string, endTimes: string[]): string {
+  const available = endTimes.filter(t => t > startTime);
+  return available.length > 0 ? available[0] : endTimes[endTimes.length - 1];
+}
+
 // ============================================================
 // БЛОК 3: Основной компонент и состояния
 // Описание: Определение компонента EmployeeDashboard, useState.
@@ -203,6 +209,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   // БЛОК 6: Загрузка данных (fetchData) - ПОЛНОСТЬЮ ПЕРЕПИСАН
   // Описание: Загружает смены, приоритеты, цель, график.
   // Теперь использует кэш аттракционов, загруженный отдельно.
+  // Исправлена обработка null в attraction_ids.
   // ============================================================
   
   // 0. Загрузка всех аттракционов при монтировании
@@ -292,7 +299,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
 
       // --- 4. Доступные аттракционы (для цели) ---
       try {
-        const attractionIdsWithPriority = prioRecords.flatMap(r => r.attraction_ids);
+        const attractionIdsWithPriority = prioRecords.flatMap(r => r.attraction_ids || []);
         const allAttractions = Array.from(attractionMap.entries()).map(([id, name]) => ({ id, name }));
         let available = allAttractions.filter(a => !attractionIdsWithPriority.includes(a.id));
 
@@ -410,6 +417,16 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     setModalError('');
     setIsAddModalOpen(true);
   };
+
+  // Эффект для синхронизации конечного времени при смене начального
+  useEffect(() => {
+    if (!isFullDayModal && isAddModalOpen) {
+      const firstAvailable = getFirstAvailableEndTime(modalStartTime, END_TIMES);
+      if (modalEndTime <= modalStartTime) {
+        setModalEndTime(firstAvailable);
+      }
+    }
+  }, [modalStartTime, isFullDayModal, isAddModalOpen, END_TIMES]);
 
   const openViewModal = (shift: Shift) => {
     setViewShift(shift);
@@ -804,7 +821,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
           {availableAttractions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
         <button onClick={handleSaveStudyGoal} disabled={savingGoal} className="w-full bg-blue-600 text-white py-2 rounded">
-          Сохранить цель
+          {savingGoal ? 'Сохранение...' : 'Сохранить цель'}
         </button>
       </div>
     );
@@ -934,7 +951,9 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
               <div><label className="block text-xs">Время прихода</label><input type="time" value={actualStart} onChange={e => setActualStart(e.target.value)} className="border rounded w-full p-2" /></div>
               <div><label className="block text-xs">Время ухода</label><input type="time" value={actualEnd} onChange={e => setActualEnd(e.target.value)} className="border rounded w-full p-2" /></div>
             </div>
-            <button onClick={handleSaveTimeLog} disabled={savingTimeLog} className="w-full bg-blue-600 text-white py-2 rounded">Сохранить</button>
+            <button onClick={handleSaveTimeLog} disabled={savingTimeLog} className="w-full bg-blue-600 text-white py-2 rounded">
+              {savingTimeLog ? 'Сохранение...' : 'Сохранить'}
+            </button>
           </div>
         </div>
       )}
