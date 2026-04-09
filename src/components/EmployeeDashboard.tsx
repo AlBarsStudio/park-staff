@@ -179,24 +179,48 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         .order('work_date');
       if (shiftData) setShifts(shiftData as Shift[]);
 
-      // 2. Приоритеты (ИСПРАВЛЕННЫЙ БЛОК)
+      // 2. Приоритеты (двухэтапная загрузка без вложенного select)
       console.log('🔄 Загружаем приоритеты для employee_id:', profile.id);
       const { data: prioData, error: prioError } = await supabase
         .from('employee_attraction_priorities')
-        .select(`
-          id,
-          priority_level,
-          attraction_id,
-          attractions ( name )
-        `)
+        .select('id, priority_level, attraction_id')
         .eq('employee_id', profile.id)
         .order('priority_level', { ascending: true });
 
       if (prioError) {
         console.error('❌ Ошибка загрузки приоритетов:', prioError);
+        setPriorities([]);
       } else {
-        console.log('✅ Приоритеты загружены:', prioData);
-        setPriorities(prioData as unknown as Priority[]);
+        console.log('✅ Получены приоритеты (без названий):', prioData);
+        if (prioData && prioData.length > 0) {
+          const attractionIds = prioData.map(p => p.attraction_id);
+          const { data: attractionsData, error: attrError } = await supabase
+            .from('attractions')
+            .select('id, name')
+            .in('id', attractionIds);
+
+          if (attrError) {
+            console.error('❌ Ошибка загрузки названий аттракционов:', attrError);
+            // Даже без названий покажем приоритеты с "Неизвестный"
+            const prioritiesWithNames = prioData.map(p => ({
+              ...p,
+              attractions: { name: 'Неизвестный' }
+            }));
+            setPriorities(prioritiesWithNames as unknown as Priority[]);
+          } else {
+            console.log('✅ Названия аттракционов:', attractionsData);
+            const attractionMap = new Map(attractionsData?.map(a => [a.id, a.name]) || []);
+            const prioritiesWithNames = prioData.map(p => ({
+              ...p,
+              attractions: { name: attractionMap.get(p.attraction_id) || 'Неизвестный' }
+            }));
+            setPriorities(prioritiesWithNames as unknown as Priority[]);
+            console.log('✅ Приоритеты с названиями:', prioritiesWithNames);
+          }
+        } else {
+          setPriorities([]);
+          console.log('ℹ️ Нет записей о приоритетах');
+        }
       }
 
       // 3. Цель изучения
@@ -644,9 +668,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     );
   };
 
-  // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ РЕНДЕРА ПРИОРИТЕТОВ ==========
+  // ========== РЕНДЕР ПРИОРИТЕТОВ (показывает 1,2,3) ==========
   const renderPriorities = () => {
-    // Заполняем дефолтные значения для уровней 1,2,3
+    // Заполняем дефолтные значения
     const priorityMap: Record<number, string> = {
       1: 'Не задан',
       2: 'Не задан',
