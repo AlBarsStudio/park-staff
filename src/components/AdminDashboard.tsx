@@ -30,7 +30,6 @@ import {
 import { ru } from 'date-fns/locale';
 import { ScheduleGenerator } from './ScheduleGenerator';
 import { AttractionsList } from './AttractionsList';
-import html2canvas from 'html2canvas';
 
 // ============================================================
 // БЛОК 2: Типы
@@ -651,36 +650,77 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
     }
   };
 
-  // ============================================================
-  // БЛОК 9: Экспорт графика в PNG (высокое качество)
-  // ============================================================
-  const handleExportScheduleImage = async () => {
-    if (!scheduleViewRef.current) return;
+// ============================================================
+// БЛОК 9: Экспорт графика в PNG (простой метод)
+// ============================================================
+const handleExportScheduleImage = async () => {
+  if (!scheduleViewRef.current) return;
 
-    setExportingImage(true);
+  setExportingImage(true);
 
-    try {
-      // Увеличиваем scale для высокого разрешения (эмуляция ~300 DPI)
-      const canvas = await html2canvas(scheduleViewRef.current, {
-        scale: 3, // 3x = ~288 DPI при обычном экране 96 DPI
-        useCORS: true,
-        backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
-        logging: false,
-        width: scheduleViewRef.current.scrollWidth,
-        height: scheduleViewRef.current.scrollHeight,
-      });
+  try {
+    const element = scheduleViewRef.current;
+    const scale = 3; // Множитель для высокого разрешения
 
-      const link = document.createElement('a');
-      link.download = `график_${format(scheduleViewMonth, 'MMMM-yyyy', { locale: ru })}.png`;
-      link.href = canvas.toDataURL('image/png', 1.0);
-      link.click();
-    } catch (err) {
-      console.error('[AdminDashboard] Ошибка экспорта:', err);
-      alert('Ошибка при экспорте изображения');
-    } finally {
-      setExportingImage(false);
+    // Создаём временный контейнер для рендера
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      throw new Error('Не удалось открыть окно для экспорта');
     }
-  };
+
+    // Копируем все стили
+    const styles = Array.from(document.styleSheets)
+      .map(styleSheet => {
+        try {
+          return Array.from(styleSheet.cssRules)
+            .map(rule => rule.cssText)
+            .join('\n');
+        } catch (e) {
+          return '';
+        }
+      })
+      .join('\n');
+
+    // HTML для экспорта
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>График ${format(scheduleViewMonth, 'MMMM yyyy', { locale: ru })}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              background: ${theme === 'dark' ? '#1f2937' : '#ffffff'};
+              padding: 20px;
+              font-family: system-ui, -apple-system, sans-serif;
+            }
+            ${styles}
+          </style>
+        </head>
+        <body>
+          ${element.outerHTML}
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+
+    // Ждём загрузки
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Используем встроенную функцию печати браузера для сохранения в PDF
+    printWindow.print();
+    
+    // Закрываем окно через 1 секунду
+    setTimeout(() => printWindow.close(), 1000);
+
+  } catch (err) {
+    console.error('[AdminDashboard] Ошибка экспорта:', err);
+    alert('Ошибка при экспорте. Попробуйте использовать скриншот (Ctrl+Shift+S в большинстве браузеров).');
+  } finally {
+    setExportingImage(false);
+  }
+};
 
   // ============================================================
   // БЛОК 10: График смен (вычисления)
