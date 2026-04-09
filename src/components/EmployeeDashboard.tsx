@@ -1,7 +1,27 @@
+/*
+ * =====================================================================
+ * ВНИМАНИЕ! Этот файл разбит на логические блоки с комментариями.
+ * Каждый блок начинается с // ===== БЛОК N: ... =====
+ * 
+ * ПРАВИЛА ЗАМЕНЫ БЛОКОВ:
+ * 1. Если нужно изменить код только в определённых блоках (например, блок 10),
+ *    вы должны полностью заменить содержимое этих блоков, включая комментарии.
+ * 2. Не удаляйте и не изменяйте комментарии-разделители блоков без необходимости.
+ * 3. Если изменяете несколько блоков, заменяйте каждый целиком, сохраняя их порядок.
+ * 4. Остальные блоки (не упомянутые в задании) должны оставаться нетронутыми.
+ * 5. В ответе укажите, какие именно блоки были изменены.
+ * =====================================================================
+ */
+
+// ============================================================
+// БЛОК 1: Импорты и типы
+// Описание: Импорт всех зависимостей, компонентов, утилит и типов.
+// При изменении: заменять целиком, если добавляются новые импорты.
+// ============================================================
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../lib/activityLog';
-import { UserProfile, Shift, Priority } from '../types';
+import { UserProfile, Shift } from '../types';
 import { getRandomGreeting } from '../utils/greetings';
 import { format, isBefore, startOfDay, parseISO, addMonths, subMonths, differenceInMinutes } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -42,6 +62,10 @@ interface EmployeeProfile extends UserProfile {
   base_hourly_rate: number;
 }
 
+// ============================================================
+// БЛОК 2: Вспомогательные функции
+// Описание: Чистые функции для форматирования дат, проверки прав.
+// ============================================================
 function formatDateStr(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
   return `${d}.${m}.${y}`;
@@ -76,15 +100,14 @@ function isDateActive(dateStr: string): boolean {
   return true;
 }
 
-// ======================== ОСНОВНОЙ КОМПОНЕНТ ========================
-interface EmployeeDashboardProps {
-  profile: EmployeeProfile;
-}
-
-export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
+// ============================================================
+// БЛОК 3: Основной компонент и состояния
+// Описание: Определение компонента EmployeeDashboard, useState.
+// ============================================================
+export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const [priorities, setPriorities] = useState<Priority[]>([]);
+  const [priorities, setPriorities] = useState<{ level: number; attractions: { id: number; name: string }[] }[]>([]);
   const [studyGoal, setStudyGoal] = useState<StudyGoal | null>(null);
   const [availableAttractions, setAvailableAttractions] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,6 +147,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [salaryData, setSalaryData] = useState<{ days: any[]; total: number } | null>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
 
+  // ============================================================
+  // БЛОК 4: Константы и массивы времени
+  // ============================================================
   const START_TIMES = (() => {
     const times: string[] = [];
     for (let h = 10; h <= 20; h++) {
@@ -146,6 +172,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     return times;
   })();
 
+  // ============================================================
+  // БЛОК 5: Эффекты для таймеров и приветствия
+  // ============================================================
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
@@ -168,6 +197,11 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   }, [profile.full_name]);
 
+  // ============================================================
+  // БЛОК 6: Загрузка данных (fetchData) - ИЗМЕНЁН
+  // Описание: Загружает смены, приоритеты (новая структура), цель, график.
+  // При изменении: заменять целиком, если меняется логика загрузки.
+  // ============================================================
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -179,13 +213,35 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         .order('work_date');
       if (shiftData) setShifts(shiftData as Shift[]);
 
-      // 2. Приоритеты
-      const { data: prioData } = await supabase
+      // 2. Приоритеты (новая структура с массивами)
+      const { data: prioRecords } = await supabase
         .from('employee_attraction_priorities')
-        .select('id, priority_level, attraction_id, attractions(name)')
+        .select('id, priority_level, attraction_ids')
         .eq('employee_id', profile.id)
         .order('priority_level');
-      if (prioData) setPriorities(prioData as unknown as Priority[]);
+
+      let prioritiesWithNames: { level: number; attractions: { id: number; name: string }[] }[] = [];
+      if (prioRecords && prioRecords.length > 0) {
+        const allAttractionIds = prioRecords.flatMap(r => r.attraction_ids);
+        const { data: attractionData } = await supabase
+          .from('attractions')
+          .select('id, name')
+          .in('id', allAttractionIds);
+        
+        const attractionMap = new Map<number, string>();
+        attractionData?.forEach(a => attractionMap.set(a.id, a.name));
+
+        prioritiesWithNames = prioRecords
+          .map(record => ({
+            level: record.priority_level,
+            attractions: record.attraction_ids.map(id => ({
+              id,
+              name: attractionMap.get(id) || 'Неизвестный аттракцион'
+            }))
+          }))
+          .sort((a, b) => a.level - b.level);
+      }
+      setPriorities(prioritiesWithNames);
 
       // 3. Цель изучения (без change_count и change_history)
       const { data: goalData } = await supabase
@@ -202,7 +258,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       }
 
       // 4. Доступные аттракционы: исключаем те, что уже в приоритетах, но добавляем текущую цель (если она есть)
-      const attractionIdsWithPriority = prioData?.map(p => p.attraction_id) || [];
+      const attractionIdsWithPriority = prioRecords?.flatMap(r => r.attraction_ids) || [];
       let { data: allAttractions } = await supabase
         .from('attractions')
         .select('id, name')
@@ -257,6 +313,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     fetchData();
   }, [fetchData]);
 
+  // ============================================================
+  // БЛОК 7: Вычисляемые данные (useMemo)
+  // ============================================================
   const shiftsForMonth = useMemo(() => {
     return shifts.filter(s => {
       const d = parseISO(s.work_date);
@@ -273,6 +332,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
   const occupiedDates = useMemo(() => new Set(shifts.map(s => s.work_date)), [shifts]);
 
+  // ============================================================
+  // БЛОК 8: Обработчики действий со сменами (добавление, удаление)
+  // ============================================================
   const handleDeleteShift = async (shift: Shift) => {
     const { allowed, reason } = canDeleteShift(shift);
     if (!allowed) { alert(reason); return; }
@@ -333,6 +395,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingShift(false);
   };
 
+  // ============================================================
+  // БЛОК 9: Обработчики для фактического времени и зарплаты
+  // ============================================================
   const openTimeLogModal = (schedule: ScheduleAssignment) => {
     const workDate = parseISO(schedule.work_date);
     const today = startOfDay(new Date());
@@ -475,7 +540,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   }, [activeTab, salaryPeriod]);
 
-  // ✨ UPSERT для цели изучения (без лимита изменений)
+  // ============================================================
+  // БЛОК 10: Цель изучения (сохранение)
+  // ============================================================
   const handleSaveStudyGoal = async () => {
     if (!selectedAttractionId) {
       setGoalError('Выберите аттракцион');
@@ -484,14 +551,13 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingGoal(true);
     setGoalError('');
     try {
-      // Пытаемся обновить, если запись с таким employee_id существует – иначе вставляем
       const { error } = await supabase
         .from('employee_study_goals')
         .upsert({
           employee_id: profile.id,
           attraction_id: selectedAttractionId,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'employee_id' }); // уникальное ограничение на employee_id
+        }, { onConflict: 'employee_id' });
 
       if (error) throw error;
       await fetchData();
@@ -503,7 +569,10 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   };
 
-  // --- Рендеры ---
+  // ============================================================
+  // БЛОК 11: Рендер-функции (календарь, таблицы, приоритеты) - ИЗМЕНЁН
+  // Описание: Функции отрисовки UI, включая обновлённые приоритеты.
+  // ============================================================
   const renderMonthDays = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -637,13 +706,41 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   };
 
   const renderPriorities = () => {
-    if (priorities.length === 0) return <div className="text-center py-6 text-gray-400"><Map className="mx-auto h-8 w-8 mb-2" /><p>Приоритеты не заданы</p></div>;
+    if (priorities.length === 0) {
+      return (
+        <div className="text-center py-6 text-gray-400">
+          <Map className="mx-auto h-8 w-8 mb-2" />
+          <p>Приоритеты не заданы</p>
+        </div>
+      );
+    }
+
+    const levelLabels: Record<number, { name: string; color: string }> = {
+      1: { name: '1 уровень (высший)', color: 'bg-red-50 border-red-200' },
+      2: { name: '2 уровень (средний)', color: 'bg-yellow-50 border-yellow-200' },
+      3: { name: '3 уровень (низший)', color: 'bg-green-50 border-green-200' },
+    };
+
     return (
-      <ul className="divide-y">
-        {priorities.map(prio => (
-          <li key={prio.id} className="py-3 flex justify-between"><span>{prio.attractions?.name || 'Неизвестный'}</span><span className="text-xs bg-gray-100 px-2 py-1 rounded">#{prio.priority_level}</span></li>
+      <div className="space-y-3">
+        {priorities.map(({ level, attractions }) => (
+          <div key={level} className={`p-3 rounded-lg border ${levelLabels[level]?.color || 'bg-gray-50'}`}>
+            <h4 className="font-medium text-gray-700 mb-2">{levelLabels[level]?.name || `Уровень ${level}`}</h4>
+            {attractions.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">Нет аттракционов</p>
+            ) : (
+              <ul className="space-y-1">
+                {attractions.map(attr => (
+                  <li key={attr.id} className="text-sm flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                    {attr.name}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ))}
-      </ul>
+      </div>
     );
   };
 
@@ -676,6 +773,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
   if (loading) return <div className="flex justify-center p-16"><Loader2 className="animate-spin text-blue-600 h-8 w-8" /></div>;
 
+  // ============================================================
+  // БЛОК 12: Основной JSX рендер (шапка, контент, модалки, футер)
+  // ============================================================
   return (
     <div className="bg-gray-50 text-gray-900 pb-24 md:pb-0">
       <div className="max-w-7xl mx-auto px-4 pt-6">
