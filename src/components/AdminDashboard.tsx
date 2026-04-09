@@ -3,11 +3,11 @@
  * AdminDashboard - Панель администратора
  * 
  * Возможности:
- * - Темная тема (авто/светлая/темная)
  * - Адаптивный дизайн для мобильных устройств
  * - Улучшенный UX/UI
  * - Полная интеграция с DatabaseService
  * - Автоматическое логирование всех действий
+ * - Обновление данных только при изменениях
  * =====================================================================
  */
 
@@ -21,7 +21,7 @@ import {
   Loader2, Search, Edit2, Trash2, Plus, ChevronLeft, ChevronRight,
   Calendar, LayoutGrid, CalendarDays, Wand2, X, Users, Gamepad2, UserCheck,
   CheckCircle, AlertCircle, MessageSquare, PlusCircle, MinusCircle, Save,
-  Menu, Sun, Moon, Monitor, Download, Eye, Clock
+  Menu, Clock
 } from 'lucide-react';
 import {
   format, parseISO, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval,
@@ -35,7 +35,6 @@ import { AttractionsList } from './AttractionsList';
 // БЛОК 2: Типы
 // ============================================================
 type ViewMode = 'day' | 'week' | 'month';
-type ThemeMode = 'light' | 'dark' | 'system';
 type TabType = 'shifts' | 'schedule' | 'manual' | 'employees' | 'attractions' | 'scheduleView';
 
 interface AdminDashboardProps {
@@ -62,76 +61,9 @@ function canEditShift(workDate: string): boolean {
 }
 
 // ============================================================
-// БЛОК 4: Компонент переключения темы
-// ============================================================
-function ThemeToggle({ theme, setTheme }: { theme: ThemeMode; setTheme: (theme: ThemeMode) => void }) {
-  return (
-    <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-      <button
-        onClick={() => setTheme('light')}
-        className={`p-2 rounded-md transition ${
-          theme === 'light' ? 'bg-white dark:bg-gray-600 shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-600'
-        }`}
-        title="Светлая тема"
-      >
-        <Sun className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-      </button>
-      <button
-        onClick={() => setTheme('dark')}
-        className={`p-2 rounded-md transition ${
-          theme === 'dark' ? 'bg-white dark:bg-gray-600 shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-600'
-        }`}
-        title="Темная тема"
-      >
-        <Moon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-      </button>
-      <button
-        onClick={() => setTheme('system')}
-        className={`p-2 rounded-md transition ${
-          theme === 'system' ? 'bg-white dark:bg-gray-600 shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-gray-600'
-        }`}
-        title="Системная тема"
-      >
-        <Monitor className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-      </button>
-    </div>
-  );
-}
-
-// ============================================================
-// БЛОК 5: Основной компонент
+// БЛОК 4: Основной компонент
 // ============================================================
 export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboardProps) {
-  // ============================================================
-  // Тема
-  // ============================================================
-  const [theme, setTheme] = useState<ThemeMode>(() => {
-    const saved = localStorage.getItem('admin-theme');
-    return (saved as ThemeMode) || 'system';
-  });
-
-  useEffect(() => {
-    localStorage.setItem('admin-theme', theme);
-
-    const applyTheme = () => {
-      const root = document.documentElement;
-      if (theme === 'system') {
-        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        root.classList.toggle('dark', isDark);
-      } else {
-        root.classList.toggle('dark', theme === 'dark');
-      }
-    };
-
-    applyTheme();
-
-    if (theme === 'system') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      mediaQuery.addEventListener('change', applyTheme);
-      return () => mediaQuery.removeEventListener('change', applyTheme);
-    }
-  }, [theme]);
-
   // ============================================================
   // Состояния UI
   // ============================================================
@@ -194,50 +126,53 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
   // ============================================================
   // График смен
   // ============================================================
+  const [scheduleViewMode, setScheduleViewMode] = useState<ViewMode>('month');
+  const [scheduleViewDate, setScheduleViewDate] = useState<Date>(new Date());
   const [scheduleViewMonth, setScheduleViewMonth] = useState<Date>(new Date());
+  const [scheduleViewWeekStart, setScheduleViewWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [employeeSearch, setEmployeeSearch] = useState('');
   const scheduleViewRef = useRef<HTMLDivElement>(null);
-  const [exportingImage, setExportingImage] = useState(false);
 
-// ============================================================
-// БЛОК 6: Инициализация
-// ============================================================
-useEffect(() => {
-  const initData = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      if (!profile?.auth_uid) {
-        throw new Error('auth_uid отсутствует в профиле');
-      }
-
-      console.log('[AdminDashboard] Инициализация для:', profile.full_name, 'auth_uid:', profile.auth_uid);
-
-      const success = await dbService.init(profile.auth_uid);
-
-      if (!success) {
-        throw new Error('Не удалось инициализировать базу данных');
-      }
-
-      setEmployees(dbService.getEmployees());
-      setAttractions(dbService.getAttractions());
-      setScheduleAssignments(dbService.getScheduleAssignments());
-      setShifts(dbService.getEmployeeAvailability());
-
-      console.log('[AdminDashboard] Данные успешно загружены');
-    } catch (err: any) {
-      console.error('[AdminDashboard] Ошибка инициализации:', err);
-      setError(err.message || 'Ошибка загрузки данных');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  initData();
-}, [profile]);
   // ============================================================
-  // Обновление данных
+  // БЛОК 5: Инициализация
+  // ============================================================
+  useEffect(() => {
+    const initData = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        if (!profile?.auth_uid) {
+          throw new Error('auth_uid отсутствует в профиле');
+        }
+
+        console.log('[AdminDashboard] Инициализация для:', profile.full_name, 'auth_uid:', profile.auth_uid);
+
+        const success = await dbService.init(profile.auth_uid);
+
+        if (!success) {
+          throw new Error('Не удалось инициализировать базу данных');
+        }
+
+        setEmployees(dbService.getEmployees());
+        setAttractions(dbService.getAttractions());
+        setScheduleAssignments(dbService.getScheduleAssignments());
+        setShifts(dbService.getEmployeeAvailability());
+
+        console.log('[AdminDashboard] Данные успешно загружены');
+      } catch (err: any) {
+        console.error('[AdminDashboard] Ошибка инициализации:', err);
+        setError(err.message || 'Ошибка загрузки данных');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initData();
+  }, [profile]);
+
+  // ============================================================
+  // Обновление данных (только при действиях)
   // ============================================================
   const refreshData = useCallback(async () => {
     try {
@@ -254,7 +189,7 @@ useEffect(() => {
   }, []);
 
   // ============================================================
-  // БЛОК 7: Управление сменами
+  // БЛОК 6: Управление сменами
   // ============================================================
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -416,7 +351,7 @@ useEffect(() => {
   const monthLabel = format(new Date(currentYear, currentMonth, 1), 'LLLL yyyy', { locale: ru });
 
   // ============================================================
-  // БЛОК 8: Ручное составление
+  // БЛОК 7: Ручное составление
   // ============================================================
   const fetchDayData = useCallback(
     async (date: Date) => {
@@ -428,20 +363,16 @@ useEffect(() => {
       try {
         const dateStr = format(date, 'yyyy-MM-dd');
 
-        // Доступность сотрудников
         const availData = dbService.getAvailabilityByDate(date);
         const availableEmpIds = availData.map((a) => a.employee_id);
 
-        // Цели обучения
         const allGoals = dbService.getStudyGoals();
         const goalsForDay = allGoals.filter((g) => availableEmpIds.includes(g.employee_id));
         setGoalsCache(goalsForDay);
 
-        // Приоритеты
         const allPriorities = dbService.getPriorities();
         setPrioritiesCache(allPriorities);
 
-        // График
         const daySchedule = dbService.getScheduleByDate(date);
 
         const goalsMap = new Map<number, string>();
@@ -562,7 +493,6 @@ useEffect(() => {
 
     const available = manualEmployeesForDay.filter((emp) => !assignedEmployeeIds.has(emp.id));
 
-    // Приоритеты: учитываем attraction_ids (массив)
     const priorityMap = new Map<number, number[]>();
     prioritiesCache.forEach((p) => {
       if (p.attraction_ids && Array.isArray(p.attraction_ids) && p.attraction_ids.includes(attractionId)) {
@@ -653,109 +583,64 @@ useEffect(() => {
     }
   };
 
-// ============================================================
-// БЛОК 9: Экспорт графика в PNG (простой метод)
-// ============================================================
-const handleExportScheduleImage = async () => {
-  if (!scheduleViewRef.current) return;
-
-  setExportingImage(true);
-
-  try {
-    const element = scheduleViewRef.current;
-    const scale = 3; // Множитель для высокого разрешения
-
-    // Создаём временный контейнер для рендера
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      throw new Error('Не удалось открыть окно для экспорта');
-    }
-
-    // Копируем все стили
-    const styles = Array.from(document.styleSheets)
-      .map(styleSheet => {
-        try {
-          return Array.from(styleSheet.cssRules)
-            .map(rule => rule.cssText)
-            .join('\n');
-        } catch (e) {
-          return '';
-        }
-      })
-      .join('\n');
-
-    // HTML для экспорта
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>График ${format(scheduleViewMonth, 'MMMM yyyy', { locale: ru })}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-              background: ${theme === 'dark' ? '#1f2937' : '#ffffff'};
-              padding: 20px;
-              font-family: system-ui, -apple-system, sans-serif;
-            }
-            ${styles}
-          </style>
-        </head>
-        <body>
-          ${element.outerHTML}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-
-    // Ждём загрузки
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Используем встроенную функцию печати браузера для сохранения в PDF
-    printWindow.print();
-    
-    // Закрываем окно через 1 секунду
-    setTimeout(() => printWindow.close(), 1000);
-
-  } catch (err) {
-    console.error('[AdminDashboard] Ошибка экспорта:', err);
-    alert('Ошибка при экспорте. Попробуйте использовать скриншот (Ctrl+Shift+S в большинстве браузеров).');
-  } finally {
-    setExportingImage(false);
-  }
-};
-
   // ============================================================
-  // БЛОК 10: График смен (вычисления)
+  // БЛОК 8: График смен (вычисления)
   // ============================================================
   const scheduleViewDays = useMemo(() => {
-    const start = startOfMonth(scheduleViewMonth);
-    const end = endOfMonth(scheduleViewMonth);
-    return eachDayOfInterval({ start, end });
-  }, [scheduleViewMonth]);
+    if (scheduleViewMode === 'day') {
+      return [scheduleViewDate];
+    } else if (scheduleViewMode === 'week') {
+      return eachDayOfInterval({ start: scheduleViewWeekStart, end: addDays(scheduleViewWeekStart, 6) });
+    } else {
+      const start = startOfMonth(scheduleViewMonth);
+      const end = endOfMonth(scheduleViewMonth);
+      return eachDayOfInterval({ start, end });
+    }
+  }, [scheduleViewMode, scheduleViewDate, scheduleViewMonth, scheduleViewWeekStart]);
 
   const scheduleViewData = useMemo(() => {
-    const start = format(startOfMonth(scheduleViewMonth), 'yyyy-MM-dd');
-    const end = format(endOfMonth(scheduleViewMonth), 'yyyy-MM-dd');
+    const startDate = format(scheduleViewDays[0], 'yyyy-MM-dd');
+    const endDate = format(scheduleViewDays[scheduleViewDays.length - 1], 'yyyy-MM-dd');
 
-    return scheduleAssignments.filter((a) => a.work_date >= start && a.work_date <= end);
-  }, [scheduleAssignments, scheduleViewMonth]);
+    return scheduleAssignments.filter((a) => a.work_date >= startDate && a.work_date <= endDate);
+  }, [scheduleAssignments, scheduleViewDays]);
 
-  const filteredEmployeesForScheduleView = useMemo(() => {
-    if (!employeeSearch.trim()) return employees;
-    const q = employeeSearch.toLowerCase();
-    return employees.filter((e) => e.full_name.toLowerCase().includes(q));
-  }, [employees, employeeSearch]);
+  // Группировка по аттракционам и датам
+  const scheduleByAttractionAndDate = useMemo(() => {
+    const grouped = new Map<number, Map<string, ScheduleAssignment[]>>();
+
+    scheduleViewData.forEach((assignment) => {
+      if (!grouped.has(assignment.attraction_id)) {
+        grouped.set(assignment.attraction_id, new Map());
+      }
+      const dateMap = grouped.get(assignment.attraction_id)!;
+      if (!dateMap.has(assignment.work_date)) {
+        dateMap.set(assignment.work_date, []);
+      }
+      dateMap.get(assignment.work_date)!.push(assignment);
+    });
+
+    return grouped;
+  }, [scheduleViewData]);
+
+  // Получение имени и фамилии сотрудника
+  const getShortName = (fullName: string) => {
+    const parts = fullName.trim().split(' ');
+    if (parts.length >= 2) {
+      return `${parts[0]} ${parts[1]}`;
+    }
+    return fullName;
+  };
 
   // ============================================================
-  // БЛОК 11: Рендер загрузки и ошибок
+  // БЛОК 9: Рендер загрузки и ошибок
   // ============================================================
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
         <div className="text-center">
-          <Loader2 className="animate-spin text-blue-600 dark:text-blue-400 h-12 w-12 mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">Загрузка данных...</p>
+          <Loader2 className="animate-spin text-blue-600 h-12 w-12 mx-auto mb-4" />
+          <p className="text-gray-600">Загрузка данных...</p>
         </div>
       </div>
     );
@@ -763,12 +648,12 @@ const handleExportScheduleImage = async () => {
 
   if (error) {
     return (
-      <div className="p-6 min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 flex items-start gap-4">
-          <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+      <div className="p-6 min-h-screen bg-gray-50">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 flex items-start gap-4">
+          <AlertCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
           <div>
-            <h3 className="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Ошибка загрузки</h3>
-            <p className="text-red-700 dark:text-red-300">{error}</p>
+            <h3 className="text-lg font-semibold text-red-900 mb-2">Ошибка загрузки</h3>
+            <p className="text-red-700">{error}</p>
             <button
               onClick={() => window.location.reload()}
               className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
@@ -794,21 +679,19 @@ const handleExportScheduleImage = async () => {
   ];
 
   // ============================================================
-  // БЛОК 12: Основной рендер
+  // БЛОК 10: Основной рендер
   // ============================================================
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen bg-gray-50 transition-colors">
       {/* Шапка */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 shadow-sm">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-              <Menu className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100">
+              <Menu className="h-5 w-5 text-gray-700" />
             </button>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Панель администратора</h1>
+            <h1 className="text-xl font-bold text-gray-900">Панель администратора</h1>
           </div>
-
-          <ThemeToggle theme={theme} setTheme={setTheme} />
         </div>
       </header>
 
@@ -816,11 +699,11 @@ const handleExportScheduleImage = async () => {
         {/* Мобильное меню */}
         {mobileMenuOpen && (
           <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50" onClick={() => setMobileMenuOpen(false)}>
-            <div className="bg-white dark:bg-gray-800 w-64 h-full p-4 space-y-2" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white w-64 h-full p-4 space-y-2" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-900 dark:text-white">Меню</h2>
-                <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                  <X className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                <h2 className="font-semibold text-gray-900">Меню</h2>
+                <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-lg hover:bg-gray-100">
+                  <X className="h-5 w-5 text-gray-700" />
                 </button>
               </div>
               {tabs.map((tab) => {
@@ -834,8 +717,8 @@ const handleExportScheduleImage = async () => {
                     }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition ${
                       activeTab === tab.id
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-700 hover:bg-gray-100'
                     }`}
                   >
                     <Icon className="h-5 w-5" />
@@ -848,9 +731,9 @@ const handleExportScheduleImage = async () => {
         )}
 
         {/* Основной контент */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {/* Десктоп вкладки */}
-          <div className="hidden lg:flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
+          <div className="hidden lg:flex border-b border-gray-200 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
@@ -859,8 +742,8 @@ const handleExportScheduleImage = async () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 px-6 py-4 text-sm font-medium flex items-center justify-center gap-2 border-b-2 transition whitespace-nowrap ${
                     activeTab === tab.id
-                      ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      ? 'border-blue-600 text-blue-600 bg-blue-50'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -877,12 +760,12 @@ const handleExportScheduleImage = async () => {
             <div className="p-4 sm:p-6 space-y-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-                    <ChevronLeft className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                  <button onClick={handlePrevMonth} className="p-2 rounded-lg hover:bg-gray-100 transition">
+                    <ChevronLeft className="h-5 w-5 text-gray-700" />
                   </button>
-                  <span className="text-xl font-semibold capitalize text-gray-900 dark:text-white">{monthLabel}</span>
-                  <button onClick={handleNextMonth} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-                    <ChevronRight className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                  <span className="text-xl font-semibold capitalize text-gray-900">{monthLabel}</span>
+                  <button onClick={handleNextMonth} className="p-2 rounded-lg hover:bg-gray-100 transition">
+                    <ChevronRight className="h-5 w-5 text-gray-700" />
                   </button>
                 </div>
 
@@ -894,8 +777,8 @@ const handleExportScheduleImage = async () => {
                     }}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
                       viewMode === 'day'
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
                     День
@@ -907,8 +790,8 @@ const handleExportScheduleImage = async () => {
                     }}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
                       viewMode === 'week'
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
                     Неделя
@@ -917,8 +800,8 @@ const handleExportScheduleImage = async () => {
                     onClick={() => setViewMode('month')}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
                       viewMode === 'month'
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
                     Месяц
@@ -928,26 +811,26 @@ const handleExportScheduleImage = async () => {
 
               {viewMode === 'day' && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">Дата:</span>
+                  <span className="text-sm text-gray-600">Дата:</span>
                   <input
                     type="date"
                     value={format(selectedDate, 'yyyy-MM-dd')}
                     onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                    className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                    className="border border-gray-300 bg-white text-gray-900 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               )}
 
               {viewMode === 'week' && (
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setSelectedWeekStart((prev) => addDays(prev, -7))} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                    <ChevronLeft className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                  <button onClick={() => setSelectedWeekStart((prev) => addDays(prev, -7))} className="p-1 hover:bg-gray-100 rounded">
+                    <ChevronLeft className="h-4 w-4 text-gray-700" />
                   </button>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  <span className="text-sm font-medium text-gray-900">
                     {format(selectedWeekStart, 'd MMM', { locale: ru })} – {format(addDays(selectedWeekStart, 6), 'd MMM yyyy', { locale: ru })}
                   </span>
-                  <button onClick={() => setSelectedWeekStart((prev) => addDays(prev, 7))} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                    <ChevronRight className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                  <button onClick={() => setSelectedWeekStart((prev) => addDays(prev, 7))} className="p-1 hover:bg-gray-100 rounded">
+                    <ChevronRight className="h-4 w-4 text-gray-700" />
                   </button>
                 </div>
               )}
@@ -960,7 +843,7 @@ const handleExportScheduleImage = async () => {
                     placeholder="Поиск..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <button
@@ -976,21 +859,21 @@ const handleExportScheduleImage = async () => {
                 </button>
               </div>
 
-              <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Дата</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Сотрудник</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Смена</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Действия</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Дата</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Сотрудник</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Смена</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Действия</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
+                    <tbody className="bg-white divide-y divide-gray-100">
                       {filteredShifts.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                          <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
                             Нет смен
                           </td>
                         </tr>
@@ -998,14 +881,14 @@ const handleExportScheduleImage = async () => {
                         filteredShifts.map((shift) => {
                           const editable = canEditShift(shift.work_date);
                           return (
-                            <tr key={shift.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                              <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{format(parseISO(shift.work_date), 'dd.MM.yyyy')}</td>
-                              <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{shift.employees?.full_name || '—'}</td>
+                            <tr key={shift.id} className="hover:bg-gray-50 transition">
+                              <td className="px-4 py-3 text-sm text-gray-900">{format(parseISO(shift.work_date), 'dd.MM.yyyy')}</td>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900">{shift.employees?.full_name || '—'}</td>
                               <td className="px-4 py-3 text-sm">
                                 {shift.is_full_day ? (
-                                  <span className="text-gray-700 dark:text-gray-300">Полный день</span>
+                                  <span className="text-gray-700">Полный день</span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-1 rounded-md text-xs font-medium">
+                                  <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-2 py-1 rounded-md text-xs font-medium">
                                     <Clock className="h-3 w-3" />
                                     {shift.start_time?.slice(0, 5)} – {shift.end_time?.slice(0, 5)}
                                   </span>
@@ -1016,7 +899,7 @@ const handleExportScheduleImage = async () => {
                                   {shift.comment && (
                                     <button
                                       onClick={() => setViewingComment(shift.comment)}
-                                      className="p-1.5 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition"
+                                      className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition"
                                       title="Просмотреть комментарий"
                                     >
                                       <MessageSquare className="h-4 w-4" />
@@ -1027,8 +910,8 @@ const handleExportScheduleImage = async () => {
                                     disabled={!editable}
                                     className={`p-1.5 rounded-lg transition ${
                                       editable
-                                        ? 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
-                                        : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                        ? 'text-blue-600 hover:bg-blue-50'
+                                        : 'text-gray-300 cursor-not-allowed'
                                     }`}
                                     title={editable ? 'Редактировать' : 'Редактирование запрещено'}
                                   >
@@ -1039,8 +922,8 @@ const handleExportScheduleImage = async () => {
                                     disabled={!editable}
                                     className={`p-1.5 rounded-lg transition ${
                                       editable
-                                        ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30'
-                                        : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                        ? 'text-red-600 hover:bg-red-50'
+                                        : 'text-gray-300 cursor-not-allowed'
                                     }`}
                                     title={editable ? 'Удалить' : 'Удаление запрещено'}
                                   >
@@ -1062,17 +945,17 @@ const handleExportScheduleImage = async () => {
           {/* Модальное окно комментария */}
           {viewingComment && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setViewingComment(null)}>
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Комментарий</h3>
-                  <button onClick={() => setViewingComment(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  <h3 className="text-lg font-semibold text-gray-900">Комментарий</h3>
+                  <button onClick={() => setViewingComment(null)} className="text-gray-400 hover:text-gray-600">
                     <X className="h-5 w-5" />
                   </button>
                 </div>
-                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{viewingComment}</p>
+                <p className="text-gray-700 whitespace-pre-wrap">{viewingComment}</p>
                 <button
                   onClick={() => setViewingComment(null)}
-                  className="mt-4 w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                  className="mt-4 w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
                 >
                   Закрыть
                 </button>
@@ -1083,24 +966,24 @@ const handleExportScheduleImage = async () => {
           {/* Модальное окно добавления/редактирования смены */}
           {showAddShiftModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full">
+              <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
                 <form onSubmit={handleSaveShift} className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{editingShiftId ? 'Редактировать' : 'Новая смена'}</h3>
-                    <button type="button" onClick={resetShiftForm} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <h3 className="text-lg font-semibold text-gray-900">{editingShiftId ? 'Редактировать' : 'Новая смена'}</h3>
+                    <button type="button" onClick={resetShiftForm} className="text-gray-400 hover:text-gray-600">
                       <X className="h-5 w-5" />
                     </button>
                   </div>
 
                   {formError && (
-                    <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-3 rounded-lg text-sm flex items-start gap-2">
+                    <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-start gap-2">
                       <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                       <span>{formError}</span>
                     </div>
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Сотрудник <span className="text-red-500">*</span>
                     </label>
                     {editingShiftId ? (
@@ -1108,7 +991,7 @@ const handleExportScheduleImage = async () => {
                         type="text"
                         value={addEmployeeSearch}
                         disabled
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg"
+                        className="w-full px-3 py-2 border border-gray-300 bg-gray-100 text-gray-700 rounded-lg"
                       />
                     ) : (
                       <div className="relative">
@@ -1117,11 +1000,11 @@ const handleExportScheduleImage = async () => {
                           placeholder="Начните вводить ФИО..."
                           value={addEmployeeSearch}
                           onChange={(e) => setAddEmployeeSearch(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500"
                           autoFocus
                         />
                         {addEmployeeResults.length > 0 && (
-                          <ul className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto">
+                          <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
                             {addEmployeeResults.map((emp) => (
                               <li
                                 key={emp.id}
@@ -1130,7 +1013,7 @@ const handleExportScheduleImage = async () => {
                                   setAddEmployeeSearch(emp.full_name);
                                   setAddEmployeeResults([]);
                                 }}
-                                className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-sm text-gray-900 dark:text-white"
+                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-900"
                               >
                                 {emp.full_name}
                               </li>
@@ -1142,14 +1025,14 @@ const handleExportScheduleImage = async () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Дата <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="date"
                       value={workDate}
                       onChange={(e) => setWorkDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500"
                       disabled={!!editingShiftId}
                       required
                     />
@@ -1163,7 +1046,7 @@ const handleExportScheduleImage = async () => {
                       onChange={(e) => setIsFullDay(e.target.checked)}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <label htmlFor="isFullDay" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label htmlFor="isFullDay" className="text-sm font-medium text-gray-700">
                       Полный день
                     </label>
                   </div>
@@ -1171,22 +1054,22 @@ const handleExportScheduleImage = async () => {
                   {!isFullDay && (
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Начало</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Начало</label>
                         <input
                           type="time"
                           value={startTime}
                           onChange={(e) => setStartTime(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg"
+                          className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg"
                           required
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Конец</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Конец</label>
                         <input
                           type="time"
                           value={endTime}
                           onChange={(e) => setEndTime(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg"
+                          className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg"
                           required
                         />
                       </div>
@@ -1194,18 +1077,18 @@ const handleExportScheduleImage = async () => {
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Комментарий</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Комментарий</label>
                     <textarea
                       value={shiftComment}
                       onChange={(e) => setShiftComment(e.target.value)}
                       rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg"
+                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg"
                       placeholder="Необязательно"
                     />
                   </div>
 
                   <div className="flex justify-end gap-3 pt-2">
-                    <button type="button" onClick={resetShiftForm} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <button type="button" onClick={resetShiftForm} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
                       Отмена
                     </button>
                     <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -1233,25 +1116,25 @@ const handleExportScheduleImage = async () => {
             <div className="p-4 sm:p-6 space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Календарь */}
-                <div className="lg:col-span-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm">
-                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
-                    <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <div className="lg:col-span-1 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
+                    <Calendar className="h-5 w-5 text-blue-600" />
                     Выбор даты
                   </h3>
 
                   <div className="flex items-center justify-between mb-4">
-                    <button onClick={() => handleManualMonthChange('prev')} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                      <ChevronLeft className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                    <button onClick={() => handleManualMonthChange('prev')} className="p-2 rounded-lg hover:bg-gray-100">
+                      <ChevronLeft className="h-5 w-5 text-gray-700" />
                     </button>
-                    <span className="font-medium text-lg capitalize text-gray-900 dark:text-white">{format(manualMonth, 'LLLL yyyy', { locale: ru })}</span>
-                    <button onClick={() => handleManualMonthChange('next')} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                      <ChevronRight className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                    <span className="font-medium text-lg capitalize text-gray-900">{format(manualMonth, 'LLLL yyyy', { locale: ru })}</span>
+                    <button onClick={() => handleManualMonthChange('next')} className="p-2 rounded-lg hover:bg-gray-100">
+                      <ChevronRight className="h-5 w-5 text-gray-700" />
                     </button>
                   </div>
 
                   <div className="grid grid-cols-7 gap-1 mb-2 text-center">
                     {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => (
-                      <div key={day} className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                      <div key={day} className="text-xs font-medium text-gray-500">
                         {day}
                       </div>
                     ))}
@@ -1273,37 +1156,37 @@ const handleExportScheduleImage = async () => {
                           onClick={() => handleDaySelect(day)}
                           className={`h-10 rounded-lg flex items-center justify-center relative transition text-sm font-medium ${
                             isWeekendDay
-                              ? 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400'
-                              : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
-                          } ${isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}`}
+                              ? 'bg-red-50 hover:bg-red-100 text-red-700'
+                              : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
+                          } ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
                         >
                           <span>{format(day, 'd')}</span>
-                          {hasSchedule && <CheckCircle className="absolute -top-1 -right-1 h-4 w-4 text-green-500 dark:text-green-400 bg-white dark:bg-gray-800 rounded-full" />}
+                          {hasSchedule && <CheckCircle className="absolute -top-1 -right-1 h-4 w-4 text-green-500 bg-white rounded-full" />}
                         </button>
                       );
                     })}
                   </div>
 
-                  <div className="mt-4 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500 dark:text-green-400" /> — график составлен
+                  <div className="mt-4 text-sm text-gray-500 flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-500" /> — график составлен
                   </div>
                 </div>
 
                 {/* Составление */}
                 <div className="lg:col-span-2">
                   {!manualSelectedDay ? (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center">
+                    <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
                       <CalendarDays className="h-12 w-12 mx-auto mb-3 opacity-50 text-gray-400" />
-                      <p className="text-gray-400 dark:text-gray-500">Выберите день</p>
+                      <p className="text-gray-400">Выберите день</p>
                     </div>
                   ) : manualDayDataLoading ? (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8 flex justify-center">
-                      <Loader2 className="animate-spin text-blue-600 dark:text-blue-400 h-8 w-8" />
+                    <div className="bg-white border border-gray-200 rounded-xl p-8 flex justify-center">
+                      <Loader2 className="animate-spin text-blue-600 h-8 w-8" />
                     </div>
                   ) : (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-sm space-y-6">
+                    <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-6">
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">График на {format(manualSelectedDay, 'd MMMM yyyy', { locale: ru })}</h3>
+                        <h3 className="text-lg font-semibold text-gray-900">График на {format(manualSelectedDay, 'd MMMM yyyy', { locale: ru })}</h3>
                         <button
                           onClick={handleSaveManualSchedule}
                           disabled={manualSaving}
@@ -1315,58 +1198,58 @@ const handleExportScheduleImage = async () => {
                       </div>
 
                       {manualError && (
-                        <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-3 rounded-lg text-sm flex items-start gap-2">
+                        <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-start gap-2">
                           <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                           <span>{manualError}</span>
                         </div>
                       )}
 
                       <div>
-                        <h4 className="font-medium mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
-                          <Gamepad2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <h4 className="font-medium mb-3 flex items-center gap-2 text-gray-900">
+                          <Gamepad2 className="h-4 w-4 text-blue-600" />
                           Работающие аттракционы
                         </h4>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                           {attractions.map((attr) => (
-                            <label key={attr.id} className="flex items-center gap-2 p-2 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                            <label key={attr.id} className="flex items-center gap-2 p-2 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
                               <input
                                 type="checkbox"
                                 checked={manualWorkingAttractions.has(attr.id)}
                                 onChange={() => toggleAttractionWorking(attr.id)}
                                 className="rounded text-blue-600 focus:ring-blue-500"
                               />
-                              <span className="text-sm text-gray-900 dark:text-white">{attr.name}</span>
-                              <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">x{attr.coefficient}</span>
+                              <span className="text-sm text-gray-900">{attr.name}</span>
+                              <span className="text-xs text-gray-400 ml-auto">x{attr.coefficient}</span>
                             </label>
                           ))}
                         </div>
                       </div>
 
                       <div>
-                        <h4 className="font-medium mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
-                          <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <h4 className="font-medium mb-3 flex items-center gap-2 text-gray-900">
+                          <Users className="h-4 w-4 text-blue-600" />
                           Доступные сотрудники ({manualEmployeesForDay.length})
                         </h4>
                         {manualEmployeesForDay.length === 0 ? (
-                          <p className="text-gray-400 dark:text-gray-500 text-sm">Нет сотрудников с доступностью на эту дату</p>
+                          <p className="text-gray-400 text-sm">Нет сотрудников с доступностью на эту дату</p>
                         ) : (
-                          <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg divide-y divide-gray-200 dark:divide-gray-600">
+                          <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-200">
                             {manualEmployeesForDay.map((emp) => (
-                              <div key={emp.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                              <div key={emp.id} className="p-3 hover:bg-gray-50 transition">
                                 <div className="flex items-start justify-between">
                                   <div>
-                                    <span className="font-medium text-gray-900 dark:text-white">{emp.full_name}</span>
+                                    <span className="font-medium text-gray-900">{emp.full_name}</span>
                                     {emp.studyGoal && (
-                                      <span className="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-2 py-0.5 rounded-full">Цель: {emp.studyGoal}</span>
+                                      <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Цель: {emp.studyGoal}</span>
                                     )}
                                     {!emp.availability.isFullDay && (
-                                      <span className="ml-2 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full">
+                                      <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
                                         {emp.availability.startTime?.slice(0, 5)}-{emp.availability.endTime?.slice(0, 5)}
                                       </span>
                                     )}
                                   </div>
                                   {emp.availability.comment && (
-                                    <button onClick={() => alert(emp.availability.comment)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Комментарий">
+                                    <button onClick={() => alert(emp.availability.comment)} className="text-gray-400 hover:text-gray-600" title="Комментарий">
                                       <MessageSquare className="h-4 w-4" />
                                     </button>
                                   )}
@@ -1378,7 +1261,7 @@ const handleExportScheduleImage = async () => {
                       </div>
 
                       <div className="space-y-4">
-                        <h4 className="font-medium text-gray-900 dark:text-white">Назначения</h4>
+                        <h4 className="font-medium text-gray-900">Назначения</h4>
                         {Array.from(manualWorkingAttractions).map((attrId) => {
                           const attr = attractions.find((a) => a.id === attrId);
                           if (!attr) return null;
@@ -1387,12 +1270,12 @@ const handleExportScheduleImage = async () => {
                           const assignedEmployees = manualEmployeesForDay.filter((e) => assignedIds.includes(e.id));
 
                           return (
-                            <div key={attrId} className="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+                            <div key={attrId} className="border border-gray-200 rounded-lg p-3">
                               <div className="flex items-center justify-between mb-2">
-                                <h5 className="font-medium text-gray-900 dark:text-white">{attr.name}</h5>
+                                <h5 className="font-medium text-gray-900">{attr.name}</h5>
                                 <button
                                   onClick={() => setManualShowAddModal({ attractionId: attrId, attractionName: attr.name })}
-                                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm flex items-center gap-1"
+                                  className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
                                 >
                                   <PlusCircle className="h-4 w-4" />
                                   Добавить
@@ -1400,13 +1283,13 @@ const handleExportScheduleImage = async () => {
                               </div>
 
                               {assignedEmployees.length === 0 ? (
-                                <p className="text-gray-400 dark:text-gray-500 text-sm py-2">Нет назначений</p>
+                                <p className="text-gray-400 text-sm py-2">Нет назначений</p>
                               ) : (
                                 <div className="space-y-1">
                                   {assignedEmployees.map((emp) => (
-                                    <div key={emp.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-2 rounded">
-                                      <span className="text-sm text-gray-900 dark:text-white">{emp.full_name}</span>
-                                      <button onClick={() => removeEmployeeFromAttraction(attrId, emp.id)} className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">
+                                    <div key={emp.id} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                                      <span className="text-sm text-gray-900">{emp.full_name}</span>
+                                      <button onClick={() => removeEmployeeFromAttraction(attrId, emp.id)} className="text-red-500 hover:text-red-700">
                                         <MinusCircle className="h-4 w-4" />
                                       </button>
                                     </div>
@@ -1425,10 +1308,10 @@ const handleExportScheduleImage = async () => {
               {/* Модальное окно добавления */}
               {manualShowAddModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-                    <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                      <h3 className="font-semibold text-lg text-gray-900 dark:text-white">Добавить на «{manualShowAddModal.attractionName}»</h3>
-                      <button onClick={() => setManualShowAddModal(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                    <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                      <h3 className="font-semibold text-lg text-gray-900">Добавить на «{manualShowAddModal.attractionName}»</h3>
+                      <button onClick={() => setManualShowAddModal(null)} className="text-gray-400 hover:text-gray-600">
                         <X className="h-5 w-5" />
                       </button>
                     </div>
@@ -1439,17 +1322,17 @@ const handleExportScheduleImage = async () => {
                         const allEmpty = !available.priority1.length && !available.priority2.length && !available.priority3.length && !available.goals.length;
 
                         if (allEmpty) {
-                          return <p className="text-gray-500 dark:text-gray-400 text-center py-8">Нет доступных сотрудников</p>;
+                          return <p className="text-gray-500 text-center py-8">Нет доступных сотрудников</p>;
                         }
 
                         return (
                           <div className="space-y-4">
                             {available.priority1.length > 0 && (
                               <div>
-                                <h4 className="font-medium text-green-700 dark:text-green-400 mb-2">Приоритет 1</h4>
+                                <h4 className="font-medium text-green-700 mb-2">Приоритет 1</h4>
                                 <div className="space-y-1">
                                   {available.priority1.map((emp) => (
-                                    <label key={emp.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
+                                    <label key={emp.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
                                       <input
                                         type="checkbox"
                                         checked={manualEmployeeSelection.has(emp.id)}
@@ -1460,7 +1343,7 @@ const handleExportScheduleImage = async () => {
                                         }}
                                         className="rounded text-blue-600"
                                       />
-                                      <span className="text-gray-900 dark:text-white">{emp.full_name}</span>
+                                      <span className="text-gray-900">{emp.full_name}</span>
                                     </label>
                                   ))}
                                 </div>
@@ -1469,10 +1352,10 @@ const handleExportScheduleImage = async () => {
 
                             {available.priority2.length > 0 && (
                               <div>
-                                <h4 className="font-medium text-blue-700 dark:text-blue-400 mb-2">Приоритет 2</h4>
+                                <h4 className="font-medium text-blue-700 mb-2">Приоритет 2</h4>
                                 <div className="space-y-1">
                                   {available.priority2.map((emp) => (
-                                    <label key={emp.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
+                                    <label key={emp.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
                                       <input
                                         type="checkbox"
                                         checked={manualEmployeeSelection.has(emp.id)}
@@ -1483,7 +1366,7 @@ const handleExportScheduleImage = async () => {
                                         }}
                                         className="rounded text-blue-600"
                                       />
-                                      <span className="text-gray-900 dark:text-white">{emp.full_name}</span>
+                                      <span className="text-gray-900">{emp.full_name}</span>
                                     </label>
                                   ))}
                                 </div>
@@ -1492,10 +1375,10 @@ const handleExportScheduleImage = async () => {
 
                             {available.priority3.length > 0 && (
                               <div>
-                                <h4 className="font-medium text-gray-700 dark:text-gray-400 mb-2">Приоритет 3</h4>
+                                <h4 className="font-medium text-gray-700 mb-2">Приоритет 3</h4>
                                 <div className="space-y-1">
                                   {available.priority3.map((emp) => (
-                                    <label key={emp.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
+                                    <label key={emp.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
                                       <input
                                         type="checkbox"
                                         checked={manualEmployeeSelection.has(emp.id)}
@@ -1506,7 +1389,7 @@ const handleExportScheduleImage = async () => {
                                         }}
                                         className="rounded text-blue-600"
                                       />
-                                      <span className="text-gray-900 dark:text-white">{emp.full_name}</span>
+                                      <span className="text-gray-900">{emp.full_name}</span>
                                     </label>
                                   ))}
                                 </div>
@@ -1515,10 +1398,10 @@ const handleExportScheduleImage = async () => {
 
                             {available.goals.length > 0 && (
                               <div>
-                                <h4 className="font-medium text-purple-700 dark:text-purple-400 mb-2">Цель обучения</h4>
+                                <h4 className="font-medium text-purple-700 mb-2">Цель обучения</h4>
                                 <div className="space-y-1">
                                   {available.goals.map((emp) => (
-                                    <label key={emp.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer">
+                                    <label key={emp.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
                                       <input
                                         type="checkbox"
                                         checked={manualEmployeeSelection.has(emp.id)}
@@ -1529,7 +1412,7 @@ const handleExportScheduleImage = async () => {
                                         }}
                                         className="rounded text-blue-600"
                                       />
-                                      <span className="text-gray-900 dark:text-white">{emp.full_name}</span>
+                                      <span className="text-gray-900">{emp.full_name}</span>
                                     </label>
                                   ))}
                                 </div>
@@ -1540,8 +1423,8 @@ const handleExportScheduleImage = async () => {
                       })()}
                     </div>
 
-                    <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 flex justify-end gap-3">
-                      <button onClick={() => setManualShowAddModal(null)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600">
+                    <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+                      <button onClick={() => setManualShowAddModal(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100">
                         Отмена
                       </button>
                       <button
@@ -1570,49 +1453,101 @@ const handleExportScheduleImage = async () => {
             <div className="p-4 sm:p-6 space-y-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <button onClick={() => setScheduleViewMonth(subMonths(scheduleViewMonth, 1))} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <ChevronLeft className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-                  </button>
-                  <h3 className="text-xl font-semibold capitalize text-gray-900 dark:text-white">{format(scheduleViewMonth, 'LLLL yyyy', { locale: ru })}</h3>
-                  <button onClick={() => setScheduleViewMonth(addMonths(scheduleViewMonth, 1))} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <ChevronRight className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-                  </button>
+                  {scheduleViewMode === 'month' && (
+                    <>
+                      <button onClick={() => setScheduleViewMonth(subMonths(scheduleViewMonth, 1))} className="p-2 rounded-lg hover:bg-gray-100">
+                        <ChevronLeft className="h-5 w-5 text-gray-700" />
+                      </button>
+                      <h3 className="text-xl font-semibold capitalize text-gray-900">{format(scheduleViewMonth, 'LLLL yyyy', { locale: ru })}</h3>
+                      <button onClick={() => setScheduleViewMonth(addMonths(scheduleViewMonth, 1))} className="p-2 rounded-lg hover:bg-gray-100">
+                        <ChevronRight className="h-5 w-5 text-gray-700" />
+                      </button>
+                    </>
+                  )}
+
+                  {scheduleViewMode === 'week' && (
+                    <>
+                      <button onClick={() => setScheduleViewWeekStart(addDays(scheduleViewWeekStart, -7))} className="p-2 rounded-lg hover:bg-gray-100">
+                        <ChevronLeft className="h-5 w-5 text-gray-700" />
+                      </button>
+                      <h3 className="text-xl font-semibold text-gray-900">
+                        {format(scheduleViewWeekStart, 'd MMM', { locale: ru })} – {format(addDays(scheduleViewWeekStart, 6), 'd MMM yyyy', { locale: ru })}
+                      </h3>
+                      <button onClick={() => setScheduleViewWeekStart(addDays(scheduleViewWeekStart, 7))} className="p-2 rounded-lg hover:bg-gray-100">
+                        <ChevronRight className="h-5 w-5 text-gray-700" />
+                      </button>
+                    </>
+                  )}
+
+                  {scheduleViewMode === 'day' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Дата:</span>
+                      <input
+                        type="date"
+                        value={format(scheduleViewDate, 'yyyy-MM-dd')}
+                        onChange={(e) => setScheduleViewDate(new Date(e.target.value))}
+                        className="border border-gray-300 bg-white text-gray-900 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
                 </div>
 
-                <button
-                  onClick={handleExportScheduleImage}
-                  disabled={exportingImage}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-green-700 disabled:opacity-50 transition"
-                >
-                  {exportingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                  Сохранить как PNG
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setScheduleViewMode('day');
+                      setScheduleViewDate(new Date());
+                    }}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                      scheduleViewMode === 'day'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    День
+                  </button>
+                  <button
+                    onClick={() => {
+                      setScheduleViewMode('week');
+                      setScheduleViewWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
+                    }}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                      scheduleViewMode === 'week'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Неделя
+                  </button>
+                  <button
+                    onClick={() => {
+                      setScheduleViewMode('month');
+                      setScheduleViewMonth(new Date());
+                    }}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                      scheduleViewMode === 'month'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Месяц
+                  </button>
+                </div>
               </div>
 
-              <div className="relative w-full sm:w-80">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Поиск сотрудника..."
-                  value={employeeSearch}
-                  onChange={(e) => setEmployeeSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div ref={scheduleViewRef} className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm bg-white dark:bg-gray-800">
+              <div ref={scheduleViewRef} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white">
                 <div className="overflow-x-auto">
                   <table className="min-w-full">
-                    <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                    <thead className="bg-gray-50 sticky top-0">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase border-r border-gray-200 dark:border-gray-600">
-                          Сотрудник
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">
+                          Аттракцион
                         </th>
                         {scheduleViewDays.map((day) => (
                           <th
                             key={day.toISOString()}
-                            className={`px-2 py-3 text-center text-xs font-semibold uppercase border-r border-gray-200 dark:border-gray-600 ${
-                              isWeekend(day) ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'
+                            className={`px-2 py-3 text-center text-xs font-semibold uppercase border-r border-gray-200 ${
+                              isWeekend(day) ? 'bg-red-50 text-red-700' : 'text-gray-600'
                             }`}
                           >
                             <div>{format(day, 'd')}</div>
@@ -1621,39 +1556,55 @@ const handleExportScheduleImage = async () => {
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                      {filteredEmployeesForScheduleView.map((emp) => (
-                        <tr key={emp.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-600 whitespace-nowrap">
-                            {emp.full_name}
-                          </td>
-                          {scheduleViewDays.map((day) => {
-                            const dateStr = format(day, 'yyyy-MM-dd');
-                            const assignments = scheduleViewData.filter((a) => a.work_date === dateStr && a.employee_id === emp.id);
+                    <tbody className="divide-y divide-gray-100">
+                      {attractions.map((attraction) => {
+                        const attractionSchedule = scheduleByAttractionAndDate.get(attraction.id);
+                        
+                        return (
+                          <tr key={attraction.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900 border-r border-gray-200 whitespace-nowrap">
+                              {attraction.name}
+                            </td>
+                            {scheduleViewDays.map((day) => {
+                              const dateStr = format(day, 'yyyy-MM-dd');
+                              const assignments = attractionSchedule?.get(dateStr) || [];
 
-                            return (
-                              <td
-                                key={day.toISOString()}
-                                className={`px-2 py-2 text-xs text-center border-r border-gray-200 dark:border-gray-600 ${
-                                  isWeekend(day) ? 'bg-red-50/50 dark:bg-red-900/10' : ''
-                                }`}
-                              >
-                                {assignments.length > 0 ? (
-                                  <div className="space-y-1">
-                                    {assignments.map((a) => (
-                                      <div key={a.id} className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1 py-0.5 rounded text-[10px] truncate">
-                                        {a.attractions?.name || '—'}
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-300 dark:text-gray-600">—</span>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
+                              return (
+                                <td
+                                  key={day.toISOString()}
+                                  className={`px-2 py-2 text-xs border-r border-gray-200 align-top ${
+                                    isWeekend(day) ? 'bg-red-50/50' : ''
+                                  }`}
+                                  style={{ minHeight: assignments.length > 0 ? `${assignments.length * 2}rem` : 'auto' }}
+                                >
+                                  {assignments.length > 0 ? (
+                                    <div className="space-y-1">
+                                      {assignments.map((assignment) => {
+                                        const employee = employees.find(e => e.id === assignment.employee_id);
+                                        const shortName = employee ? getShortName(employee.full_name) : '—';
+                                        const isPartialShift = assignment.start_time !== '10:00' || assignment.end_time !== '22:00';
+
+                                        return (
+                                          <div key={assignment.id} className="bg-blue-100 text-blue-700 px-1.5 py-1 rounded text-[11px] leading-tight">
+                                            <div>{shortName}</div>
+                                            {isPartialShift && (
+                                              <div className="text-[9px] opacity-75 mt-0.5">
+                                                {assignment.start_time?.slice(0, 5)}-{assignment.end_time?.slice(0, 5)}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-300 block text-center">—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1667,7 +1618,7 @@ const handleExportScheduleImage = async () => {
           {activeTab === 'employees' && (
             <div className="p-4 sm:p-6 space-y-6">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Сотрудники</h3>
+                <h3 className="text-xl font-semibold text-gray-900">Сотрудники</h3>
                 <div className="relative w-full sm:w-80">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
@@ -1675,34 +1626,34 @@ const handleExportScheduleImage = async () => {
                     placeholder="Поиск..."
                     value={employeeSearch}
                     onChange={(e) => setEmployeeSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
-              <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700/50">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">ФИО</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Возраст</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Телефон</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Соцсети</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Последний вход</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">ФИО</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Возраст</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Телефон</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Соцсети</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Последний вход</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
+                    <tbody className="bg-white divide-y divide-gray-100">
                       {employees
                         .filter((emp) => {
                           if (!employeeSearch.trim()) return true;
                           return emp.full_name?.toLowerCase().includes(employeeSearch.toLowerCase());
                         })
                         .map((emp) => (
-                          <tr key={emp.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{emp.full_name}</td>
-                            <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{emp.age || '—'}</td>
-                            <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{emp.phone_number || '—'}</td>
+                          <tr key={emp.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{emp.full_name}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{emp.age || '—'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{emp.phone_number || '—'}</td>
                             <td className="px-4 py-3 text-sm">
                               <div className="flex items-center gap-3">
                                 {emp.telegram && (
@@ -1732,7 +1683,7 @@ const handleExportScheduleImage = async () => {
                                 {!emp.telegram && !emp.vk && !emp.max && <span className="text-gray-400 text-xs">—</span>}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{emp.last_login ? format(parseISO(emp.last_login), 'dd.MM.yyyy HH:mm') : '—'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-700">{emp.last_login ? format(parseISO(emp.last_login), 'dd.MM.yyyy HH:mm') : '—'}</td>
                           </tr>
                         ))}
                     </tbody>
