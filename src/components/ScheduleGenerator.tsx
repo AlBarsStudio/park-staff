@@ -78,13 +78,57 @@ interface ScheduleDay {
 type AlgorithmType = 'combined' | 'timeslot';
 
 // ============================================================
-// БЛОК 2: Вспомогательные функции (математика, преобразования)
-// Описание: Функции для работы с временем, матрицами, потоками.
+// БЛОК 2: Вспомогательные функции (математика, преобразования, покрытие интервалов)
+// Описание: Функции для работы с временем, матрицами, потоками, а также покрытие дня неполными сменами.
 // При изменении: заменять целиком при изменении логики назначения.
 // ============================================================
+
+const WORK_START_MIN = 0;      // 10:00
+const WORK_END_MIN = 780;      // 23:00 (13 часов * 60)
+const HOURS = Array.from({ length: 13 }, (_, i) => i); // 0..12 (10:00..23:00)
+
 function minutesFrom10(timeStr: string): number {
   const [h, m] = timeStr.split(':').map(Number);
   return (h - 10) * 60 + m;
+}
+
+// Проверяет, можно ли покрыть день [WORK_START_MIN, WORK_END_MIN] заданным набором интервалов
+// Возвращает массив выбранных сотрудников или null
+function findCoverForAttraction(
+  neededCount: number,
+  partialEmployees: ScheduleEntry[],
+  attractionId: number,
+  priorityMapCache: Map<number, Map<number, number>>
+): ScheduleEntry[] | null {
+  const candidates = partialEmployees.filter(emp => {
+    const priorities = priorityMapCache.get(emp.employeeId);
+    return priorities?.has(attractionId);
+  });
+  if (candidates.length < neededCount) return null;
+
+  if (neededCount === 1) return null;
+
+  if (neededCount === 2) {
+    const intervals = candidates.map(emp => ({
+      emp,
+      start: emp.startTime ? minutesFrom10(emp.startTime) : WORK_START_MIN,
+      end: emp.endTime ? minutesFrom10(emp.endTime) : WORK_END_MIN
+    }));
+    for (let i = 0; i < intervals.length; i++) {
+      for (let j = i + 1; j < intervals.length; j++) {
+        const a = intervals[i];
+        const b = intervals[j];
+        const start = Math.min(a.start, b.start);
+        const end = Math.max(a.end, b.end);
+        if (start <= WORK_START_MIN && end >= WORK_END_MIN) {
+          return [a.emp, b.emp];
+        }
+      }
+    }
+    return null;
+  }
+
+  return null;
 }
 
 // Решение задачи назначения для полных смен (min-cost flow)
@@ -109,7 +153,6 @@ function solveAssignment(
     }
   }
 
-  // Построение графа
   const N = 2 + nEmp + nSlot;
   const source = 0;
   const sink = N - 1;
@@ -137,7 +180,6 @@ function solveAssignment(
   }
   for (let j = 0; j < nSlot; j++) addEdge(slotOffset + j, sink, 1, 0);
 
-  // Bellman-Ford для поиска кратчайшего пути
   let totalFlow = 0;
   const maxFlow = Math.min(nEmp, nSlot);
   const dist = new Array(N);
@@ -177,7 +219,6 @@ function solveAssignment(
     }
   }
 
-  // Восстановление назначений
   const assignment: (number | null)[] = new Array(nSlot).fill(null);
   for (let i = 0; i < nEmp; i++) {
     const empNode = empOffset + i;
@@ -193,9 +234,109 @@ function solveAssignment(
 }
 
 // ============================================================
-// БЛОК 3: Альтернативный алгоритм с временными слотами (заглушка)
-// Описание: Реализация единого потокового алгоритма с разбиением на часы.
-// При изменении: заменить на полную реализацию.
+// Дополнительные функции для алгоритма временных слотов
+// ============================================================
+
+interface Timeslot {
+  attractionId: number;
+  hour: number; // 0..12 (10:00 + hour)
+}
+
+interface TimeslotGraphEdge {
+  to: number;
+  rev: number;
+  cap: number;
+  cost: number;
+}
+
+// Построение графа для алгоритма временных слотов
+// Возвращает: { graph, source, sink, employeeNodes, slotNodes, slotInfos }
+function buildTimeslotGraph(
+  employees: EmployeeWithPriority[],
+  timeslots: Timeslot[],
+  partialIntervals: Map<number, { start: number; end: number }> // employeeId -> { startMin, endMin }
+): {
+  graph: TimeslotGraphEdge[][];
+  source: number;
+  sink: number;
+  employeeNodes: number[];
+  slotNodes: number[];
+  slotInfos: Timeslot[];
+} {
+  const nEmp = employees.length;
+  const nSlot = timeslots.length;
+  const N = 2 + nEmp + nSlot;
+  const source = 0;
+  const sink = N - 1;
+  const empOffset = 1;
+  const slotOffset = 1 + nEmp;
+
+  const graph: TimeslotGraphEdge[][] = Array(N).fill(null).map(() => []);
+  const addEdge = (from: number, to: number, cap: number, cost: number) => {
+    graph[from].push({ to, rev: graph[to].length, cap, cost });
+    graph[to].push({ to: from, rev: graph[from].length - 1, cap: 0, cost: -cost });
+  };
+
+  // Исток -> сотрудники (capacity = 1, но на самом деле сотрудник может быть назначен на несколько слотов?
+  // В нашей модели сотрудник может работать в разные часы на разных аттракционах, поэтому capacity должно быть равно количеству часов, которые он может работать.
+  // Упростим: сотрудник может быть назначен на произвольное количество слотов, но не более одного в час. Поскольку слоты разные по часам, ограничение "один сотрудник на один слот" уже задано рёбрами от сотрудника к слотам с cap=1.
+  // Чтобы сотрудник мог быть назначен на несколько слотов, нужно от истока к сотруднику дать capacity = количество часов, которые он может отработать (например, 13 для полного дня).
+  // Для неполных смен capacity = количество часов в его интервале.
+  // Для простоты дадим capacity = 13 (максимум), но тогда сотрудник может быть назначен на 13 разных слотов, что допустимо.
+  // Однако лучше вычислить реальную доступность.
+  for (let i = 0; i < nEmp; i++) {
+    const emp = employees[i];
+    const interval = partialIntervals.get(emp.id);
+    let maxHours = HOURS.length; // 13
+    if (interval) {
+      // Неполная смена: считаем количество часов в интервале
+      const startHour = Math.ceil(interval.start / 60);
+      const endHour = Math.floor(interval.end / 60);
+      maxHours = Math.max(0, endHour - startHour);
+    }
+    addEdge(source, empOffset + i, Math.min(maxHours, HOURS.length), 0);
+  }
+
+  // Сотрудники -> слоты (только если есть допуск и время покрывает час)
+  for (let i = 0; i < nEmp; i++) {
+    const emp = employees[i];
+    const interval = partialIntervals.get(emp.id);
+    for (let j = 0; j < nSlot; j++) {
+      const slot = timeslots[j];
+      const priority = emp.priorityMap.get(slot.attractionId);
+      if (priority === undefined) continue;
+      // Проверяем, что час слота попадает в интервал сотрудника
+      const hourStart = WORK_START_MIN + slot.hour * 60;
+      const hourEnd = hourStart + 60;
+      if (interval) {
+        if (hourEnd <= interval.start || hourStart >= interval.end) continue;
+      }
+      // Стоимость: чем выше приоритет (1 - лучший), тем меньше стоимость
+      const cost = priority * 10;
+      addEdge(empOffset + i, slotOffset + j, 1, cost);
+    }
+  }
+
+  // Слоты -> сток (capacity = required)
+  // required позже добавим отдельно, пока capacity = 1 (будем менять после построения)
+  for (let j = 0; j < nSlot; j++) {
+    addEdge(slotOffset + j, sink, 1, 0); // временно 1
+  }
+
+  return {
+    graph,
+    source,
+    sink,
+    employeeNodes: Array.from({ length: nEmp }, (_, i) => empOffset + i),
+    slotNodes: Array.from({ length: nSlot }, (_, i) => slotOffset + i),
+    slotInfos: timeslots
+  };
+}
+
+// ============================================================
+// БЛОК 3: Алгоритм с временными слотами (полноценная реализация)
+// Описание: Разбиение дня на часы, построение min-cost flow, назначение сотрудников.
+// При изменении: заменить при изменении логики временных слотов.
 // ============================================================
 async function generateWithTimeslots(
   date: string,
@@ -206,9 +347,236 @@ async function generateWithTimeslots(
   studyGoalCache: Map<number, number>,
   fetchAvailabilityForDate: (date: string) => Promise<Availability[]>
 ): Promise<{ rows: ScheduleAttractionRow[]; unassigned: ScheduleEntry[] }> {
-  // ЗАГЛУШКА: возвращает пустой результат с пометкой
-  console.warn('Алгоритм с временными слотами ещё не реализован, используйте комбинированный');
-  return { rows: [], unassigned: [] };
+  // 1. Определяем требования для каждого аттракциона (min_staff на каждый час)
+  const isWeekendDay = isWeekend(parseISO(date));
+  const attractionRequirements = activeAttractions.map(attr => ({
+    attractionId: attr.id,
+    attractionName: attr.name,
+    requiredCount: Math.max(
+      isWeekendDay ? attr.minStaffWeekend : attr.minStaffWeekday,
+      minStaffPerAttraction
+    )
+  }));
+
+  // 2. Получаем доступность сотрудников
+  const availabilities = await fetchAvailabilityForDate(date);
+  const fullDayAvail = availabilities.filter(a => a.isFullDay);
+  const partialAvail = availabilities.filter(a => !a.isFullDay);
+
+  // 3. Формируем список сотрудников с приоритетами и интервалами
+  interface EmployeeSlot {
+    id: number;
+    name: string;
+    priorityMap: Map<number, number>;
+    studyGoalAttractionId?: number;
+    startMin: number;
+    endMin: number;
+    isFullDay: boolean;
+  }
+
+  const employeesForGraph: EmployeeSlot[] = [];
+
+  // Полные смены (весь день)
+  for (const av of fullDayAvail) {
+    const emp = employeesList.find(e => e.id === av.employeeId);
+    if (!emp) continue;
+    const priorityMap = priorityMapCache.get(av.employeeId) || new Map();
+    employeesForGraph.push({
+      id: emp.id,
+      name: emp.full_name,
+      priorityMap,
+      studyGoalAttractionId: studyGoalCache.get(av.employeeId),
+      startMin: WORK_START_MIN,
+      endMin: WORK_END_MIN,
+      isFullDay: true,
+    });
+  }
+
+  // Неполные смены
+  for (const av of partialAvail) {
+    const emp = employeesList.find(e => e.id === av.employeeId);
+    if (!emp) continue;
+    const priorityMap = priorityMapCache.get(av.employeeId) || new Map();
+    const startMin = av.startTime ? minutesFrom10(av.startTime) : WORK_START_MIN;
+    const endMin = av.endTime ? minutesFrom10(av.endTime) : WORK_END_MIN;
+    employeesForGraph.push({
+      id: emp.id,
+      name: emp.full_name,
+      priorityMap,
+      studyGoalAttractionId: studyGoalCache.get(av.employeeId),
+      startMin,
+      endMin,
+      isFullDay: false,
+    });
+  }
+
+  // 4. Создаём временные слоты: для каждого аттракциона и каждого часа (10-11, 11-12, ..., 22-23)
+  const timeslots: Timeslot[] = [];
+  for (const req of attractionRequirements) {
+    for (let hour = 0; hour < HOURS.length; hour++) {
+      timeslots.push({ attractionId: req.attractionId, hour });
+    }
+  }
+
+  // 5. Строим граф
+  const partialIntervals = new Map<number, { start: number; end: number }>();
+  for (const emp of employeesForGraph) {
+    partialIntervals.set(emp.id, { start: emp.startMin, end: emp.endMin });
+  }
+  const { graph, source, sink, slotNodes, slotInfos } = buildTimeslotGraph(
+    employeesForGraph.map(e => ({ id: e.id, name: e.name, priorityMap: e.priorityMap, studyGoalAttractionId: e.studyGoalAttractionId })),
+    timeslots,
+    partialIntervals
+  );
+
+  // 6. Устанавливаем пропускные способности для слотов (сторона слота -> сток) в соответствии с requiredCount
+  // Нужно найти рёбра от slotNodes к sink и изменить их capacity
+  for (let j = 0; j < slotNodes.length; j++) {
+    const slotNode = slotNodes[j];
+    const slot = slotInfos[j];
+    const required = attractionRequirements.find(r => r.attractionId === slot.attractionId)?.requiredCount || 1;
+    // Ищем ребро от slotNode к sink (обычно оно одно)
+    for (let k = 0; k < graph[slotNode].length; k++) {
+      const edge = graph[slotNode][k];
+      if (edge.to === sink) {
+        edge.cap = required;
+        // Находим обратное ребро и меняем его cap на 0 (не обязательно)
+        const revEdge = graph[sink][edge.rev];
+        if (revEdge && revEdge.to === slotNode) {
+          revEdge.cap = 0;
+        }
+        break;
+      }
+    }
+  }
+
+  // 7. Запускаем min-cost max-flow для заполнения всех слотов
+  const INF = 1e9;
+  let totalFlow = 0;
+  let totalCost = 0;
+  const totalSlots = slotNodes.length;
+  const maxFlow = totalSlots * 10; // достаточно большой
+
+  const dist = new Array(graph.length);
+  const prevv = new Array(graph.length);
+  const preve = new Array(graph.length);
+  const inqueue = new Array(graph.length);
+
+  while (totalFlow < maxFlow) {
+    for (let i = 0; i < graph.length; i++) dist[i] = INF;
+    dist[source] = 0;
+    const queue: number[] = [source];
+    inqueue[source] = true;
+    while (queue.length) {
+      const v = queue.shift()!;
+      inqueue[v] = false;
+      for (let i = 0; i < graph[v].length; i++) {
+        const e = graph[v][i];
+        if (e.cap > 0 && dist[e.to] > dist[v] + e.cost) {
+          dist[e.to] = dist[v] + e.cost;
+          prevv[e.to] = v;
+          preve[e.to] = i;
+          if (!inqueue[e.to]) {
+            queue.push(e.to);
+            inqueue[e.to] = true;
+          }
+        }
+      }
+    }
+    if (dist[sink] === INF) break;
+    let d = maxFlow - totalFlow;
+    for (let v = sink; v !== source; v = prevv[v]) {
+      d = Math.min(d, graph[prevv[v]][preve[v]].cap);
+    }
+    totalFlow += d;
+    totalCost += d * dist[sink];
+    for (let v = sink; v !== source; v = prevv[v]) {
+      const e = graph[prevv[v]][preve[v]];
+      e.cap -= d;
+      graph[v][e.rev].cap += d;
+    }
+  }
+
+  // 8. Восстанавливаем назначения: для каждого слота, кто на него назначен
+  // Сотрудники находятся в вершинах empOffset (1..1+nEmp-1), но у нас граф перестроен внутри buildTimeslotGraph.
+  // У нас есть slotNodes, ищем рёбра от сотрудников к слотам с cap === 0.
+  // Для этого нужно знать маппинг сотрудник -> employeeId. Сотрудники в графе имеют индексы от 1 до nEmp.
+  const empOffset = 1;
+  const employeeIdByNode: Map<number, number> = new Map();
+  for (let i = 0; i < employeesForGraph.length; i++) {
+    employeeIdByNode.set(empOffset + i, employeesForGraph[i].id);
+  }
+
+  // Для каждого слота собираем назначенного сотрудника
+  const slotAssignments: Map<number, number[]> = new Map(); // attractionId -> массив employeeId (по часам)
+  for (let j = 0; j < slotNodes.length; j++) {
+    const slotNode = slotNodes[j];
+    const slot = slotInfos[j];
+    // Ищем ребро от какого-то сотрудника к этому slotNode с cap === 0
+    for (let i = 0; i < graph.length; i++) {
+      for (const edge of graph[i]) {
+        if (edge.to === slotNode && edge.cap === 0 && i !== source && i !== sink) {
+          const empId = employeeIdByNode.get(i);
+          if (empId) {
+            if (!slotAssignments.has(slot.attractionId)) slotAssignments.set(slot.attractionId, []);
+            slotAssignments.get(slot.attractionId)!.push(empId);
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // 9. Формируем результат: для каждого аттракциона собираем уникальных сотрудников (поскольку один сотрудник может быть назначен на несколько часов, нужно убрать дубли)
+  const rows: ScheduleAttractionRow[] = attractionRequirements.map(req => ({
+    attractionId: req.attractionId,
+    attractionName: req.attractionName,
+    minStaffRequired: req.requiredCount,
+    employees: []
+  }));
+
+  const usedEmployeeIds = new Set<number>();
+  for (const req of attractionRequirements) {
+    const assignedIds = slotAssignments.get(req.attractionId) || [];
+    const uniqueIds = [...new Set(assignedIds)];
+    for (const empId of uniqueIds) {
+      const emp = employeesForGraph.find(e => e.id === empId);
+      if (emp) {
+        const row = rows.find(r => r.attractionId === req.attractionId);
+        if (row) {
+          row.employees.push({
+            employeeId: emp.id,
+            employeeName: emp.name,
+            isFullDay: emp.isFullDay,
+            startTime: emp.isFullDay ? null : formatTimeFromMinutes(emp.startMin),
+            endTime: emp.isFullDay ? null : formatTimeFromMinutes(emp.endMin),
+            isManuallyAdded: false,
+          });
+          usedEmployeeIds.add(emp.id);
+        }
+      }
+    }
+  }
+
+  // 10. Незадействованные сотрудники (кто не попал в назначения)
+  const unassignedEmployees = employeesForGraph.filter(emp => !usedEmployeeIds.has(emp.id));
+  const unassignedList: ScheduleEntry[] = unassignedEmployees.map(emp => ({
+    employeeId: emp.id,
+    employeeName: emp.name,
+    isFullDay: emp.isFullDay,
+    startTime: emp.isFullDay ? null : formatTimeFromMinutes(emp.startMin),
+    endTime: emp.isFullDay ? null : formatTimeFromMinutes(emp.endMin),
+  }));
+
+  return { rows, unassigned: unassignedList };
+}
+
+// Вспомогательная функция для преобразования минут в строку времени (HH:MM)
+function formatTimeFromMinutes(minutesFrom10: number): string {
+  const totalMinutes = 10 * 60 + minutesFrom10;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 
 // ============================================================
@@ -303,104 +671,140 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
     }));
   };
 
-  // ============================================================
-  // БЛОК 6: Генерация для одного дня (комбинированный алгоритм)
-  // Описание: Логика комбинированного подхода (только полные смены).
-  // При изменении: заменить при изменении алгоритма назначения.
-  // ============================================================
-  const generateForDayCombined = async (date: string): Promise<{ rows: ScheduleAttractionRow[]; unassigned: ScheduleEntry[] }> => {
-    const activeAttractions = attractions.filter(a => selectedAttractionIds.has(a.id));
-    const isWeekendDay = isWeekend(parseISO(date));
+// ============================================================
+// БЛОК 6: Генерация для одного дня (комбинированный алгоритм с поддержкой неполных смен)
+// Описание: Логика комбинированного подхода: сначала полные смены, затем покрытие дефицита неполными.
+// При изменении: заменить при изменении алгоритма назначения.
+// ============================================================
+const generateForDayCombined = async (date: string): Promise<{ rows: ScheduleAttractionRow[]; unassigned: ScheduleEntry[] }> => {
+  const activeAttractions = attractions.filter(a => selectedAttractionIds.has(a.id));
+  const isWeekendDay = isWeekend(parseISO(date));
 
-    const attractionRequirements = activeAttractions.map(attr => ({
-      attractionId: attr.id,
-      attractionName: attr.name,
-      requiredCount: Math.max(
-        isWeekendDay ? attr.minStaffWeekend : attr.minStaffWeekday,
-        minStaffPerAttraction
-      )
-    }));
+  const attractionRequirements = activeAttractions.map(attr => ({
+    attractionId: attr.id,
+    attractionName: attr.name,
+    requiredCount: Math.max(
+      isWeekendDay ? attr.minStaffWeekend : attr.minStaffWeekday,
+      minStaffPerAttraction
+    )
+  }));
 
-    const availabilities = await fetchAvailabilityForDate(date);
-    const fullDayAvail = availabilities.filter(a => a.isFullDay);
-    const fullEmployees: EmployeeWithPriority[] = [];
-    for (const av of fullDayAvail) {
-      const emp = employees.find(e => e.id === av.employeeId);
-      if (!emp) continue;
-      const priorityMap = priorityMapCache.get(av.employeeId) || new Map();
-      fullEmployees.push({
-        id: emp.id,
-        name: emp.full_name,
-        priorityMap,
-        studyGoalAttractionId: studyGoalCache.get(av.employeeId),
-      });
-    }
+  const availabilities = await fetchAvailabilityForDate(date);
+  const fullDayAvail = availabilities.filter(a => a.isFullDay);
+  const partialAvail = availabilities.filter(a => !a.isFullDay);
 
-    const slots: { attractionId: number }[] = [];
-    for (const req of attractionRequirements) {
-      for (let i = 0; i < req.requiredCount; i++) slots.push({ attractionId: req.attractionId });
-    }
+  // Сотрудники с полными сменами
+  const fullEmployees: EmployeeWithPriority[] = [];
+  for (const av of fullDayAvail) {
+    const emp = employees.find(e => e.id === av.employeeId);
+    if (!emp) continue;
+    const priorityMap = priorityMapCache.get(av.employeeId) || new Map();
+    fullEmployees.push({
+      id: emp.id,
+      name: emp.full_name,
+      priorityMap,
+      studyGoalAttractionId: studyGoalCache.get(av.employeeId),
+    });
+  }
 
-    const assignment = solveAssignment(fullEmployees, slots);
+  // Создаём слоты для полных смен
+  const slots: { attractionId: number }[] = [];
+  for (const req of attractionRequirements) {
+    for (let i = 0; i < req.requiredCount; i++) slots.push({ attractionId: req.attractionId });
+  }
 
-    const rows: ScheduleAttractionRow[] = attractionRequirements.map(req => ({
-      attractionId: req.attractionId,
-      attractionName: req.attractionName,
-      minStaffRequired: req.requiredCount,
-      employees: []
-    }));
+  // Назначаем полные смены
+  const assignment = solveAssignment(fullEmployees, slots);
 
-    for (let slotIdx = 0; slotIdx < slots.length; slotIdx++) {
-      const slot = slots[slotIdx];
-      const empId = assignment[slotIdx];
-      if (empId !== null) {
-        const emp = fullEmployees.find(e => e.id === empId);
-        if (emp) {
-          const row = rows.find(r => r.attractionId === slot.attractionId);
-          if (row) {
-            row.employees.push({
-              employeeId: emp.id,
-              employeeName: emp.name,
-              isFullDay: true,
-              startTime: null,
-              endTime: null,
-              isManuallyAdded: false,
-            });
-          }
+  // Инициализируем строки аттракционов
+  const rows: ScheduleAttractionRow[] = attractionRequirements.map(req => ({
+    attractionId: req.attractionId,
+    attractionName: req.attractionName,
+    minStaffRequired: req.requiredCount,
+    employees: []
+  }));
+
+  // Заполняем назначенных полных сотрудников
+  const assignedFullIds: number[] = [];
+  for (let slotIdx = 0; slotIdx < slots.length; slotIdx++) {
+    const slot = slots[slotIdx];
+    const empId = assignment[slotIdx];
+    if (empId !== null) {
+      const emp = fullEmployees.find(e => e.id === empId);
+      if (emp) {
+        const row = rows.find(r => r.attractionId === slot.attractionId);
+        if (row) {
+          row.employees.push({
+            employeeId: emp.id,
+            employeeName: emp.name,
+            isFullDay: true,
+            startTime: null,
+            endTime: null,
+            isManuallyAdded: false,
+          });
+          assignedFullIds.push(emp.id);
         }
       }
     }
+  }
 
-    const assignedEmpIds = assignment.filter(id => id !== null) as number[];
-    const unassignedFull = fullEmployees.filter(emp => !assignedEmpIds.includes(emp.id));
-    const partialAvail = availabilities.filter(a => !a.isFullDay);
-    const partialEntries: ScheduleEntry[] = [];
-    for (const av of partialAvail) {
-      const emp = employees.find(e => e.id === av.employeeId);
-      if (emp) {
-        partialEntries.push({
-          employeeId: emp.id,
-          employeeName: emp.full_name,
-          isFullDay: false,
-          startTime: av.startTime,
-          endTime: av.endTime,
+  // Список неиспользованных полных сотрудников
+  const unassignedFull = fullEmployees.filter(emp => !assignedFullIds.includes(emp.id));
+
+  // Преобразуем неполные смены в ScheduleEntry
+  let partialEntries: ScheduleEntry[] = [];
+  for (const av of partialAvail) {
+    const emp = employees.find(e => e.id === av.employeeId);
+    if (emp) {
+      partialEntries.push({
+        employeeId: emp.id,
+        employeeName: emp.full_name,
+        isFullDay: false,
+        startTime: av.startTime,
+        endTime: av.endTime,
+      });
+    }
+  }
+
+  // Для каждого аттракциона проверяем дефицит и пытаемся закрыть его неполными сменами
+  const usedPartialIds: number[] = [];
+  for (const row of rows) {
+    const currentCount = row.employees.length;
+    const deficit = row.minStaffRequired - currentCount;
+    if (deficit <= 0) continue;
+
+    // Пытаемся найти покрытие из неполных сотрудников (ещё не использованных)
+    const availablePartials = partialEntries.filter(p => !usedPartialIds.includes(p.employeeId));
+    const cover = findCoverForAttraction(deficit, availablePartials, row.attractionId, priorityMapCache);
+    if (cover && cover.length === deficit) {
+      // Назначаем этих сотрудников на аттракцион
+      for (const emp of cover) {
+        row.employees.push({
+          ...emp,
+          isManuallyAdded: false, // автоматически назначенные, не вручную
         });
+        usedPartialIds.push(emp.employeeId);
       }
     }
-    const unassignedList: ScheduleEntry[] = [
-      ...unassignedFull.map(emp => ({
-        employeeId: emp.id,
-        employeeName: emp.name,
-        isFullDay: true,
-        startTime: null,
-        endTime: null,
-      })),
-      ...partialEntries
-    ];
+  }
 
-    return { rows, unassigned: unassignedList };
-  };
+  // Оставшиеся неполные (не использованные в покрытии)
+  const remainingPartial = partialEntries.filter(p => !usedPartialIds.includes(p.employeeId));
 
+  // Все незадействованные: неиспользованные полные + оставшиеся неполные
+  const unassignedList: ScheduleEntry[] = [
+    ...unassignedFull.map(emp => ({
+      employeeId: emp.id,
+      employeeName: emp.name,
+      isFullDay: true,
+      startTime: null,
+      endTime: null,
+    })),
+    ...remainingPartial
+  ];
+
+  return { rows, unassigned: unassignedList };
+};
   // ============================================================
   // БЛОК 7: Генерация для одного дня (выбор алгоритма)
   // Описание: Маршрутизация на нужный алгоритм.
