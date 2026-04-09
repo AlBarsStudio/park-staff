@@ -1,25 +1,7 @@
-/*
- * =====================================================================
- * ВНИМАНИЕ! Этот файл разбит на логические блоки с комментариями.
- * Каждый блок начинается с // ===== БЛОК N: ... =====
- * 
- * ПРАВИЛА ЗАМЕНЫ БЛОКОВ:
- * 1. Если нужно изменить код только в определённых блоках (например, блок 10),
- *    вы должны полностью заменить содержимое этих блоков, включая комментарии.
- * 2. Не удаляйте и не изменяйте комментарии-разделители блоков без необходимости.
- * 3. Если изменяете несколько блоков, заменяйте каждый целиком, сохраняя их порядок.
- * 4. Остальные блоки (не упомянутые в задании) должны оставаться нетронутыми.
- * 5. В ответе укажите, какие именно блоки были изменены.
- * =====================================================================
- */
-
-// ============================================================
-// БЛОК 1: Импорты и типы
-// ============================================================
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../lib/activityLog';
-import { UserProfile, Shift } from '../types';
+import { UserProfile, Shift, Priority } from '../types';
 import { getRandomGreeting } from '../utils/greetings';
 import { format, isBefore, startOfDay, parseISO, addMonths, subMonths, differenceInMinutes } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -60,9 +42,6 @@ interface EmployeeProfile extends UserProfile {
   base_hourly_rate: number;
 }
 
-// ============================================================
-// БЛОК 2: Вспомогательные функции
-// ============================================================
 function formatDateStr(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
   return `${d}.${m}.${y}`;
@@ -97,18 +76,15 @@ function isDateActive(dateStr: string): boolean {
   return true;
 }
 
-function getFirstAvailableEndTime(startTime: string, endTimes: string[]): string {
-  const available = endTimes.filter(t => t > startTime);
-  return available.length > 0 ? available[0] : endTimes[endTimes.length - 1];
+// ======================== ОСНОВНОЙ КОМПОНЕНТ ========================
+interface EmployeeDashboardProps {
+  profile: EmployeeProfile;
 }
 
-// ============================================================
-// БЛОК 3: Основной компонент и состояния
-// ============================================================
-export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
+export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const [priorities, setPriorities] = useState<{ level: number; attractions: { id: number; name: string }[] }[]>([]);
+  const [priorities, setPriorities] = useState<Priority[]>([]);
   const [studyGoal, setStudyGoal] = useState<StudyGoal | null>(null);
   const [availableAttractions, setAvailableAttractions] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,18 +124,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   const [salaryData, setSalaryData] = useState<{ days: any[]; total: number } | null>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
 
-  const attractionsMapRef = useRef<Map<number, string>>(new Map());
-  const [attractionsLoaded, setAttractionsLoaded] = useState(false);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  // ============================================================
-  // БЛОК 4: Константы и массивы времени
-  // ============================================================
-  const START_TIMES = useMemo(() => {
+  const START_TIMES = (() => {
     const times: string[] = [];
     for (let h = 10; h <= 20; h++) {
       for (let m of [0, 15, 30, 45]) {
@@ -168,9 +133,9 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
       }
     }
     return times;
-  }, []);
+  })();
 
-  const END_TIMES = useMemo(() => {
+  const END_TIMES = (() => {
     const times: string[] = [];
     for (let h = 12; h <= 23; h++) {
       for (let m of [0, 15, 30, 45]) {
@@ -179,27 +144,20 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
       }
     }
     return times;
-  }, []);
+  })();
 
-  // ============================================================
-  // БЛОК 5: Эффекты для таймеров и приветствия
-  // ============================================================
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (mountedRef.current) setNow(new Date());
-    }, 1000);
+    const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (mountedRef.current) {
-        setPing(prev => {
-          let newPing = prev + (Math.random() * 30) - 15;
-          newPing = Math.min(458, Math.max(78, newPing));
-          return Math.round(newPing);
-        });
-      }
+      setPing(prev => {
+        let newPing = prev + (Math.random() * 30) - 15;
+        newPing = Math.min(458, Math.max(78, newPing));
+        return Math.round(newPing);
+      });
     }, 2000);
     return () => clearInterval(interval);
   }, []);
@@ -210,149 +168,95 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     }
   }, [profile.full_name]);
 
-  // ============================================================
-  // БЛОК 6: Загрузка данных (fetchData)
-  // ============================================================
-  useEffect(() => {
-    const loadAttractions = async () => {
-      try {
-        const { data, error } = await supabase.from('attractions').select('id, name');
-        if (error) throw error;
-        const map = new Map<number, string>();
-        data?.forEach(a => map.set(a.id, a.name));
-        attractionsMapRef.current = map;
-      } catch (e) {
-        console.error('Не удалось загрузить список аттракционов:', e);
-      } finally {
-        if (mountedRef.current) setAttractionsLoaded(true);
-      }
-    };
-    loadAttractions();
-  }, []);
-
   const fetchData = useCallback(async () => {
-    if (!mountedRef.current) return;
     setLoading(true);
     try {
-      // 1. Смены сотрудника
-      try {
-        const { data: shiftData, error } = await supabase
-          .from('employee_availability')
-          .select('id, employee_id, work_date, is_full_day, start_time, end_time, comment')
-          .eq('employee_id', profile.id)
-          .order('work_date');
-        if (!error && shiftData && mountedRef.current) setShifts(shiftData as Shift[]);
-      } catch (e) {
-        console.error('Ошибка загрузки смен:', e);
-        if (mountedRef.current) setShifts([]);
-      }
+      // 1. Старые смены
+      const { data: shiftData } = await supabase
+        .from('employee_availability')
+        .select('id, employee_id, work_date, is_full_day, start_time, end_time, comment')
+        .eq('employee_id', profile.id)
+        .order('work_date');
+      if (shiftData) setShifts(shiftData as Shift[]);
 
       // 2. Приоритеты
-      let prioRecords: any[] = [];
-      try {
-        const { data, error } = await supabase
-          .from('employee_attraction_priorities')
-          .select('id, priority_level, attraction_ids')
-          .eq('employee_id', profile.id)
-          .order('priority_level');
-        if (!error && data) prioRecords = data;
-      } catch (e) {
-        console.error('Ошибка загрузки приоритетов:', e);
+      const { data: prioData } = await supabase
+        .from('employee_attraction_priorities')
+        .select('id, priority_level, attraction_id, attractions(name)')
+        .eq('employee_id', profile.id)
+        .order('priority_level');
+      if (prioData) setPriorities(prioData as unknown as Priority[]);
+
+      // 3. Цель изучения (без change_count и change_history)
+      const { data: goalData } = await supabase
+        .from('employee_study_goals')
+        .select('id, attraction_id, attractions(name)')
+        .eq('employee_id', profile.id)
+        .maybeSingle();
+      if (goalData) {
+        setStudyGoal(goalData as StudyGoal);
+        setSelectedAttractionId(goalData.attraction_id);
+      } else {
+        setStudyGoal(null);
+        setSelectedAttractionId(null);
       }
 
-      const attractionMap = attractionsMapRef.current;
-      const prioritiesWithNames = prioRecords.map(record => ({
-        level: record.priority_level,
-        attractions: (record.attraction_ids || []).map((id: number) => ({
-          id,
-          name: attractionMap.get(id) || '—'
-        }))
-      })).sort((a, b) => a.level - b.level);
-      if (mountedRef.current) setPriorities(prioritiesWithNames);
+      // 4. Доступные аттракционы: исключаем те, что уже в приоритетах, но добавляем текущую цель (если она есть)
+      const attractionIdsWithPriority = prioData?.map(p => p.attraction_id) || [];
+      let { data: allAttractions } = await supabase
+        .from('attractions')
+        .select('id, name')
+        .not('id', 'in', `(${attractionIdsWithPriority.join(',') || 0})`);
 
-      // 3. Цель изучения
-      let goalData: StudyGoal | null = null;
-      try {
-        const { data, error } = await supabase
-          .from('employee_study_goals')
-          .select('id, attraction_id, attractions(name)')
-          .eq('employee_id', profile.id)
-          .maybeSingle();
-        if (!error && data) goalData = data as StudyGoal;
-      } catch (e) {
-        console.error('Ошибка загрузки цели изучения:', e);
-      }
-      if (mountedRef.current) {
-        setStudyGoal(goalData);
-        setSelectedAttractionId(goalData?.attraction_id || null);
-      }
+      let available = allAttractions || [];
 
-      // 4. Доступные аттракционы
-      try {
-        const attractionIdsWithPriority = prioRecords.flatMap(r => r.attraction_ids || []);
-        const allAttractions = Array.from(attractionMap.entries()).map(([id, name]) => ({ id, name }));
-        let available = allAttractions.filter(a => !attractionIdsWithPriority.includes(a.id));
-        if (goalData?.attraction_id && !available.some(a => a.id === goalData.attraction_id)) {
-          const goalAttraction = allAttractions.find(a => a.id === goalData.attraction_id);
-          if (goalAttraction) available = [goalAttraction, ...available];
+      // Если у сотрудника уже есть цель, и её аттракцион не попал в список (например, он в приоритетах),
+      // добавляем его принудительно, чтобы можно было остаться на нём.
+      if (goalData && goalData.attraction_id) {
+        const alreadyInList = available.some(a => a.id === goalData.attraction_id);
+        if (!alreadyInList) {
+          const { data: currentGoalAttraction } = await supabase
+            .from('attractions')
+            .select('id, name')
+            .eq('id', goalData.attraction_id)
+            .single();
+          if (currentGoalAttraction) {
+            available = [currentGoalAttraction, ...available];
+          }
         }
-        if (mountedRef.current) setAvailableAttractions(available);
-      } catch (e) {
-        console.error('Ошибка формирования доступных аттракционов:', e);
-        if (mountedRef.current) setAvailableAttractions([]);
       }
+      setAvailableAttractions(available);
 
       // 5. График от администратора
-      let scheduleData: any[] = [];
-      try {
-        const { data, error } = await supabase
-          .from('schedule_assignments')
-          .select(`
-            id, work_date, employee_id, attraction_id, start_time, end_time,
-            created_at, updated_at,
-            attractions ( name, coefficient )
-          `)
-          .eq('employee_id', profile.id)
-          .order('work_date', { ascending: true });
-        if (!error && data) scheduleData = data;
-      } catch (e) {
-        console.error('Ошибка загрузки графика:', e);
-      }
-      if (mountedRef.current) setScheduleAssignments(scheduleData as ScheduleAssignment[]);
+      const { data: scheduleData } = await supabase
+        .from('schedule_assignments')
+        .select(`
+          id, work_date, employee_id, attraction_id, start_time, end_time,
+          created_at, updated_at,
+          attractions ( name, coefficient )
+        `)
+        .eq('employee_id', profile.id)
+        .order('work_date', { ascending: true });
+      if (scheduleData) setScheduleAssignments(scheduleData as ScheduleAssignment[]);
 
       // 6. Фактические отметки
-      if (scheduleData.length > 0) {
-        try {
-          const scheduleIds = scheduleData.map(s => s.id);
-          const { data: logsData, error } = await supabase
-            .from('actual_work_log')
-            .select('*')
-            .in('schedule_assignment_id', scheduleIds);
-          if (!error && logsData && mountedRef.current) setActualLogs(logsData as ActualWorkLog[]);
-        } catch (e) {
-          console.error('Ошибка загрузки фактических отметок:', e);
-          if (mountedRef.current) setActualLogs([]);
-        }
-      } else {
-        if (mountedRef.current) setActualLogs([]);
-      }
+      const { data: logsData } = await supabase
+        .from('actual_work_log')
+        .select('*')
+        .in('schedule_assignment_id', (scheduleData || []).map(s => s.id));
+      if (logsData) setActualLogs(logsData as ActualWorkLog[]);
 
     } catch (err) {
-      console.error('Критическая ошибка в fetchData:', err);
+      console.error(err);
     } finally {
-      if (mountedRef.current) setLoading(false);
+      setLoading(false);
     }
   }, [profile.id]);
 
   useEffect(() => {
-    if (attractionsLoaded) {
-      fetchData();
-    }
-  }, [fetchData, attractionsLoaded]);
+    fetchData();
+  }, [fetchData]);
 
-  // ============================================================
-  // БЛОК 7: Вычисляемые данные
-  // ============================================================
   const shiftsForMonth = useMemo(() => {
     return shifts.filter(s => {
       const d = parseISO(s.work_date);
@@ -369,9 +273,6 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
 
   const occupiedDates = useMemo(() => new Set(shifts.map(s => s.work_date)), [shifts]);
 
-  // ============================================================
-  // БЛОК 8: Обработчики смен
-  // ============================================================
   const handleDeleteShift = async (shift: Shift) => {
     const { allowed, reason } = canDeleteShift(shift);
     if (!allowed) { alert(reason); return; }
@@ -397,15 +298,6 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     setModalError('');
     setIsAddModalOpen(true);
   };
-
-  useEffect(() => {
-    if (!isFullDayModal && isAddModalOpen) {
-      const firstAvailable = getFirstAvailableEndTime(modalStartTime, END_TIMES);
-      if (modalEndTime <= modalStartTime) {
-        setModalEndTime(firstAvailable);
-      }
-    }
-  }, [modalStartTime, isFullDayModal, isAddModalOpen, END_TIMES, modalEndTime]);
 
   const openViewModal = (shift: Shift) => {
     setViewShift(shift);
@@ -441,9 +333,6 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     setSavingShift(false);
   };
 
-  // ============================================================
-  // БЛОК 9: Фактическое время и зарплата
-  // ============================================================
   const openTimeLogModal = (schedule: ScheduleAssignment) => {
     const workDate = parseISO(schedule.work_date);
     const today = startOfDay(new Date());
@@ -586,9 +475,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     }
   }, [activeTab, salaryPeriod]);
 
-  // ============================================================
-  // БЛОК 10: Цель изучения
-  // ============================================================
+  // ✨ UPSERT для цели изучения (без лимита изменений)
   const handleSaveStudyGoal = async () => {
     if (!selectedAttractionId) {
       setGoalError('Выберите аттракцион');
@@ -597,13 +484,14 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     setSavingGoal(true);
     setGoalError('');
     try {
+      // Пытаемся обновить, если запись с таким employee_id существует – иначе вставляем
       const { error } = await supabase
         .from('employee_study_goals')
         .upsert({
           employee_id: profile.id,
           attraction_id: selectedAttractionId,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'employee_id' });
+        }, { onConflict: 'employee_id' }); // уникальное ограничение на employee_id
 
       if (error) throw error;
       await fetchData();
@@ -615,9 +503,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     }
   };
 
-  // ============================================================
-  // БЛОК 11: Рендер-функции
-  // ============================================================
+  // --- Рендеры ---
   const renderMonthDays = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -733,7 +619,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
         {salaryData && (
           <div>
             <div className="max-h-96 overflow-y-auto">
-              {salaryData.days.map((day: any) => (
+              {salaryData.days.map(day => (
                 <div key={day.date} className="border-b py-2">
                   <div className="font-semibold">{format(parseISO(day.date), 'dd.MM.yyyy')}</div>
                   {day.attractions.map((a: any, idx: number) => (
@@ -751,41 +637,13 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   };
 
   const renderPriorities = () => {
-    if (!priorities || priorities.length === 0) {
-      return (
-        <div className="text-center py-6 text-gray-400">
-          <Map className="mx-auto h-8 w-8 mb-2" />
-          <p>Приоритеты не заданы</p>
-        </div>
-      );
-    }
-
-    const levelLabels: Record<number, { name: string; color: string }> = {
-      1: { name: '1 уровень (высший)', color: 'bg-red-50 border-red-200' },
-      2: { name: '2 уровень (средний)', color: 'bg-yellow-50 border-yellow-200' },
-      3: { name: '3 уровень (низший)', color: 'bg-green-50 border-green-200' },
-    };
-
+    if (priorities.length === 0) return <div className="text-center py-6 text-gray-400"><Map className="mx-auto h-8 w-8 mb-2" /><p>Приоритеты не заданы</p></div>;
     return (
-      <div className="space-y-3">
-        {priorities.map(({ level, attractions }) => (
-          <div key={level} className={`p-3 rounded-lg border ${levelLabels[level]?.color || 'bg-gray-50'}`}>
-            <h4 className="font-medium text-gray-700 mb-2">{levelLabels[level]?.name || `Уровень ${level}`}</h4>
-            {!attractions || attractions.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">Нет аттракционов</p>
-            ) : (
-              <ul className="space-y-1">
-                {attractions.map(attr => (
-                  <li key={attr.id} className="text-sm flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-                    {attr.name}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+      <ul className="divide-y">
+        {priorities.map(prio => (
+          <li key={prio.id} className="py-3 flex justify-between"><span>{prio.attractions?.name || 'Неизвестный'}</span><span className="text-xs bg-gray-100 px-2 py-1 rounded">#{prio.priority_level}</span></li>
         ))}
-      </div>
+      </ul>
     );
   };
 
@@ -799,7 +657,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
           {availableAttractions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
         <button onClick={handleSaveStudyGoal} disabled={savingGoal} className="w-full bg-blue-600 text-white py-2 rounded">
-          {savingGoal ? 'Сохранение...' : 'Сохранить цель'}
+          Сохранить цель
         </button>
       </div>
     );
@@ -818,9 +676,6 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
 
   if (loading) return <div className="flex justify-center p-16"><Loader2 className="animate-spin text-blue-600 h-8 w-8" /></div>;
 
-  // ============================================================
-  // БЛОК 12: Основной JSX рендер
-  // ============================================================
   return (
     <div className="bg-gray-50 text-gray-900 pb-24 md:pb-0">
       <div className="max-w-7xl mx-auto px-4 pt-6">
@@ -929,9 +784,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
               <div><label className="block text-xs">Время прихода</label><input type="time" value={actualStart} onChange={e => setActualStart(e.target.value)} className="border rounded w-full p-2" /></div>
               <div><label className="block text-xs">Время ухода</label><input type="time" value={actualEnd} onChange={e => setActualEnd(e.target.value)} className="border rounded w-full p-2" /></div>
             </div>
-            <button onClick={handleSaveTimeLog} disabled={savingTimeLog} className="w-full bg-blue-600 text-white py-2 rounded">
-              {savingTimeLog ? 'Сохранение...' : 'Сохранить'}
-            </button>
+            <button onClick={handleSaveTimeLog} disabled={savingTimeLog} className="w-full bg-blue-600 text-white py-2 rounded">Сохранить</button>
           </div>
         </div>
       )}
@@ -949,6 +802,3 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     </div>
   );
 }
-
-// Добавляем дефолтный экспорт для совместимости с обоими стилями импорта
-export default EmployeeDashboard;
