@@ -25,6 +25,7 @@ export function useAuth() {
   useEffect(() => {
     // Получаем текущую сессию
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[useAuth] Текущая сессия:', session?.user?.id);
       setSession(session);
       if (session?.user) {
         loadProfile(session.user.id);
@@ -37,6 +38,7 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('[useAuth] Изменение auth состояния:', _event, session?.user?.id);
       setSession(session);
       if (session?.user) {
         loadProfile(session.user.id);
@@ -61,11 +63,11 @@ export function useAuth() {
         .maybeSingle();
 
       if (adminError && adminError.code !== 'PGRST116') {
-        console.error('[useAuth] Ошибка при проверке admins:', adminError);
+        console.error('[useAuth] Ошибка запроса admins:', adminError);
       }
 
       if (adminData) {
-        console.log('[useAuth] Найден администратор:', adminData.full_name);
+        console.log('[useAuth] ✅ Найден администратор:', adminData.full_name);
         setProfile({
           ...adminData,
           age: null,
@@ -88,28 +90,29 @@ export function useAuth() {
         .maybeSingle();
 
       if (employeeError && employeeError.code !== 'PGRST116') {
-        console.error('[useAuth] Ошибка при проверке employees:', employeeError);
+        console.error('[useAuth] Ошибка запроса employees:', employeeError);
       }
 
       if (employeeData) {
-        console.log('[useAuth] Найден сотрудник:', employeeData.full_name);
+        console.log('[useAuth] ✅ Найден сотрудник:', employeeData.full_name);
         setProfile(employeeData);
         setLoading(false);
         return;
       }
 
       // 3. Профиль не найден
-      console.error('[useAuth] Профиль не найден ни в admins, ни в employees');
+      console.error('[useAuth] ❌ Профиль не найден ни в admins, ни в employees для auth_uid:', authUid);
       setProfile(null);
       setLoading(false);
     } catch (error) {
-      console.error('[useAuth] Критическая ошибка загрузки профиля:', error);
+      console.error('[useAuth] ❌ Критическая ошибка загрузки профиля:', error);
       setProfile(null);
       setLoading(false);
     }
   };
 
   const signOut = async () => {
+    console.log('[useAuth] Выход из системы');
     await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
