@@ -1,13 +1,23 @@
+// SuperAdminDashboard.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { UserProfile, Log } from '../types';
-import { Loader2, ShieldAlert, Activity, Users, Settings } from 'lucide-react';
+import {
+  Loader2,
+  ShieldAlert,
+  Activity,
+  Users,
+  Settings,
+  Star, // иконка для вкладки "Приоритеты"
+} from 'lucide-react';
 import { AdminDashboard } from './AdminDashboard';
+import { EmployeePriorities } from './EmployeePriorities'; // новый компонент
 
 interface SuperAdminDashboardProps {
   profile: UserProfile;
 }
 
+// Стили для типов действий в логах
 const ACTION_BADGE: Record<string, string> = {
   shift_add: 'bg-green-100 text-green-800',
   shift_delete: 'bg-red-100 text-red-800',
@@ -18,6 +28,7 @@ const ACTION_BADGE: Record<string, string> = {
   logout: 'bg-gray-100 text-gray-700',
 };
 
+// Человеко-читаемые названия действий
 const ACTION_LABELS: Record<string, string> = {
   shift_add: 'Добавление смены',
   shift_delete: 'Удаление смены',
@@ -28,6 +39,7 @@ const ACTION_LABELS: Record<string, string> = {
   logout: 'Выход',
 };
 
+// Типы пользователей
 const USER_TYPE_LABELS: Record<string, string> = {
   employee: 'Сотрудник',
   admin: 'Администратор',
@@ -35,12 +47,15 @@ const USER_TYPE_LABELS: Record<string, string> = {
 };
 
 export function SuperAdminDashboard({ profile }: SuperAdminDashboardProps) {
+  // Состояние для журнала действий
   const [logs, setLogs] = useState<Log[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
-  const [activeTab, setActiveTab] = useState<'shifts' | 'logs' | 'users'>('shifts');
+  // Активная вкладка: теперь включает 'priorities'
+  const [activeTab, setActiveTab] = useState<'shifts' | 'priorities' | 'users' | 'logs'>('shifts');
   const [logFilter, setLogFilter] = useState<string>('all');
   const [logSearch, setLogSearch] = useState('');
 
+  // Загружаем логи только при переходе на вкладку "Журнал действий"
   useEffect(() => {
     if (activeTab === 'logs') fetchLogs();
   }, [activeTab]);
@@ -58,6 +73,7 @@ export function SuperAdminDashboard({ profile }: SuperAdminDashboardProps) {
     setLoadingLogs(false);
   };
 
+  // Фильтрация логов по типу и поиску
   const filteredLogs = logs.filter(log => {
     const matchesType = logFilter === 'all' || log.action_type === logFilter;
     const matchesSearch =
@@ -68,8 +84,10 @@ export function SuperAdminDashboard({ profile }: SuperAdminDashboardProps) {
     return matchesType && matchesSearch;
   });
 
+  // Описание вкладок
   const tabs = [
     { id: 'shifts' as const, label: 'Управление сменами', Icon: Settings },
+    { id: 'priorities' as const, label: 'Приоритеты', Icon: Star }, // новая вкладка
     { id: 'users' as const, label: 'Пользователи', Icon: Users },
     { id: 'logs' as const, label: 'Журнал действий', Icon: Activity },
   ];
@@ -105,13 +123,17 @@ export function SuperAdminDashboard({ profile }: SuperAdminDashboardProps) {
         </div>
 
         <div className="p-0">
+          {/* Вкладка "Управление сменами" */}
           {activeTab === 'shifts' && (
             <div className="p-1">
-              {/* Переиспользуем AdminDashboard с флагом суперадмина */}
               <AdminDashboard profile={profile} isSuperAdmin={true} />
             </div>
           )}
 
+          {/* Новая вкладка "Приоритеты" */}
+          {activeTab === 'priorities' && <EmployeePriorities />}
+
+          {/* Вкладка "Пользователи" (пока заглушка) */}
           {activeTab === 'users' && (
             <div className="p-6">
               <div className="text-center py-16">
@@ -130,6 +152,7 @@ export function SuperAdminDashboard({ profile }: SuperAdminDashboardProps) {
             </div>
           )}
 
+          {/* Вкладка "Журнал действий" */}
           {activeTab === 'logs' && (
             <div className="p-6 space-y-4">
               <div className="flex flex-col sm:flex-row gap-3">
