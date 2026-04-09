@@ -124,87 +124,98 @@ export class DatabaseService {
   private adminId: number | null = null;
   private isInitialized = false;
 
-  // ============================================================
-  // ИНИЦИАЛИЗАЦИЯ
-  // ============================================================
+// ============================================================
+// ИНИЦИАЛИЗАЦИЯ
+// ============================================================
 
-  async init(adminAuthUid: string): Promise<boolean> {
-    try {
-      console.log('[DB] Инициализация DatabaseService для админа:', adminAuthUid);
-
-      // 1. Получаем текущего администратора
-      const { data: adminData, error: adminError } = await supabase
-        .from('admins')
-        .select('id, full_name, auth_uid, access_level, created_at')
-        .eq('auth_uid', adminAuthUid)
-        .single();
-
-      if (adminError || !adminData) {
-        console.error('[DB] Ошибка получения данных администратора:', adminError);
-        return false;
-      }
-
-      this.data.currentAdmin = adminData;
-      this.adminId = adminData.id;
-
-      console.log('[DB] Администратор найден:', adminData.full_name, 'ID:', this.adminId);
-
-      // 2. Параллельная загрузка всех данных
-      const [
-        employeesRes,
-        attractionsRes,
-        scheduleRes,
-        availabilityRes,
-        actualLogRes,
-        studyGoalsRes,
-        prioritiesRes,
-        activityLogRes,
-      ] = await Promise.all([
-        this.loadEmployees(),
-        this.loadAttractions(),
-        this.loadScheduleAssignments(),
-        this.loadEmployeeAvailability(),
-        this.loadActualWorkLog(),
-        this.loadStudyGoals(),
-        this.loadPriorities(),
-        this.loadActivityLog(),
-      ]);
-
-      // Проверяем результаты загрузки
-      const allSuccess = [
-        employeesRes,
-        attractionsRes,
-        scheduleRes,
-        availabilityRes,
-        actualLogRes,
-        studyGoalsRes,
-        prioritiesRes,
-        activityLogRes,
-      ].every((res) => res);
-
-      if (allSuccess) {
-        this.isInitialized = true;
-        console.log('[DB] Инициализация завершена успешно');
-        console.log('[DB] Загружено данных:', {
-          employees: this.data.employees.length,
-          attractions: this.data.attractions.length,
-          scheduleAssignments: this.data.scheduleAssignments.length,
-          employeeAvailability: this.data.employeeAvailability.length,
-          actualWorkLog: this.data.actualWorkLog.length,
-          studyGoals: this.data.studyGoals.length,
-          priorities: this.data.priorities.length,
-          activityLog: this.data.activityLog.length,
-        });
-        return true;
-      } else {
-        console.error('[DB] Ошибка при загрузке некоторых данных');
-        return false;
-      }
-    } catch (error) {
-      console.error('[DB] Критическая ошибка инициализации:', error);
+async init(adminAuthUid: string | undefined): Promise<boolean> {
+  try {
+    // Проверка валидности auth_uid
+    if (!adminAuthUid) {
+      console.error('[DB] Ошибка: auth_uid не предоставлен');
       return false;
     }
+
+    console.log('[DB] Инициализация DatabaseService для админа:', adminAuthUid);
+
+    // 1. Получаем текущего администратора
+    const { data: adminData, error: adminError } = await supabase
+      .from('admins')
+      .select('id, full_name, auth_uid, access_level, created_at')
+      .eq('auth_uid', adminAuthUid)
+      .maybeSingle(); // Используем maybeSingle вместо single
+
+    if (adminError) {
+      console.error('[DB] Ошибка запроса администратора:', adminError);
+      return false;
+    }
+
+    if (!adminData) {
+      console.error('[DB] Администратор не найден с auth_uid:', adminAuthUid);
+      return false;
+    }
+
+    this.data.currentAdmin = adminData;
+    this.adminId = adminData.id;
+
+    console.log('[DB] Администратор найден:', adminData.full_name, 'ID:', this.adminId);
+
+    // 2. Параллельная загрузка всех данных
+    const [
+      employeesRes,
+      attractionsRes,
+      scheduleRes,
+      availabilityRes,
+      actualLogRes,
+      studyGoalsRes,
+      prioritiesRes,
+      activityLogRes,
+    ] = await Promise.all([
+      this.loadEmployees(),
+      this.loadAttractions(),
+      this.loadScheduleAssignments(),
+      this.loadEmployeeAvailability(),
+      this.loadActualWorkLog(),
+      this.loadStudyGoals(),
+      this.loadPriorities(),
+      this.loadActivityLog(),
+    ]);
+
+    // Проверяем результаты загрузки
+    const allSuccess = [
+      employeesRes,
+      attractionsRes,
+      scheduleRes,
+      availabilityRes,
+      actualLogRes,
+      studyGoalsRes,
+      prioritiesRes,
+      activityLogRes,
+    ].every((res) => res);
+
+    if (allSuccess) {
+      this.isInitialized = true;
+      console.log('[DB] Инициализация завершена успешно');
+      console.log('[DB] Загружено данных:', {
+        employees: this.data.employees.length,
+        attractions: this.data.attractions.length,
+        scheduleAssignments: this.data.scheduleAssignments.length,
+        employeeAvailability: this.data.employeeAvailability.length,
+        actualWorkLog: this.data.actualWorkLog.length,
+        studyGoals: this.data.studyGoals.length,
+        priorities: this.data.priorities.length,
+        activityLog: this.data.activityLog.length,
+      });
+      return true;
+    } else {
+      console.error('[DB] Ошибка при загрузке некоторых данных');
+      return false;
+    }
+  } catch (error) {
+    console.error('[DB] Критическая ошибка инициализации:', error);
+    return false;
   }
+}
 
   // ============================================================
   // ЗАГРУЗКА ДАННЫХ ИЗ БД
