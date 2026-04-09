@@ -197,184 +197,183 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     }
   }, [profile.full_name]);
 
-// ============================================================
-// БЛОК 6: Загрузка данных (fetchData) - ИСПРАВЛЕН
-// Описание: Загружает смены, приоритеты, цель, график.
-// Теперь ошибки в одном запросе не прерывают загрузку остальных.
-// ============================================================
-const fetchData = useCallback(async () => {
-  setLoading(true);
-  try {
-    // --- 1. Смены сотрудника ---
+  // ============================================================
+  // БЛОК 6: Загрузка данных (fetchData) - ИСПРАВЛЕН
+  // Описание: Загружает смены, приоритеты, цель, график.
+  // Теперь ошибки в одном запросе не прерывают загрузку остальных.
+  // ============================================================
+  const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      const { data: shiftData, error: shiftError } = await supabase
-        .from('employee_availability')
-        .select('id, employee_id, work_date, is_full_day, start_time, end_time, comment')
-        .eq('employee_id', profile.id)
-        .order('work_date');
-      if (shiftError) throw shiftError;
-      if (shiftData) setShifts(shiftData as Shift[]);
-    } catch (e) {
-      console.error('Ошибка загрузки смен:', e);
-      setShifts([]);
-    }
-
-    // --- 2. Приоритеты (новая структура) ---
-    let prioRecords: any[] = [];
-    try {
-      const { data, error } = await supabase
-        .from('employee_attraction_priorities')
-        .select('id, priority_level, attraction_ids')
-        .eq('employee_id', profile.id)
-        .order('priority_level');
-      if (error) throw error;
-      prioRecords = data || [];
-    } catch (e) {
-      console.error('Ошибка загрузки приоритетов:', e);
-      prioRecords = [];
-    }
-
-    let prioritiesWithNames: { level: number; attractions: { id: number; name: string }[] }[] = [];
-    if (prioRecords.length > 0) {
+      // --- 1. Смены сотрудника ---
       try {
-        const allAttractionIds = prioRecords.flatMap(r => r.attraction_ids);
-        if (allAttractionIds.length > 0) {
-          const { data: attractionData, error: attrError } = await supabase
-            .from('attractions')
-            .select('id, name')
-            .in('id', allAttractionIds);
-          if (attrError) throw attrError;
-
-          const attractionMap = new Map<number, string>();
-          attractionData?.forEach(a => attractionMap.set(a.id, a.name));
-
-          prioritiesWithNames = prioRecords
-            .map(record => ({
-              level: record.priority_level,
-              attractions: (record.attraction_ids || []).map((id: number) => ({
-                id,
-                name: attractionMap.get(id) || 'Неизвестный аттракцион'
-              }))
-            }))
-            .sort((a, b) => a.level - b.level);
-        } else {
-          // Если attraction_ids пустые, просто создаём уровни без аттракционов
-          prioritiesWithNames = prioRecords.map(record => ({
-            level: record.priority_level,
-            attractions: []
-          }));
-        }
+        const { data: shiftData, error: shiftError } = await supabase
+          .from('employee_availability')
+          .select('id, employee_id, work_date, is_full_day, start_time, end_time, comment')
+          .eq('employee_id', profile.id)
+          .order('work_date');
+        if (shiftError) throw shiftError;
+        if (shiftData) setShifts(shiftData as Shift[]);
       } catch (e) {
-        console.error('Ошибка при обработке приоритетов:', e);
-        prioritiesWithNames = [];
+        console.error('Ошибка загрузки смен:', e);
+        setShifts([]);
       }
-    }
-    setPriorities(prioritiesWithNames);
 
-    // --- 3. Цель изучения ---
-    let goalData: StudyGoal | null = null;
-    try {
-      const { data, error } = await supabase
-        .from('employee_study_goals')
-        .select('id, attraction_id, attractions(name)')
-        .eq('employee_id', profile.id)
-        .maybeSingle();
-      if (error) throw error;
-      goalData = data as StudyGoal | null;
-    } catch (e) {
-      console.error('Ошибка загрузки цели изучения:', e);
-      goalData = null;
-    }
-
-    if (goalData) {
-      setStudyGoal(goalData);
-      setSelectedAttractionId(goalData.attraction_id);
-    } else {
-      setStudyGoal(null);
-      setSelectedAttractionId(null);
-    }
-
-    // --- 4. Доступные аттракционы (для цели) ---
-    try {
-      const attractionIdsWithPriority = prioRecords?.flatMap(r => r.attraction_ids) || [];
-      let query = supabase.from('attractions').select('id, name');
-      if (attractionIdsWithPriority.length > 0) {
-        query = query.not('id', 'in', `(${attractionIdsWithPriority.join(',')})`);
+      // --- 2. Приоритеты (новая структура) ---
+      let prioRecords: any[] = [];
+      try {
+        const { data, error } = await supabase
+          .from('employee_attraction_priorities')
+          .select('id, priority_level, attraction_ids')
+          .eq('employee_id', profile.id)
+          .order('priority_level');
+        if (error) throw error;
+        prioRecords = data || [];
+      } catch (e) {
+        console.error('Ошибка загрузки приоритетов:', e);
+        prioRecords = [];
       }
-      const { data: allAttractions, error } = await query;
-      if (error) throw error;
 
-      let available = allAttractions || [];
+      let prioritiesWithNames: { level: number; attractions: { id: number; name: string }[] }[] = [];
+      if (prioRecords.length > 0) {
+        try {
+          const allAttractionIds = prioRecords.flatMap(r => r.attraction_ids);
+          if (allAttractionIds.length > 0) {
+            const { data: attractionData, error: attrError } = await supabase
+              .from('attractions')
+              .select('id, name')
+              .in('id', allAttractionIds);
+            if (attrError) throw attrError;
 
-      // Добавляем текущую цель, если она не попала в список (например, уже в приоритетах)
-      if (goalData && goalData.attraction_id) {
-        const alreadyInList = available.some(a => a.id === goalData.attraction_id);
-        if (!alreadyInList) {
-          const { data: currentGoal, error: goalErr } = await supabase
-            .from('attractions')
-            .select('id, name')
-            .eq('id', goalData.attraction_id)
-            .single();
-          if (!goalErr && currentGoal) {
-            available = [currentGoal, ...available];
+            const attractionMap = new Map<number, string>();
+            attractionData?.forEach(a => attractionMap.set(a.id, a.name));
+
+            prioritiesWithNames = prioRecords
+              .map(record => ({
+                level: record.priority_level,
+                attractions: (record.attraction_ids || []).map((id: number) => ({
+                  id,
+                  name: attractionMap.get(id) || 'Неизвестный аттракцион'
+                }))
+              }))
+              .sort((a, b) => a.level - b.level);
+          } else {
+            // Если attraction_ids пустые, просто создаём уровни без аттракционов
+            prioritiesWithNames = prioRecords.map(record => ({
+              level: record.priority_level,
+              attractions: []
+            }));
+          }
+        } catch (e) {
+          console.error('Ошибка при обработке приоритетов:', e);
+          prioritiesWithNames = [];
+        }
+      }
+      setPriorities(prioritiesWithNames);
+
+      // --- 3. Цель изучения ---
+      let goalData: StudyGoal | null = null;
+      try {
+        const { data, error } = await supabase
+          .from('employee_study_goals')
+          .select('id, attraction_id, attractions(name)')
+          .eq('employee_id', profile.id)
+          .maybeSingle();
+        if (error) throw error;
+        goalData = data as StudyGoal | null;
+      } catch (e) {
+        console.error('Ошибка загрузки цели изучения:', e);
+        goalData = null;
+      }
+
+      if (goalData) {
+        setStudyGoal(goalData);
+        setSelectedAttractionId(goalData.attraction_id);
+      } else {
+        setStudyGoal(null);
+        setSelectedAttractionId(null);
+      }
+
+      // --- 4. Доступные аттракционы (для цели) ---
+      try {
+        const attractionIdsWithPriority = prioRecords?.flatMap(r => r.attraction_ids) || [];
+        let query = supabase.from('attractions').select('id, name');
+        if (attractionIdsWithPriority.length > 0) {
+          query = query.not('id', 'in', `(${attractionIdsWithPriority.join(',')})`);
+        }
+        const { data: allAttractions, error } = await query;
+        if (error) throw error;
+
+        let available = allAttractions || [];
+
+        // Добавляем текущую цель, если она не попала в список (например, уже в приоритетах)
+        if (goalData && goalData.attraction_id) {
+          const alreadyInList = available.some(a => a.id === goalData.attraction_id);
+          if (!alreadyInList) {
+            const { data: currentGoal, error: goalErr } = await supabase
+              .from('attractions')
+              .select('id, name')
+              .eq('id', goalData.attraction_id)
+              .single();
+            if (!goalErr && currentGoal) {
+              available = [currentGoal, ...available];
+            }
           }
         }
-      }
-      setAvailableAttractions(available);
-    } catch (e) {
-      console.error('Ошибка загрузки доступных аттракционов:', e);
-      setAvailableAttractions([]);
-    }
-
-    // --- 5. График от администратора ---
-    let scheduleData: any[] = [];
-    try {
-      const { data, error } = await supabase
-        .from('schedule_assignments')
-        .select(`
-          id, work_date, employee_id, attraction_id, start_time, end_time,
-          created_at, updated_at,
-          attractions ( name, coefficient )
-        `)
-        .eq('employee_id', profile.id)
-        .order('work_date', { ascending: true });
-      if (error) throw error;
-      scheduleData = data || [];
-    } catch (e) {
-      console.error('Ошибка загрузки графика:', e);
-      scheduleData = [];
-    }
-    setScheduleAssignments(scheduleData as ScheduleAssignment[]);
-
-    // --- 6. Фактические отметки ---
-    if (scheduleData.length > 0) {
-      try {
-        const scheduleIds = scheduleData.map(s => s.id);
-        const { data: logsData, error } = await supabase
-          .from('actual_work_log')
-          .select('*')
-          .in('schedule_assignment_id', scheduleIds);
-        if (error) throw error;
-        setActualLogs(logsData as ActualWorkLog[]);
+        setAvailableAttractions(available);
       } catch (e) {
-        console.error('Ошибка загрузки фактических отметок:', e);
+        console.error('Ошибка загрузки доступных аттракционов:', e);
+        setAvailableAttractions([]);
+      }
+
+      // --- 5. График от администратора ---
+      let scheduleData: any[] = [];
+      try {
+        const { data, error } = await supabase
+          .from('schedule_assignments')
+          .select(`
+            id, work_date, employee_id, attraction_id, start_time, end_time,
+            created_at, updated_at,
+            attractions ( name, coefficient )
+          `)
+          .eq('employee_id', profile.id)
+          .order('work_date', { ascending: true });
+        if (error) throw error;
+        scheduleData = data || [];
+      } catch (e) {
+        console.error('Ошибка загрузки графика:', e);
+        scheduleData = [];
+      }
+      setScheduleAssignments(scheduleData as ScheduleAssignment[]);
+
+      // --- 6. Фактические отметки ---
+      if (scheduleData.length > 0) {
+        try {
+          const scheduleIds = scheduleData.map(s => s.id);
+          const { data: logsData, error } = await supabase
+            .from('actual_work_log')
+            .select('*')
+            .in('schedule_assignment_id', scheduleIds);
+          if (error) throw error;
+          setActualLogs(logsData as ActualWorkLog[]);
+        } catch (e) {
+          console.error('Ошибка загрузки фактических отметок:', e);
+          setActualLogs([]);
+        }
+      } else {
         setActualLogs([]);
       }
-    } else {
-      setActualLogs([]);
+
+    } catch (err) {
+      console.error('Критическая ошибка в fetchData:', err);
+    } finally {
+      setLoading(false);
     }
+  }, [profile.id]);
 
-  } catch (err) {
-    // Общая ошибка (например, проблемы с сетью)
-    console.error('Критическая ошибка в fetchData:', err);
-  } finally {
-    setLoading(false);
-  }
-}, [profile.id]);
-
-useEffect(() => {
-  fetchData();
-}, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // ============================================================
   // БЛОК 7: Вычисляемые данные (useMemo)
@@ -633,7 +632,7 @@ useEffect(() => {
   };
 
   // ============================================================
-  // БЛОК 11: Рендер-функции (календарь, таблицы, приоритеты) - ИЗМЕНЁН
+  // БЛОК 11: Рендер-функции (календарь, таблицы, приоритеты) - ИСПРАВЛЕН
   // Описание: Функции отрисовки UI, включая обновлённые приоритеты.
   // ============================================================
   const renderMonthDays = () => {
@@ -768,44 +767,15 @@ useEffect(() => {
     );
   };
 
-const renderPriorities = () => {
-  if (!priorities || priorities.length === 0) {
-    return (
-      <div className="text-center py-6 text-gray-400">
-        <Map className="mx-auto h-8 w-8 mb-2" />
-        <p>Приоритеты не заданы</p>
-      </div>
-    );
-  }
-
-  const levelLabels: Record<number, { name: string; color: string }> = {
-    1: { name: '1 уровень (высший)', color: 'bg-red-50 border-red-200' },
-    2: { name: '2 уровень (средний)', color: 'bg-yellow-50 border-yellow-200' },
-    3: { name: '3 уровень (низший)', color: 'bg-green-50 border-green-200' },
-  };
-
-  return (
-    <div className="space-y-3">
-      {priorities.map(({ level, attractions }) => (
-        <div key={level} className={`p-3 rounded-lg border ${levelLabels[level]?.color || 'bg-gray-50'}`}>
-          <h4 className="font-medium text-gray-700 mb-2">{levelLabels[level]?.name || `Уровень ${level}`}</h4>
-          {!attractions || attractions.length === 0 ? (
-            <p className="text-sm text-gray-400 italic">Нет аттракционов</p>
-          ) : (
-            <ul className="space-y-1">
-              {attractions.map(attr => (
-                <li key={attr.id} className="text-sm flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
-                  {attr.name}
-                </li>
-              ))}
-            </ul>
-          )}
+  const renderPriorities = () => {
+    if (!priorities || priorities.length === 0) {
+      return (
+        <div className="text-center py-6 text-gray-400">
+          <Map className="mx-auto h-8 w-8 mb-2" />
+          <p>Приоритеты не заданы</p>
         </div>
-      ))}
-    </div>
-  );
-};
+      );
+    }
 
     const levelLabels: Record<number, { name: string; color: string }> = {
       1: { name: '1 уровень (высший)', color: 'bg-red-50 border-red-200' },
@@ -818,7 +788,7 @@ const renderPriorities = () => {
         {priorities.map(({ level, attractions }) => (
           <div key={level} className={`p-3 rounded-lg border ${levelLabels[level]?.color || 'bg-gray-50'}`}>
             <h4 className="font-medium text-gray-700 mb-2">{levelLabels[level]?.name || `Уровень ${level}`}</h4>
-            {attractions.length === 0 ? (
+            {!attractions || attractions.length === 0 ? (
               <p className="text-sm text-gray-400 italic">Нет аттракционов</p>
             ) : (
               <ul className="space-y-1">
