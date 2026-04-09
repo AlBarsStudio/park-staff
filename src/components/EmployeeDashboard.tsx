@@ -15,8 +15,6 @@
 
 // ============================================================
 // БЛОК 1: Импорты и типы
-// Описание: Импорт всех зависимостей, компонентов, утилит и типов.
-// При изменении: заменять целиком, если добавляются новые импорты.
 // ============================================================
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
@@ -61,9 +59,9 @@ interface StudyGoal {
 interface EmployeeProfile extends UserProfile {
   base_hourly_rate: number;
 }
+
 // ============================================================
 // БЛОК 2: Вспомогательные функции
-// Описание: Чистые функции для форматирования дат, проверки прав.
 // ============================================================
 function formatDateStr(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
@@ -99,7 +97,6 @@ function isDateActive(dateStr: string): boolean {
   return true;
 }
 
-// Вспомогательная функция для получения первого доступного конечного времени
 function getFirstAvailableEndTime(startTime: string, endTimes: string[]): string {
   const available = endTimes.filter(t => t > startTime);
   return available.length > 0 ? available[0] : endTimes[endTimes.length - 1];
@@ -107,7 +104,6 @@ function getFirstAvailableEndTime(startTime: string, endTimes: string[]): string
 
 // ============================================================
 // БЛОК 3: Основной компонент и состояния
-// Описание: Определение компонента EmployeeDashboard, useState.
 // ============================================================
 export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -152,13 +148,18 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   const [salaryData, setSalaryData] = useState<{ days: any[]; total: number } | null>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
 
-  // Кэш названий аттракционов
   const attractionsMapRef = useRef<Map<number, string>>(new Map());
   const [attractionsLoaded, setAttractionsLoaded] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // ============================================================
   // БЛОК 4: Константы и массивы времени
   // ============================================================
-  const START_TIMES = (() => {
+  const START_TIMES = useMemo(() => {
     const times: string[] = [];
     for (let h = 10; h <= 20; h++) {
       for (let m of [0, 15, 30, 45]) {
@@ -167,9 +168,9 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
       }
     }
     return times;
-  })();
+  }, []);
 
-  const END_TIMES = (() => {
+  const END_TIMES = useMemo(() => {
     const times: string[] = [];
     for (let h = 12; h <= 23; h++) {
       for (let m of [0, 15, 30, 45]) {
@@ -178,23 +179,27 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
       }
     }
     return times;
-  })();
+  }, []);
 
   // ============================================================
   // БЛОК 5: Эффекты для таймеров и приветствия
   // ============================================================
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
+    const timer = setInterval(() => {
+      if (mountedRef.current) setNow(new Date());
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setPing(prev => {
-        let newPing = prev + (Math.random() * 30) - 15;
-        newPing = Math.min(458, Math.max(78, newPing));
-        return Math.round(newPing);
-      });
+      if (mountedRef.current) {
+        setPing(prev => {
+          let newPing = prev + (Math.random() * 30) - 15;
+          newPing = Math.min(458, Math.max(78, newPing));
+          return Math.round(newPing);
+        });
+      }
     }, 2000);
     return () => clearInterval(interval);
   }, []);
@@ -206,13 +211,8 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   }, [profile.full_name]);
 
   // ============================================================
-  // БЛОК 6: Загрузка данных (fetchData) - ПОЛНОСТЬЮ ПЕРЕПИСАН
-  // Описание: Загружает смены, приоритеты, цель, график.
-  // Теперь использует кэш аттракционов, загруженный отдельно.
-  // Исправлена обработка null в attraction_ids.
+  // БЛОК 6: Загрузка данных (fetchData)
   // ============================================================
-  
-  // 0. Загрузка всех аттракционов при монтировании
   useEffect(() => {
     const loadAttractions = async () => {
       try {
@@ -221,34 +221,33 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
         const map = new Map<number, string>();
         data?.forEach(a => map.set(a.id, a.name));
         attractionsMapRef.current = map;
-        setAttractionsLoaded(true);
       } catch (e) {
         console.error('Не удалось загрузить список аттракционов:', e);
-        // Всё равно продолжаем работу, просто названия будут "—"
-        setAttractionsLoaded(true);
+      } finally {
+        if (mountedRef.current) setAttractionsLoaded(true);
       }
     };
     loadAttractions();
   }, []);
 
   const fetchData = useCallback(async () => {
+    if (!mountedRef.current) return;
     setLoading(true);
     try {
-      // --- 1. Смены сотрудника ---
+      // 1. Смены сотрудника
       try {
-        const { data: shiftData, error: shiftError } = await supabase
+        const { data: shiftData, error } = await supabase
           .from('employee_availability')
           .select('id, employee_id, work_date, is_full_day, start_time, end_time, comment')
           .eq('employee_id', profile.id)
           .order('work_date');
-        if (shiftError) throw shiftError;
-        if (shiftData) setShifts(shiftData as Shift[]);
+        if (!error && shiftData && mountedRef.current) setShifts(shiftData as Shift[]);
       } catch (e) {
         console.error('Ошибка загрузки смен:', e);
-        setShifts([]);
+        if (mountedRef.current) setShifts([]);
       }
 
-      // --- 2. Приоритеты (новая структура) ---
+      // 2. Приоритеты
       let prioRecords: any[] = [];
       try {
         const { data, error } = await supabase
@@ -256,14 +255,11 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
           .select('id, priority_level, attraction_ids')
           .eq('employee_id', profile.id)
           .order('priority_level');
-        if (error) throw error;
-        prioRecords = data || [];
+        if (!error && data) prioRecords = data;
       } catch (e) {
         console.error('Ошибка загрузки приоритетов:', e);
-        prioRecords = [];
       }
 
-      // Преобразуем в удобный вид, используя кэш названий
       const attractionMap = attractionsMapRef.current;
       const prioritiesWithNames = prioRecords.map(record => ({
         level: record.priority_level,
@@ -272,9 +268,9 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
           name: attractionMap.get(id) || '—'
         }))
       })).sort((a, b) => a.level - b.level);
-      setPriorities(prioritiesWithNames);
+      if (mountedRef.current) setPriorities(prioritiesWithNames);
 
-      // --- 3. Цель изучения ---
+      // 3. Цель изучения
       let goalData: StudyGoal | null = null;
       try {
         const { data, error } = await supabase
@@ -282,44 +278,31 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
           .select('id, attraction_id, attractions(name)')
           .eq('employee_id', profile.id)
           .maybeSingle();
-        if (error) throw error;
-        goalData = data as StudyGoal | null;
+        if (!error && data) goalData = data as StudyGoal;
       } catch (e) {
         console.error('Ошибка загрузки цели изучения:', e);
-        goalData = null;
       }
-
-      if (goalData) {
+      if (mountedRef.current) {
         setStudyGoal(goalData);
-        setSelectedAttractionId(goalData.attraction_id);
-      } else {
-        setStudyGoal(null);
-        setSelectedAttractionId(null);
+        setSelectedAttractionId(goalData?.attraction_id || null);
       }
 
-      // --- 4. Доступные аттракционы (для цели) ---
+      // 4. Доступные аттракционы
       try {
         const attractionIdsWithPriority = prioRecords.flatMap(r => r.attraction_ids || []);
         const allAttractions = Array.from(attractionMap.entries()).map(([id, name]) => ({ id, name }));
         let available = allAttractions.filter(a => !attractionIdsWithPriority.includes(a.id));
-
-        // Добавляем текущую цель, если она не попала в список (например, уже в приоритетах)
-        if (goalData && goalData.attraction_id) {
-          const alreadyInList = available.some(a => a.id === goalData.attraction_id);
-          if (!alreadyInList) {
-            const goalAttraction = allAttractions.find(a => a.id === goalData.attraction_id);
-            if (goalAttraction) {
-              available = [goalAttraction, ...available];
-            }
-          }
+        if (goalData?.attraction_id && !available.some(a => a.id === goalData.attraction_id)) {
+          const goalAttraction = allAttractions.find(a => a.id === goalData.attraction_id);
+          if (goalAttraction) available = [goalAttraction, ...available];
         }
-        setAvailableAttractions(available);
+        if (mountedRef.current) setAvailableAttractions(available);
       } catch (e) {
-        console.error('Ошибка при формировании доступных аттракционов:', e);
-        setAvailableAttractions([]);
+        console.error('Ошибка формирования доступных аттракционов:', e);
+        if (mountedRef.current) setAvailableAttractions([]);
       }
 
-      // --- 5. График от администратора ---
+      // 5. График от администратора
       let scheduleData: any[] = [];
       try {
         const { data, error } = await supabase
@@ -331,15 +314,13 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
           `)
           .eq('employee_id', profile.id)
           .order('work_date', { ascending: true });
-        if (error) throw error;
-        scheduleData = data || [];
+        if (!error && data) scheduleData = data;
       } catch (e) {
         console.error('Ошибка загрузки графика:', e);
-        scheduleData = [];
       }
-      setScheduleAssignments(scheduleData as ScheduleAssignment[]);
+      if (mountedRef.current) setScheduleAssignments(scheduleData as ScheduleAssignment[]);
 
-      // --- 6. Фактические отметки ---
+      // 6. Фактические отметки
       if (scheduleData.length > 0) {
         try {
           const scheduleIds = scheduleData.map(s => s.id);
@@ -347,20 +328,19 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
             .from('actual_work_log')
             .select('*')
             .in('schedule_assignment_id', scheduleIds);
-          if (error) throw error;
-          setActualLogs(logsData as ActualWorkLog[]);
+          if (!error && logsData && mountedRef.current) setActualLogs(logsData as ActualWorkLog[]);
         } catch (e) {
           console.error('Ошибка загрузки фактических отметок:', e);
-          setActualLogs([]);
+          if (mountedRef.current) setActualLogs([]);
         }
       } else {
-        setActualLogs([]);
+        if (mountedRef.current) setActualLogs([]);
       }
 
     } catch (err) {
       console.error('Критическая ошибка в fetchData:', err);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [profile.id]);
 
@@ -371,7 +351,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   }, [fetchData, attractionsLoaded]);
 
   // ============================================================
-  // БЛОК 7: Вычисляемые данные (useMemo)
+  // БЛОК 7: Вычисляемые данные
   // ============================================================
   const shiftsForMonth = useMemo(() => {
     return shifts.filter(s => {
@@ -390,7 +370,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   const occupiedDates = useMemo(() => new Set(shifts.map(s => s.work_date)), [shifts]);
 
   // ============================================================
-  // БЛОК 8: Обработчики действий со сменами (добавление, удаление)
+  // БЛОК 8: Обработчики смен
   // ============================================================
   const handleDeleteShift = async (shift: Shift) => {
     const { allowed, reason } = canDeleteShift(shift);
@@ -418,7 +398,6 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     setIsAddModalOpen(true);
   };
 
-  // Эффект для синхронизации конечного времени при смене начального
   useEffect(() => {
     if (!isFullDayModal && isAddModalOpen) {
       const firstAvailable = getFirstAvailableEndTime(modalStartTime, END_TIMES);
@@ -426,7 +405,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
         setModalEndTime(firstAvailable);
       }
     }
-  }, [modalStartTime, isFullDayModal, isAddModalOpen, END_TIMES]);
+  }, [modalStartTime, isFullDayModal, isAddModalOpen, END_TIMES, modalEndTime]);
 
   const openViewModal = (shift: Shift) => {
     setViewShift(shift);
@@ -463,7 +442,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   };
 
   // ============================================================
-  // БЛОК 9: Обработчики для фактического времени и зарплаты
+  // БЛОК 9: Фактическое время и зарплата
   // ============================================================
   const openTimeLogModal = (schedule: ScheduleAssignment) => {
     const workDate = parseISO(schedule.work_date);
@@ -608,7 +587,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   }, [activeTab, salaryPeriod]);
 
   // ============================================================
-  // БЛОК 10: Цель изучения (сохранение)
+  // БЛОК 10: Цель изучения
   // ============================================================
   const handleSaveStudyGoal = async () => {
     if (!selectedAttractionId) {
@@ -637,8 +616,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   };
 
   // ============================================================
-  // БЛОК 11: Рендер-функции (календарь, таблицы, приоритеты) - ИСПРАВЛЕН
-  // Описание: Функции отрисовки UI, включая обновлённые приоритеты.
+  // БЛОК 11: Рендер-функции
   // ============================================================
   const renderMonthDays = () => {
     const year = currentDate.getFullYear();
@@ -755,7 +733,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
         {salaryData && (
           <div>
             <div className="max-h-96 overflow-y-auto">
-              {salaryData.days.map(day => (
+              {salaryData.days.map((day: any) => (
                 <div key={day.date} className="border-b py-2">
                   <div className="font-semibold">{format(parseISO(day.date), 'dd.MM.yyyy')}</div>
                   {day.attractions.map((a: any, idx: number) => (
@@ -841,7 +819,7 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   if (loading) return <div className="flex justify-center p-16"><Loader2 className="animate-spin text-blue-600 h-8 w-8" /></div>;
 
   // ============================================================
-  // БЛОК 12: Основной JSX рендер (шапка, контент, модалки, футер)
+  // БЛОК 12: Основной JSX рендер
   // ============================================================
   return (
     <div className="bg-gray-50 text-gray-900 pb-24 md:pb-0">
@@ -971,3 +949,6 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     </div>
   );
 }
+
+// Добавляем дефолтный экспорт для совместимости с обоими стилями импорта
+export default EmployeeDashboard;
