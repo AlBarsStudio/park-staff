@@ -18,7 +18,7 @@
 // Описание: Импорт всех зависимостей, компонентов, утилит и типов.
 // При изменении: заменять целиком, если добавляются новые импорты.
 // ============================================================
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../lib/activityLog';
 import { UserProfile, Shift } from '../types';
@@ -61,7 +61,6 @@ interface StudyGoal {
 interface EmployeeProfile extends UserProfile {
   base_hourly_rate: number;
 }
-
 // ============================================================
 // БЛОК 2: Вспомогательные функции
 // Описание: Чистые функции для форматирования дат, проверки прав.
@@ -147,6 +146,9 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   const [salaryData, setSalaryData] = useState<{ days: any[]; total: number } | null>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
 
+  // Кэш названий аттракционов
+  const attractionsMapRef = useRef<Map<number, string>>(new Map());
+  const [attractionsLoaded, setAttractionsLoaded] = useState(false);
   // ============================================================
   // БЛОК 4: Константы и массивы времени
   // ============================================================
@@ -198,10 +200,30 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   }, [profile.full_name]);
 
   // ============================================================
-  // БЛОК 6: Загрузка данных (fetchData) - ИСПРАВЛЕН
+  // БЛОК 6: Загрузка данных (fetchData) - ПОЛНОСТЬЮ ПЕРЕПИСАН
   // Описание: Загружает смены, приоритеты, цель, график.
-  // Теперь ошибки в одном запросе не прерывают загрузку остальных.
+  // Теперь использует кэш аттракционов, загруженный отдельно.
   // ============================================================
+  
+  // 0. Загрузка всех аттракционов при монтировании
+  useEffect(() => {
+    const loadAttractions = async () => {
+      try {
+        const { data, error } = await supabase.from('attractions').select('id, name');
+        if (error) throw error;
+        const map = new Map<number, string>();
+        data?.forEach(a => map.set(a.id, a.name));
+        attractionsMapRef.current = map;
+        setAttractionsLoaded(true);
+      } catch (e) {
+        console.error('Не удалось загрузить список аттракционов:', e);
+        // Всё равно продолжаем работу, просто названия будут "—"
+        setAttractionsLoaded(true);
+      }
+    };
+    loadAttractions();
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -234,41 +256,15 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
         prioRecords = [];
       }
 
-      let prioritiesWithNames: { level: number; attractions: { id: number; name: string }[] }[] = [];
-      if (prioRecords.length > 0) {
-        try {
-          const allAttractionIds = prioRecords.flatMap(r => r.attraction_ids);
-          if (allAttractionIds.length > 0) {
-            const { data: attractionData, error: attrError } = await supabase
-              .from('attractions')
-              .select('id, name')
-              .in('id', allAttractionIds);
-            if (attrError) throw attrError;
-
-            const attractionMap = new Map<number, string>();
-            attractionData?.forEach(a => attractionMap.set(a.id, a.name));
-
-            prioritiesWithNames = prioRecords
-              .map(record => ({
-                level: record.priority_level,
-                attractions: (record.attraction_ids || []).map((id: number) => ({
-                  id,
-                  name: attractionMap.get(id) || 'Неизвестный аттракцион'
-                }))
-              }))
-              .sort((a, b) => a.level - b.level);
-          } else {
-            // Если attraction_ids пустые, просто создаём уровни без аттракционов
-            prioritiesWithNames = prioRecords.map(record => ({
-              level: record.priority_level,
-              attractions: []
-            }));
-          }
-        } catch (e) {
-          console.error('Ошибка при обработке приоритетов:', e);
-          prioritiesWithNames = [];
-        }
-      }
+      // Преобразуем в удобный вид, используя кэш названий
+      const attractionMap = attractionsMapRef.current;
+      const prioritiesWithNames = prioRecords.map(record => ({
+        level: record.priority_level,
+        attractions: (record.attraction_ids || []).map((id: number) => ({
+          id,
+          name: attractionMap.get(id) || '—'
+        }))
+      })).sort((a, b) => a.level - b.level);
       setPriorities(prioritiesWithNames);
 
       // --- 3. Цель изучения ---
@@ -296,33 +292,23 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
 
       // --- 4. Доступные аттракционы (для цели) ---
       try {
-        const attractionIdsWithPriority = prioRecords?.flatMap(r => r.attraction_ids) || [];
-        let query = supabase.from('attractions').select('id, name');
-        if (attractionIdsWithPriority.length > 0) {
-          query = query.not('id', 'in', `(${attractionIdsWithPriority.join(',')})`);
-        }
-        const { data: allAttractions, error } = await query;
-        if (error) throw error;
-
-        let available = allAttractions || [];
+        const attractionIdsWithPriority = prioRecords.flatMap(r => r.attraction_ids);
+        const allAttractions = Array.from(attractionMap.entries()).map(([id, name]) => ({ id, name }));
+        let available = allAttractions.filter(a => !attractionIdsWithPriority.includes(a.id));
 
         // Добавляем текущую цель, если она не попала в список (например, уже в приоритетах)
         if (goalData && goalData.attraction_id) {
           const alreadyInList = available.some(a => a.id === goalData.attraction_id);
           if (!alreadyInList) {
-            const { data: currentGoal, error: goalErr } = await supabase
-              .from('attractions')
-              .select('id, name')
-              .eq('id', goalData.attraction_id)
-              .single();
-            if (!goalErr && currentGoal) {
-              available = [currentGoal, ...available];
+            const goalAttraction = allAttractions.find(a => a.id === goalData.attraction_id);
+            if (goalAttraction) {
+              available = [goalAttraction, ...available];
             }
           }
         }
         setAvailableAttractions(available);
       } catch (e) {
-        console.error('Ошибка загрузки доступных аттракционов:', e);
+        console.error('Ошибка при формировании доступных аттракционов:', e);
         setAvailableAttractions([]);
       }
 
@@ -372,8 +358,10 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
   }, [profile.id]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (attractionsLoaded) {
+      fetchData();
+    }
+  }, [fetchData, attractionsLoaded]);
 
   // ============================================================
   // БЛОК 7: Вычисляемые данные (useMemo)
