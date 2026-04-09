@@ -199,39 +199,49 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
   const scheduleViewRef = useRef<HTMLDivElement>(null);
   const [exportingImage, setExportingImage] = useState(false);
 
-  // ============================================================
-  // БЛОК 6: Инициализация
-  // ============================================================
-  useEffect(() => {
-    const initData = async () => {
-      setLoading(true);
-      setError(null);
+// ============================================================
+// БЛОК 6: Инициализация
+// ============================================================
+useEffect(() => {
+  const initData = async () => {
+    setLoading(true);
+    setError(null);
 
-      try {
-        const success = await dbService.init(profile.auth_uid!);
-
-        if (!success) {
-          setError('Ошибка инициализации данных');
-          setLoading(false);
-          return;
-        }
-
-        setEmployees(dbService.getEmployees());
-        setAttractions(dbService.getAttractions());
-        setScheduleAssignments(dbService.getScheduleAssignments());
-        setShifts(dbService.getEmployeeAvailability());
-
-        console.log('[AdminDashboard] Данные загружены');
-      } catch (err: any) {
-        console.error('[AdminDashboard] Ошибка:', err);
-        setError(err.message || 'Неизвестная ошибка');
-      } finally {
+    try {
+      // Проверяем наличие auth_uid
+      if (!profile?.auth_uid) {
+        console.error('[AdminDashboard] Ошибка: auth_uid отсутствует в профиле', profile);
+        setError('Ошибка авторизации. Перезайдите в систему.');
         setLoading(false);
+        return;
       }
-    };
 
-    initData();
-  }, [profile.auth_uid]);
+      console.log('[AdminDashboard] Инициализация с auth_uid:', profile.auth_uid);
+
+      const success = await dbService.init(profile.auth_uid);
+
+      if (!success) {
+        setError('Ошибка инициализации данных. Возможно, у вас нет прав администратора.');
+        setLoading(false);
+        return;
+      }
+
+      setEmployees(dbService.getEmployees());
+      setAttractions(dbService.getAttractions());
+      setScheduleAssignments(dbService.getScheduleAssignments());
+      setShifts(dbService.getEmployeeAvailability());
+
+      console.log('[AdminDashboard] Данные загружены успешно');
+    } catch (err: any) {
+      console.error('[AdminDashboard] Ошибка инициализации:', err);
+      setError(err.message || 'Неизвестная ошибка при загрузке данных');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  initData();
+}, [profile]);
 
   // ============================================================
   // Обновление данных
