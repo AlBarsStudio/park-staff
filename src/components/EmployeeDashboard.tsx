@@ -179,15 +179,27 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         .order('work_date');
       if (shiftData) setShifts(shiftData as Shift[]);
 
-      // 2. Приоритеты
-      const { data: prioData } = await supabase
+      // 2. Приоритеты (ИСПРАВЛЕННЫЙ БЛОК)
+      console.log('🔄 Загружаем приоритеты для employee_id:', profile.id);
+      const { data: prioData, error: prioError } = await supabase
         .from('employee_attraction_priorities')
-        .select('id, priority_level, attraction_id, attractions(name)')
+        .select(`
+          id,
+          priority_level,
+          attraction_id,
+          attractions ( name )
+        `)
         .eq('employee_id', profile.id)
-        .order('priority_level');
-      if (prioData) setPriorities(prioData as unknown as Priority[]);
+        .order('priority_level', { ascending: true });
 
-      // 3. Цель изучения (без change_count и change_history)
+      if (prioError) {
+        console.error('❌ Ошибка загрузки приоритетов:', prioError);
+      } else {
+        console.log('✅ Приоритеты загружены:', prioData);
+        setPriorities(prioData as unknown as Priority[]);
+      }
+
+      // 3. Цель изучения
       const { data: goalData } = await supabase
         .from('employee_study_goals')
         .select('id, attraction_id, attractions(name)')
@@ -201,7 +213,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         setSelectedAttractionId(null);
       }
 
-      // 4. Доступные аттракционы: исключаем те, что уже в приоритетах, но добавляем текущую цель (если она есть)
+      // 4. Доступные аттракционы
       const attractionIdsWithPriority = prioData?.map(p => p.attraction_id) || [];
       let { data: allAttractions } = await supabase
         .from('attractions')
@@ -210,8 +222,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
       let available = allAttractions || [];
 
-      // Если у сотрудника уже есть цель, и её аттракцион не попал в список (например, он в приоритетах),
-      // добавляем его принудительно, чтобы можно было остаться на нём.
       if (goalData && goalData.attraction_id) {
         const alreadyInList = available.some(a => a.id === goalData.attraction_id);
         if (!alreadyInList) {
@@ -475,7 +485,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   }, [activeTab, salaryPeriod]);
 
-  // ✨ UPSERT для цели изучения (без лимита изменений)
   const handleSaveStudyGoal = async () => {
     if (!selectedAttractionId) {
       setGoalError('Выберите аттракцион');
@@ -484,14 +493,13 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingGoal(true);
     setGoalError('');
     try {
-      // Пытаемся обновить, если запись с таким employee_id существует – иначе вставляем
       const { error } = await supabase
         .from('employee_study_goals')
         .upsert({
           employee_id: profile.id,
           attraction_id: selectedAttractionId,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'employee_id' }); // уникальное ограничение на employee_id
+        }, { onConflict: 'employee_id' });
 
       if (error) throw error;
       await fetchData();
@@ -636,16 +644,45 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     );
   };
 
+  // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ РЕНДЕРА ПРИОРИТЕТОВ ==========
   const renderPriorities = () => {
-    if (priorities.length === 0) return <div className="text-center py-6 text-gray-400"><Map className="mx-auto h-8 w-8 mb-2" /><p>Приоритеты не заданы</p></div>;
+    // Заполняем дефолтные значения для уровней 1,2,3
+    const priorityMap: Record<number, string> = {
+      1: 'Не задан',
+      2: 'Не задан',
+      3: 'Не задан'
+    };
+
+    priorities.forEach(prio => {
+      if (prio.priority_level >= 1 && prio.priority_level <= 3) {
+        priorityMap[prio.priority_level] = prio.attractions?.name || 'Без названия';
+      }
+    });
+
     return (
       <ul className="divide-y">
-        {priorities.map(prio => (
-          <li key={prio.id} className="py-3 flex justify-between"><span>{prio.attractions?.name || 'Неизвестный'}</span><span className="text-xs bg-gray-100 px-2 py-1 rounded">#{prio.priority_level}</span></li>
-        ))}
+        <li className="py-3 flex justify-between items-center">
+          <span className="font-medium">1-й приоритет</span>
+          <span className="text-sm bg-blue-50 text-blue-800 px-3 py-1 rounded-full">
+            {priorityMap[1]}
+          </span>
+        </li>
+        <li className="py-3 flex justify-between items-center">
+          <span className="font-medium">2-й приоритет</span>
+          <span className="text-sm bg-blue-50 text-blue-800 px-3 py-1 rounded-full">
+            {priorityMap[2]}
+          </span>
+        </li>
+        <li className="py-3 flex justify-between items-center">
+          <span className="font-medium">3-й приоритет</span>
+          <span className="text-sm bg-blue-50 text-blue-800 px-3 py-1 rounded-full">
+            {priorityMap[3]}
+          </span>
+        </li>
       </ul>
     );
   };
+  // ========== КОНЕЦ РЕНДЕРА ПРИОРИТЕТОВ ==========
 
   const renderStudyGoal = () => {
     return (
