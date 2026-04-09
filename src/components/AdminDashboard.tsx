@@ -208,22 +208,16 @@ useEffect(() => {
     setError(null);
 
     try {
-      // Проверяем наличие auth_uid
       if (!profile?.auth_uid) {
-        console.error('[AdminDashboard] Ошибка: auth_uid отсутствует в профиле', profile);
-        setError('Ошибка авторизации. Перезайдите в систему.');
-        setLoading(false);
-        return;
+        throw new Error('auth_uid отсутствует в профиле');
       }
 
-      console.log('[AdminDashboard] Инициализация с auth_uid:', profile.auth_uid);
+      console.log('[AdminDashboard] Инициализация для:', profile.full_name, 'auth_uid:', profile.auth_uid);
 
       const success = await dbService.init(profile.auth_uid);
 
       if (!success) {
-        setError('Ошибка инициализации данных. Возможно, у вас нет прав администратора.');
-        setLoading(false);
-        return;
+        throw new Error('Не удалось инициализировать базу данных');
       }
 
       setEmployees(dbService.getEmployees());
@@ -231,10 +225,10 @@ useEffect(() => {
       setScheduleAssignments(dbService.getScheduleAssignments());
       setShifts(dbService.getEmployeeAvailability());
 
-      console.log('[AdminDashboard] Данные загружены успешно');
+      console.log('[AdminDashboard] Данные успешно загружены');
     } catch (err: any) {
       console.error('[AdminDashboard] Ошибка инициализации:', err);
-      setError(err.message || 'Неизвестная ошибка при загрузке данных');
+      setError(err.message || 'Ошибка загрузки данных');
     } finally {
       setLoading(false);
     }
@@ -242,7 +236,6 @@ useEffect(() => {
 
   initData();
 }, [profile]);
-
   // ============================================================
   // Обновление данных
   // ============================================================
