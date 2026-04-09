@@ -18,10 +18,13 @@ import { ru } from 'date-fns/locale';
 import { 
   Loader2, Calendar, Star, ChevronLeft, ChevronRight,
   Trash2, X, Clock, FileText, MessageCircle,
-  CheckCircle, DollarSign, Map
+  CheckCircle, DollarSign, Map, Home, BarChart3
 } from 'lucide-react';
 
-// ======================== ТИПЫ ========================
+// ========================================================================================
+// ТИПЫ
+// ========================================================================================
+
 interface EmployeeDashboardProps {
   profile: Employee;
 }
@@ -38,27 +41,48 @@ interface SalaryDay {
   total: number;
 }
 
-// ======================== УТИЛИТЫ ========================
+type TabType = 'home' | 'calendar' | 'schedule' | 'priorities' | 'salary' | 'form';
+
+// ========================================================================================
+// УТИЛИТЫ
+// ========================================================================================
+
+/**
+ * Форматирует дату из формата YYYY-MM-DD в DD.MM.YYYY
+ */
 function formatDateStr(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
   return `${d}.${m}.${y}`;
 }
 
-// ======================== ОСНОВНОЙ КОМПОНЕНТ ========================
+// ========================================================================================
+// ОСНОВНОЙ КОМПОНЕНТ
+// ========================================================================================
+
 export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
-  // ========== STATE ==========
+  
+  // ========================================================================================
+  // STATE - ОСНОВНЫЕ ДАННЫЕ
+  // ========================================================================================
+  
   const [dataManager, setDataManager] = useState<EmployeeDataManager | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updateTrigger, setUpdateTrigger] = useState(0);
+  
+  // ========================================================================================
+  // STATE - UI И НАВИГАЦИЯ
+  // ========================================================================================
+  
   const [now, setNow] = useState(new Date());
   const [greeting, setGreeting] = useState('');
   const [ping, setPing] = useState(120);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'shifts' | 'priorities' | 'form' | 'salary'>('dashboard');
-
-  // Данные из менеджера (обновляются при изменениях)
-  const [updateTrigger, setUpdateTrigger] = useState(0);
+  const [activeTab, setActiveTab] = useState<TabType>('home');
   
-  // Модалки - Добавление смены
+  // ========================================================================================
+  // STATE - МОДАЛКА ДОБАВЛЕНИЯ СМЕНЫ
+  // ========================================================================================
+  
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState('');
   const [isFullDayModal, setIsFullDayModal] = useState(true);
@@ -67,30 +91,45 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [modalComment, setModalComment] = useState('');
   const [modalError, setModalError] = useState('');
   const [savingShift, setSavingShift] = useState(false);
-
-  // Модалка - Просмотр смены
+  
+  // ========================================================================================
+  // STATE - МОДАЛКА ПРОСМОТРА СМЕНЫ
+  // ========================================================================================
+  
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewShift, setViewShift] = useState<EmployeeAvailability | null>(null);
-
-  // Модалка - Отметка фактического времени
+  
+  // ========================================================================================
+  // STATE - МОДАЛКА ОТМЕТКИ ВРЕМЕНИ
+  // ========================================================================================
+  
   const [isTimeLogModalOpen, setIsTimeLogModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleAssignment | null>(null);
   const [actualStart, setActualStart] = useState('');
   const [actualEnd, setActualEnd] = useState('');
   const [timeLogError, setTimeLogError] = useState('');
   const [savingTimeLog, setSavingTimeLog] = useState(false);
-
-  // Цель обучения
+  
+  // ========================================================================================
+  // STATE - ЦЕЛЬ ОБУЧЕНИЯ
+  // ========================================================================================
+  
   const [selectedAttractionId, setSelectedAttractionId] = useState<number | null>(null);
   const [savingGoal, setSavingGoal] = useState(false);
   const [goalError, setGoalError] = useState('');
-
-  // Зарплата
+  
+  // ========================================================================================
+  // STATE - ЗАРПЛАТА
+  // ========================================================================================
+  
   const [salaryPeriod, setSalaryPeriod] = useState<'first' | 'second'>('first');
   const [salaryData, setSalaryData] = useState<{ days: SalaryDay[]; total: number } | null>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
-
-  // ========== КОНСТАНТЫ ==========
+  
+  // ========================================================================================
+  // КОНСТАНТЫ - ВРЕМЕННЫЕ ИНТЕРВАЛЫ
+  // ========================================================================================
+  
   const START_TIMES = useMemo(() => {
     const times: string[] = [];
     for (let h = 10; h <= 20; h++) {
@@ -112,21 +151,27 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
     return times;
   }, []);
-
-  // ========== ИНИЦИАЛИЗАЦИЯ ==========
+  
+  // ========================================================================================
+  // ЭФФЕКТЫ - ИНИЦИАЛИЗАЦИЯ
+  // ========================================================================================
+  
+  /**
+   * Инициализация менеджера данных при монтировании компонента
+   */
   useEffect(() => {
     async function init() {
       try {
         const manager = await initializeEmployeeData(profile.id);
         setDataManager(manager);
         
-        // Устанавливаем цель обучения, если есть
+        // Устанавливаем текущую цель обучения
         const studyGoal = manager.getStudyGoal();
         if (studyGoal) {
           setSelectedAttractionId(studyGoal.attraction_id);
         }
       } catch (error) {
-        console.error('Ошибка инициализации:', error);
+        console.error('❌ Ошибка инициализации:', error);
         alert('Ошибка загрузки данных. Перезагрузите страницу.');
       } finally {
         setLoading(false);
@@ -139,13 +184,22 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       destroyEmployeeData();
     };
   }, [profile.id]);
-
-  // ========== ТАЙМЕРЫ ==========
+  
+  // ========================================================================================
+  // ЭФФЕКТЫ - ТАЙМЕРЫ
+  // ========================================================================================
+  
+  /**
+   * Обновление текущего времени каждую секунду
+   */
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  /**
+   * Эмуляция пинга для footer
+   */
   useEffect(() => {
     const interval = setInterval(() => {
       setPing(prev => {
@@ -157,13 +211,18 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     return () => clearInterval(interval);
   }, []);
 
+  /**
+   * Установка приветствия
+   */
   useEffect(() => {
     if (profile.full_name) {
       setGreeting(getRandomGreeting(profile.full_name, new Date()));
     }
   }, [profile.full_name]);
 
-  // Подписка на обновления данных
+  /**
+   * Подписка на обновления данных (для Realtime)
+   */
   useEffect(() => {
     if (!dataManager) return;
 
@@ -173,44 +232,75 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
     return () => clearInterval(interval);
   }, [dataManager]);
-
-  // ========== ПОЛУЧЕНИЕ ДАННЫХ ИЗ МЕНЕДЖЕРА ==========
+  
+  // ========================================================================================
+  // MEMO - ДАННЫЕ ИЗ МЕНЕДЖЕРА
+  // ========================================================================================
+  
+  /**
+   * Все аттракционы
+   */
   const attractions = useMemo(() => 
     dataManager?.getAttractions() || [], 
     [dataManager, updateTrigger]
   );
 
+  /**
+   * Все смены доступности (самозапись)
+   */
   const allAvailability = useMemo(() => 
     dataManager?.getAvailability() || [], 
     [dataManager, updateTrigger]
   );
 
+  /**
+   * Все смены расписания от админа
+   */
   const allSchedules = useMemo(() => 
     dataManager?.getScheduleAssignments() || [], 
     [dataManager, updateTrigger]
   );
 
+  /**
+   * Фактические отметки времени
+   */
   const actualLogs = useMemo(() => 
     dataManager?.getActualWorkLogs() || [], 
     [dataManager, updateTrigger]
   );
 
+  /**
+   * Текущая цель обучения
+   */
   const studyGoal = useMemo(() => 
     dataManager?.getStudyGoal() || null, 
     [dataManager, updateTrigger]
   );
 
+  /**
+   * Приоритеты аттракционов
+   */
   const priorities = useMemo(() => 
     dataManager?.getPriorities() || [], 
     [dataManager, updateTrigger]
   );
 
-  const availableAttractions = useMemo(() => {
+  /**
+   * Аттракционы, доступные для выбора в цели обучения
+   * (исключаем те, что уже в приоритетах)
+   */
+  const availableAttractionsForGoal = useMemo(() => {
     if (!dataManager) return [];
     
-    let available = dataManager.getAvailableAttractions();
+    // Собираем все ID аттракционов из приоритетов
+    const priorityAttractionIds = new Set(
+      priorities.flatMap(p => p.attraction_ids || [])
+    );
     
-    // Добавляем текущую цель, если она есть
+    // Фильтруем аттракционы
+    let available = attractions.filter(a => !priorityAttractionIds.has(a.id));
+    
+    // Добавляем текущую цель, если она есть и её нет в списке
     if (studyGoal && studyGoal.attraction_id) {
       const alreadyInList = available.some(a => a.id === studyGoal.attraction_id);
       if (!alreadyInList) {
@@ -222,9 +312,15 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
     
     return available;
-  }, [dataManager, studyGoal, attractions, updateTrigger]);
-
-  // ========== ФИЛЬТРАЦИЯ ПО МЕСЯЦУ ==========
+  }, [dataManager, studyGoal, attractions, priorities, updateTrigger]);
+  
+  // ========================================================================================
+  // MEMO - ФИЛЬТРАЦИЯ ПО МЕСЯЦУ
+  // ========================================================================================
+  
+  /**
+   * Смены доступности за текущий месяц
+   */
   const shiftsForMonth = useMemo(() => {
     return allAvailability.filter(s => {
       const d = parseISO(s.work_date);
@@ -233,6 +329,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     });
   }, [allAvailability, currentDate]);
 
+  /**
+   * Смены расписания за текущий месяц
+   */
   const scheduleForMonth = useMemo(() => {
     return allSchedules.filter(s => {
       const d = parseISO(s.work_date);
@@ -241,12 +340,21 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     });
   }, [allSchedules, currentDate]);
 
+  /**
+   * Набор занятых дат (для предотвращения дублирования)
+   */
   const occupiedDates = useMemo(() => 
     new Set(allAvailability.map(s => s.work_date)), 
     [allAvailability]
   );
-
-  // ========== ОБРАБОТЧИКИ - СМЕНЫ ДОСТУПНОСТИ ==========
+  
+  // ========================================================================================
+  // ОБРАБОТЧИКИ - СМЕНЫ ДОСТУПНОСТИ
+  // ========================================================================================
+  
+  /**
+   * Открытие модалки добавления смены
+   */
   const openAddModal = (dateStr: string) => {
     if (!dataManager) return;
     
@@ -269,11 +377,17 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setIsAddModalOpen(true);
   };
 
+  /**
+   * Открытие модалки просмотра смены
+   */
   const openViewModal = (shift: EmployeeAvailability) => {
     setViewShift(shift);
     setIsViewModalOpen(true);
   };
 
+  /**
+   * Добавление новой смены
+   */
   const handleAddShift = async () => {
     if (!dataManager) return;
     
@@ -314,6 +428,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingShift(false);
   };
 
+  /**
+   * Удаление смены
+   */
   const handleDeleteShift = async (shift: EmployeeAvailability) => {
     if (!dataManager) return;
 
@@ -334,8 +451,14 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       alert(result.error || 'Ошибка при удалении');
     }
   };
-
-  // ========== ОБРАБОТЧИКИ - ФАКТИЧЕСКОЕ ВРЕМЯ ==========
+  
+  // ========================================================================================
+  // ОБРАБОТЧИКИ - ФАКТИЧЕСКОЕ ВРЕМЯ
+  // ========================================================================================
+  
+  /**
+   * Открытие модалки отметки фактического времени
+   */
   const openTimeLogModal = (schedule: ScheduleAssignment) => {
     if (!dataManager) return;
 
@@ -358,6 +481,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setIsTimeLogModalOpen(true);
   };
 
+  /**
+   * Сохранение фактического времени
+   */
   const handleSaveTimeLog = async () => {
     if (!dataManager || !selectedSchedule) return;
 
@@ -383,8 +509,14 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
     setSavingTimeLog(false);
   };
-
-  // ========== ОБРАБОТЧИКИ - ЦЕЛЬ ОБУЧЕНИЯ ==========
+  
+  // ========================================================================================
+  // ОБРАБОТЧИКИ - ЦЕЛЬ ОБУЧЕНИЯ
+  // ========================================================================================
+  
+  /**
+   * Сохранение цели обучения
+   */
   const handleSaveStudyGoal = async () => {
     if (!dataManager) return;
     
@@ -407,8 +539,14 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
     setSavingGoal(false);
   };
-
-  // ========== ОБРАБОТЧИКИ - ЗАРПЛАТА ==========
+  
+  // ========================================================================================
+  // ОБРАБОТЧИКИ - ЗАРПЛАТА
+  // ========================================================================================
+  
+  /**
+   * Расчёт зарплаты за период
+   */
   const calculateSalary = async (period: 'first' | 'second') => {
     if (!dataManager) return;
 
@@ -418,20 +556,29 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       const result = await dataManager.calculateSalary(period);
       setSalaryData(result);
     } catch (error) {
-      console.error('Ошибка расчёта зарплаты:', error);
+      console.error('❌ Ошибка расчёта зарплаты:', error);
       setSalaryData(null);
     } finally {
       setLoadingSalary(false);
     }
   };
 
+  /**
+   * Пересчёт зарплаты при смене периода или вкладки
+   */
   useEffect(() => {
     if (activeTab === 'salary' && dataManager) {
       calculateSalary(salaryPeriod);
     }
   }, [activeTab, salaryPeriod, dataManager]);
-
-  // ========== РЕНДЕР - КАЛЕНДАРЬ МЕСЯЦА ==========
+  
+  // ========================================================================================
+  // RENDER ФУНКЦИИ - КАЛЕНДАРЬ
+  // ========================================================================================
+  
+  /**
+   * Рендер календаря месяца с днями
+   */
   const renderMonthDays = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -441,7 +588,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const days = [];
 
-    // Пустые ячейки в начале
+    // Пустые ячейки в начале (выравнивание по дням недели)
     for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) {
       days.push(<div key={`empty-${i}`} className="p-3"></div>);
     }
@@ -501,13 +648,19 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
     return days;
   };
-
-  // ========== РЕНДЕР - ТАБЛИЦА СМЕН ==========
+  
+  // ========================================================================================
+  // RENDER ФУНКЦИИ - ТАБЛИЦА СМЕН
+  // ========================================================================================
+  
+  /**
+   * Рендер таблицы смен самозаписи
+   */
   const renderShiftsTable = () => {
     if (shiftsForMonth.length === 0) {
       return (
         <div className="text-center py-10 bg-gray-50 rounded-lg">
-          <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50" />
+          <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50 text-gray-400" />
           <p className="text-gray-500">Смен в этом месяце пока нет</p>
         </div>
       );
@@ -587,13 +740,19 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       </div>
     );
   };
-
-  // ========== РЕНДЕР - ТАБЛИЦА РАСПИСАНИЯ ==========
+  
+  // ========================================================================================
+  // RENDER ФУНКЦИИ - ТАБЛИЦА РАСПИСАНИЯ
+  // ========================================================================================
+  
+  /**
+   * Рендер таблицы расписания от админа
+   */
   const renderScheduleTable = () => {
     if (scheduleForMonth.length === 0) {
       return (
         <div className="text-center py-10 bg-gray-50 rounded-lg">
-          <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50" />
+          <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50 text-gray-400" />
           <p className="text-gray-500">График от администратора не найден</p>
         </div>
       );
@@ -659,18 +818,35 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       </div>
     );
   };
-
-  // ========== РЕНДЕР - ПРИОРИТЕТЫ ==========
+  
+  // ========================================================================================
+  // RENDER ФУНКЦИИ - ПРИОРИТЕТЫ
+  // ========================================================================================
+  
+  /**
+   * Рендер блока приоритетов аттракционов
+   * Исправлено: теперь корректно отображаются аттракционы из БД
+   */
   const renderPriorities = () => {
+    // Создаём карту приоритетов: уровень → названия аттракционов
     const priorityMap: Record<number, string> = {
       1: 'Не задан',
       2: 'Не задан',
       3: 'Не задан'
     };
 
+    // Заполняем карту данными из БД
     priorities.forEach(prio => {
-      if (prio.priority_level >= 1 && prio.priority_level <= 3 && prio.attractions && prio.attractions.length > 0) {
-        priorityMap[prio.priority_level] = prio.attractions.map(a => a.name).join(', ');
+      if (prio.priority_level >= 1 && prio.priority_level <= 3) {
+        // Получаем названия аттракционов по их ID
+        const attractionNames = prio.attraction_ids
+          .map(id => {
+            const attraction = attractions.find(a => a.id === id);
+            return attraction?.name || 'Неизвестный';
+          })
+          .join(', ');
+        
+        priorityMap[prio.priority_level] = attractionNames || 'Не задан';
       }
     });
 
@@ -687,11 +863,20 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       </ul>
     );
   };
-
-  // ========== РЕНДЕР - ЦЕЛЬ ОБУЧЕНИЯ ==========
+  
+  // ========================================================================================
+  // RENDER ФУНКЦИИ - ЦЕЛЬ ОБУЧЕНИЯ
+  // ========================================================================================
+  
+  /**
+   * Рендер блока цели обучения
+   * Исправлено: 
+   * 1. Список аттракционов исключает те, что в приоритетах
+   * 2. Корректно отображается текущая цель
+   */
   const renderStudyGoal = () => {
     return (
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
           <Star className="text-purple-500" />
           Цель для изучения
@@ -709,7 +894,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
           className="w-full border border-gray-200 rounded-lg p-2 mb-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
           <option value="">-- Выберите аттракцион --</option>
-          {availableAttractions.map(a => (
+          {availableAttractionsForGoal.map(a => (
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}
         </select>
@@ -729,21 +914,27 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
           )}
         </button>
 
-        {studyGoal && (
+        {studyGoal && studyGoal.attraction && (
           <div className="mt-4 p-3 bg-purple-50 rounded-lg">
             <p className="text-sm text-purple-800">
-              <strong>Текущая цель:</strong> {studyGoal.attraction?.name || 'Загрузка...'}
+              <strong>Текущая цель:</strong> {studyGoal.attraction.name}
             </p>
           </div>
         )}
       </div>
     );
   };
-
-  // ========== РЕНДЕР - ЗАРПЛАТА ==========
+  
+  // ========================================================================================
+  // RENDER ФУНКЦИИ - ЗАРПЛАТА
+  // ========================================================================================
+  
+  /**
+   * Рендер блока расчёта зарплаты
+   */
   const renderSalaryBlock = () => {
     return (
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <h3 className="text-lg font-bold flex items-center gap-2 mb-2">
           <DollarSign className="text-green-600" />
           Примерный расчёт зарплаты
@@ -826,8 +1017,14 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       </div>
     );
   };
-
-  // ========== РЕНДЕР - СВОДКА ==========
+  
+  // ========================================================================================
+  // RENDER ФУНКЦИИ - СВОДКА
+  // ========================================================================================
+  
+  /**
+   * Рендер блока сводной статистики
+   */
   const renderSummary = () => (
     <div className="space-y-2">
       <div className="flex justify-between text-sm">
@@ -858,122 +1055,57 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       </div>
     </div>
   );
+  
+  // ========================================================================================
+  // RENDER ФУНКЦИИ - КОНТЕНТ ПО ВКЛАДКАМ (МОБИЛЬНАЯ ВЕРСИЯ)
+  // ========================================================================================
+  
+  /**
+   * Рендер контента в зависимости от активной вкладки (для мобильной версии)
+   */
+  const renderMobileContent = () => {
+    const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
 
-  // ========== LOADING STATE ==========
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="animate-spin text-blue-600 h-12 w-12 mx-auto mb-4" />
-          <p className="text-gray-600">Загрузка данных...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!dataManager) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">Ошибка загрузки данных</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-          >
-            Перезагрузить страницу
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ========== ОСНОВНОЙ РЕНДЕР ==========
-  const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
-
-  return (
-    <div className="bg-gray-50 text-gray-900 min-h-screen pb-24 md:pb-0">
-      <div className="max-w-7xl mx-auto px-4 pt-6">
-        {/* ========== ШАПКА ========== */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-1">
-              {greeting || profile.full_name}
-            </h2>
-            <p className="text-gray-500 text-sm">
-              {profile.full_name} • Возраст: {profile.age ?? 'Не указан'} • 
-              Ставка: {profile.base_hourly_rate}₽/ч
-            </p>
-          </div>
-          <div className="text-right mt-4 md:mt-0">
-            <div className="text-2xl font-mono text-blue-600 font-bold">
-              {now.toLocaleTimeString('ru-RU')}
+    switch (activeTab) {
+      case 'home':
+        return (
+          <div className="space-y-4">
+            {/* Приветствие */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <h2 className="text-xl font-bold text-gray-800 mb-1">
+                {greeting || profile.full_name}
+              </h2>
+              <p className="text-gray-500 text-sm">
+                Возраст: {profile.age ?? 'Не указан'} • Ставка: {profile.base_hourly_rate || 250}₽/ч
+              </p>
             </div>
-            <div className="text-gray-500 text-sm">
-              {now.toLocaleDateString('ru-RU', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </div>
-          </div>
-        </div>
 
-        {/* ========== НАВИГАЦИЯ ПО МЕСЯЦАМ ========== */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex justify-between items-center">
-          <button
-            onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
-            className="p-2 hover:bg-gray-100 rounded-lg transition"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <h3 className="text-lg font-semibold text-gray-800 capitalize">
-            {currentMonthLabel}
-          </h3>
-          <button
-            onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
-            className="p-2 hover:bg-gray-100 rounded-lg transition"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* ========== ОСНОВНАЯ СЕТКА ========== */}
-        <div className="md:grid md:grid-cols-3 md:gap-6">
-          {/* ЛЕВАЯ КОЛОНКА - 2/3 */}
-          <div className="md:col-span-2 space-y-6">
-            {/* Календарь месяца */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-                <Calendar className="text-blue-500" />
-                Календарь — {currentMonthLabel}
-              </h3>
-              <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-                {renderMonthDays()}
+            {/* Текущее время */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 rounded-xl shadow-lg text-white">
+              <div className="text-3xl font-bold font-mono">
+                {now.toLocaleTimeString('ru-RU')}
+              </div>
+              <div className="text-sm opacity-90 mt-1">
+                {now.toLocaleDateString('ru-RU', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
               </div>
             </div>
 
-            {/* Таблица смен самозаписи */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold mb-4">Мои смены (самозапись)</h3>
-              {renderShiftsTable()}
+            {/* Сводка */}
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+              <h3 className="font-semibold text-blue-800 mb-3">
+                Сводка — {currentMonthLabel}
+              </h3>
+              {renderSummary()}
             </div>
 
-            {/* Таблица расписания от админа */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold mb-4">График от администратора</h3>
-              {renderScheduleTable()}
-            </div>
-
-            {/* Блок зарплаты (показывается при activeTab === 'salary') */}
-            {activeTab === 'salary' && renderSalaryBlock()}
-          </div>
-
-          {/* ПРАВАЯ КОЛОНКА - 1/3 */}
-          <div className="space-y-6 mt-6 md:mt-0">
             {/* Приоритеты */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-lg font-bold flex items-center gap-2 mb-3">
                 <Star className="text-yellow-500" />
                 Приоритеты аттракционов
               </h3>
@@ -982,22 +1114,113 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
             {/* Цель обучения */}
             {renderStudyGoal()}
+          </div>
+        );
 
-            {/* Сводка */}
-            <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-              <h3 className="font-semibold text-blue-800 mb-4">
-                Сводка — {currentMonthLabel}
+      case 'calendar':
+        return (
+          <div className="space-y-4">
+            {/* Навигация по месяцам */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+              <button
+                onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <h3 className="text-lg font-semibold text-gray-800 capitalize">
+                {currentMonthLabel}
               </h3>
-              {renderSummary()}
+              <button
+                onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
             </div>
 
-            {/* Опрос (Google Form) */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            {/* Календарь */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
+                <Calendar className="text-blue-500" />
+                Мои смены
+              </h3>
+              <div className="grid grid-cols-4 gap-2">
+                {renderMonthDays()}
+              </div>
+            </div>
+
+            {/* Таблица смен */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-lg font-bold mb-3">Список смен</h3>
+              {renderShiftsTable()}
+            </div>
+          </div>
+        );
+
+      case 'schedule':
+        return (
+          <div className="space-y-4">
+            {/* Навигация по месяцам */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+              <button
+                onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <h3 className="text-lg font-semibold text-gray-800 capitalize">
+                {currentMonthLabel}
+              </h3>
+              <button
+                onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* График от админа */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-lg font-bold mb-3">График от администратора</h3>
+              {renderScheduleTable()}
+            </div>
+          </div>
+        );
+
+      case 'priorities':
+        return (
+          <div className="space-y-4">
+            {/* Приоритеты */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-lg font-bold flex items-center gap-2 mb-3">
+                <Star className="text-yellow-500" />
+                Приоритеты аттракционов
+              </h3>
+              {renderPriorities()}
+            </div>
+
+            {/* Цель обучения */}
+            {renderStudyGoal()}
+          </div>
+        );
+
+      case 'salary':
+        return (
+          <div className="space-y-4">
+            {renderSalaryBlock()}
+          </div>
+        );
+
+      case 'form':
+        return (
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
               <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
                 <FileText className="text-purple-500" />
                 Опрос сотрудника
               </h3>
-              <div className="relative h-[590px] overflow-hidden rounded-xl border border-gray-200">
+              <div className="relative h-[calc(100vh-200px)] overflow-hidden rounded-xl border border-gray-200">
                 <iframe
                   src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
                   className="absolute top-0 left-0 w-full h-full"
@@ -1009,33 +1232,277 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               </div>
             </div>
           </div>
-        </div>
+        );
 
-        {/* ========== FOOTER ========== */}
-        <footer className="mt-12 mb-24 md:mb-8 text-center text-xs text-gray-400">
-          <p>
-            Hand-coded by{' '}
-            <strong>
-              <a
-                href="https://vk.com/albars_studio"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-500 hover:text-gray-700"
-              >
-                AlBars
-              </a>
-            </strong>{' '}
-            • Vite build:{' '}
-            <span className="text-green-500 font-mono font-bold">{ping}</span> ms • 
-            Supabase • Host: GitHub Pages
-          </p>
-          <p className="italic mt-1">
-            Ни один искусственный интеллект не пострадал при создании
-          </p>
-        </footer>
+      default:
+        return null;
+    }
+  };
+  
+  // ========================================================================================
+  // СОСТОЯНИЕ ЗАГРУЗКИ
+  // ========================================================================================
+  
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="animate-spin text-blue-600 h-12 w-12 mx-auto mb-4" />
+          <p className="text-gray-600">Загрузка данных...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!dataManager) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Ошибка загрузки данных</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            Перезагрузить страницу
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  // ========================================================================================
+  // ОСНОВНОЙ RENDER
+  // ========================================================================================
+  
+  const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
+
+  return (
+    <div className="bg-gray-50 text-gray-900 min-h-screen pb-20 md:pb-0">
+      {/* ====================================================================== */}
+      {/* ДЕСКТОПНАЯ ВЕРСИЯ */}
+      {/* ====================================================================== */}
+      <div className="hidden md:block">
+        <div className="max-w-7xl mx-auto px-4 pt-6">
+          {/* Шапка */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-1">
+                {greeting || profile.full_name}
+              </h2>
+              <p className="text-gray-500 text-sm">
+                {profile.full_name} • Возраст: {profile.age ?? 'Не указан'} • 
+                Ставка: {profile.base_hourly_rate || 250}₽/ч
+              </p>
+            </div>
+            <div className="text-right mt-4 md:mt-0">
+              <div className="text-2xl font-mono text-blue-600 font-bold">
+                {now.toLocaleTimeString('ru-RU')}
+              </div>
+              <div className="text-gray-500 text-sm">
+                {now.toLocaleDateString('ru-RU', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Навигация по месяцам */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex justify-between items-center">
+            <button
+              onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
+              className="p-2 hover:bg-gray-100 rounded-lg transition"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <h3 className="text-lg font-semibold text-gray-800 capitalize">
+              {currentMonthLabel}
+            </h3>
+            <button
+              onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
+              className="p-2 hover:bg-gray-100 rounded-lg transition"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Основная сетка */}
+          <div className="md:grid md:grid-cols-3 md:gap-6">
+            {/* Левая колонка - 2/3 */}
+            <div className="md:col-span-2 space-y-6">
+              {/* Календарь */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
+                  <Calendar className="text-blue-500" />
+                  Календарь — {currentMonthLabel}
+                </h3>
+                <div className="grid grid-cols-7 gap-2">
+                  {renderMonthDays()}
+                </div>
+              </div>
+
+              {/* Таблица смен самозаписи */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold mb-4">Мои смены (самозапись)</h3>
+                {renderShiftsTable()}
+              </div>
+
+              {/* Таблица расписания */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold mb-4">График от администратора</h3>
+                {renderScheduleTable()}
+              </div>
+
+              {/* Блок зарплаты */}
+              {renderSalaryBlock()}
+            </div>
+
+            {/* Правая колонка - 1/3 */}
+            <div className="space-y-6 mt-6 md:mt-0">
+              {/* Приоритеты */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
+                  <Star className="text-yellow-500" />
+                  Приоритеты аттракционов
+                </h3>
+                {renderPriorities()}
+              </div>
+
+              {/* Цель обучения */}
+              {renderStudyGoal()}
+
+              {/* Сводка */}
+              <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
+                <h3 className="font-semibold text-blue-800 mb-4">
+                  Сводка — {currentMonthLabel}
+                </h3>
+                {renderSummary()}
+              </div>
+
+              {/* Опрос */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
+                  <FileText className="text-purple-500" />
+                  Опрос сотрудника
+                </h3>
+                <div className="relative h-[590px] overflow-hidden rounded-xl border border-gray-200">
+                  <iframe
+                    src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
+                    className="absolute top-0 left-0 w-full h-full"
+                    frameBorder="0"
+                    title="Google Form"
+                  >
+                    Загрузка…
+                  </iframe>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <footer className="mt-12 mb-8 text-center text-xs text-gray-400">
+            <p>
+              Hand-coded by{' '}
+              <strong>
+                <a
+                  href="https://vk.com/albars_studio"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  AlBars
+                </a>
+              </strong>{' '}
+              • Vite build:{' '}
+              <span className="text-green-500 font-mono font-bold">{ping}</span> ms • 
+              Supabase • Host: GitHub Pages
+            </p>
+            <p className="italic mt-1">
+              Ни один искусственный интеллект не пострадал при создании
+            </p>
+          </footer>
+        </div>
       </div>
 
-      {/* ========== МОДАЛКИ ========== */}
+      {/* ====================================================================== */}
+      {/* МОБИЛЬНАЯ ВЕРСИЯ */}
+      {/* ====================================================================== */}
+      <div className="md:hidden">
+        <div className="px-4 pt-4 pb-20">
+          {renderMobileContent()}
+        </div>
+
+        {/* Мобильная навигация */}
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+          <div className="grid grid-cols-5 h-16">
+            <button
+              onClick={() => setActiveTab('home')}
+              className={`flex flex-col items-center justify-center transition ${
+                activeTab === 'home' 
+                  ? 'text-blue-600 bg-blue-50' 
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <Home className="h-5 w-5" />
+              <span className="text-xs mt-1">Главная</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('calendar')}
+              className={`flex flex-col items-center justify-center transition ${
+                activeTab === 'calendar' 
+                  ? 'text-blue-600 bg-blue-50' 
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <Calendar className="h-5 w-5" />
+              <span className="text-xs mt-1">Календарь</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('schedule')}
+              className={`flex flex-col items-center justify-center transition ${
+                activeTab === 'schedule' 
+                  ? 'text-blue-600 bg-blue-50' 
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <Clock className="h-5 w-5" />
+              <span className="text-xs mt-1">График</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('salary')}
+              className={`flex flex-col items-center justify-center transition ${
+                activeTab === 'salary' 
+                  ? 'text-blue-600 bg-blue-50' 
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <DollarSign className="h-5 w-5" />
+              <span className="text-xs mt-1">Зарплата</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('form')}
+              className={`flex flex-col items-center justify-center transition ${
+                activeTab === 'form' 
+                  ? 'text-blue-600 bg-blue-50' 
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              <FileText className="h-5 w-5" />
+              <span className="text-xs mt-1">Опрос</span>
+            </button>
+          </div>
+        </nav>
+      </div>
+
+      {/* ====================================================================== */}
+      {/* МОДАЛЬНЫЕ ОКНА */}
+      {/* ====================================================================== */}
       
       {/* Модалка добавления смены */}
       {isAddModalOpen && (
@@ -1296,56 +1763,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         </div>
       )}
 
-      {/* ========== МОБИЛЬНОЕ МЕНЮ ========== */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 flex justify-around h-16 z-40 shadow-lg">
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center justify-center flex-1 transition ${
-            activeTab === 'dashboard' ? 'text-blue-600' : 'text-gray-400'
-          }`}
-        >
-          <Calendar className="h-5 w-5" />
-          <span className="text-xs mt-1">Сводка</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('shifts')}
-          className={`flex flex-col items-center justify-center flex-1 transition ${
-            activeTab === 'shifts' ? 'text-blue-600' : 'text-gray-400'
-          }`}
-        >
-          <Clock className="h-5 w-5" />
-          <span className="text-xs mt-1">Смены</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('priorities')}
-          className={`flex flex-col items-center justify-center flex-1 transition ${
-            activeTab === 'priorities' ? 'text-blue-600' : 'text-gray-400'
-          }`}
-        >
-          <Star className="h-5 w-5" />
-          <span className="text-xs mt-1">Приоритеты</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('salary')}
-          className={`flex flex-col items-center justify-center flex-1 transition ${
-            activeTab === 'salary' ? 'text-blue-600' : 'text-gray-400'
-          }`}
-        >
-          <DollarSign className="h-5 w-5" />
-          <span className="text-xs mt-1">Зарплата</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('form')}
-          className={`flex flex-col items-center justify-center flex-1 transition ${
-            activeTab === 'form' ? 'text-blue-600' : 'text-gray-400'
-          }`}
-        >
-          <FileText className="h-5 w-5" />
-          <span className="text-xs mt-1">Опрос</span>
-        </button>
-      </nav>
-
-      {/* ========== СТИЛИ ========== */}
+      {/* ====================================================================== */}
+      {/* СТИЛИ */}
+      {/* ====================================================================== */}
       <style>{`
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
