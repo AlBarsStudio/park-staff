@@ -197,121 +197,139 @@ export function EmployeeDashboard({ profile }: { profile: EmployeeProfile }) {
     }
   }, [profile.full_name]);
 
-  // ============================================================
-  // БЛОК 6: Загрузка данных (fetchData) - ИЗМЕНЁН
-  // Описание: Загружает смены, приоритеты (новая структура), цель, график.
-  // При изменении: заменять целиком, если меняется логика загрузки.
-  // ============================================================
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      // 1. Старые смены
-      const { data: shiftData } = await supabase
-        .from('employee_availability')
-        .select('id, employee_id, work_date, is_full_day, start_time, end_time, comment')
-        .eq('employee_id', profile.id)
-        .order('work_date');
-      if (shiftData) setShifts(shiftData as Shift[]);
+// ============================================================
+// БЛОК 6: Загрузка данных (fetchData) - ИЗМЕНЁН
+// Описание: Загружает смены, приоритеты (новая структура), цель, график.
+// При изменении: заменять целиком, если меняется логика загрузки.
+// ============================================================
+const fetchData = useCallback(async () => {
+  setLoading(true);
+  try {
+    // 1. Старые смены
+    const { data: shiftData, error: shiftError } = await supabase
+      .from('employee_availability')
+      .select('id, employee_id, work_date, is_full_day, start_time, end_time, comment')
+      .eq('employee_id', profile.id)
+      .order('work_date');
+    if (shiftError) console.error('Ошибка загрузки смен:', shiftError);
+    if (shiftData) setShifts(shiftData as Shift[]);
 
-      // 2. Приоритеты (новая структура с массивами)
-      const { data: prioRecords } = await supabase
-        .from('employee_attraction_priorities')
-        .select('id, priority_level, attraction_ids')
-        .eq('employee_id', profile.id)
-        .order('priority_level');
+    // 2. Приоритеты (новая структура с массивами)
+    const { data: prioRecords, error: prioError } = await supabase
+      .from('employee_attraction_priorities')
+      .select('id, priority_level, attraction_ids')
+      .eq('employee_id', profile.id)
+      .order('priority_level');
 
-      let prioritiesWithNames: { level: number; attractions: { id: number; name: string }[] }[] = [];
-      if (prioRecords && prioRecords.length > 0) {
-        const allAttractionIds = prioRecords.flatMap(r => r.attraction_ids);
-        const { data: attractionData } = await supabase
+    if (prioError) {
+      console.error('Ошибка загрузки приоритетов:', prioError);
+    }
+
+    let prioritiesWithNames: { level: number; attractions: { id: number; name: string }[] }[] = [];
+    if (prioRecords && prioRecords.length > 0) {
+      // Собираем все ID аттракционов, исключая null/undefined и пустые массивы
+      const allAttractionIds = prioRecords.flatMap(r => r.attraction_ids || []);
+      if (allAttractionIds.length > 0) {
+        const { data: attractionData, error: attrError } = await supabase
           .from('attractions')
           .select('id, name')
           .in('id', allAttractionIds);
-        
+        if (attrError) console.error('Ошибка загрузки названий аттракционов:', attrError);
+
         const attractionMap = new Map<number, string>();
         attractionData?.forEach(a => attractionMap.set(a.id, a.name));
 
         prioritiesWithNames = prioRecords
           .map(record => ({
             level: record.priority_level,
-            attractions: record.attraction_ids.map(id => ({
+            attractions: (record.attraction_ids || []).map(id => ({
               id,
               name: attractionMap.get(id) || 'Неизвестный аттракцион'
             }))
           }))
           .sort((a, b) => a.level - b.level);
-      }
-      setPriorities(prioritiesWithNames);
-
-      // 3. Цель изучения (без change_count и change_history)
-      const { data: goalData } = await supabase
-        .from('employee_study_goals')
-        .select('id, attraction_id, attractions(name)')
-        .eq('employee_id', profile.id)
-        .maybeSingle();
-      if (goalData) {
-        setStudyGoal(goalData as StudyGoal);
-        setSelectedAttractionId(goalData.attraction_id);
       } else {
-        setStudyGoal(null);
-        setSelectedAttractionId(null);
+        // Если массив пуст, просто создаём уровни с пустыми списками
+        prioritiesWithNames = prioRecords
+          .map(record => ({ level: record.priority_level, attractions: [] }))
+          .sort((a, b) => a.level - b.level);
       }
+    }
+    setPriorities(prioritiesWithNames);
 
-      // 4. Доступные аттракционы: исключаем те, что уже в приоритетах, но добавляем текущую цель (если она есть)
-      const attractionIdsWithPriority = prioRecords?.flatMap(r => r.attraction_ids) || [];
-      let { data: allAttractions } = await supabase
-        .from('attractions')
-        .select('id, name')
-        .not('id', 'in', `(${attractionIdsWithPriority.join(',') || 0})`);
+    // 3. Цель изучения
+    const { data: goalData, error: goalError } = await supabase
+      .from('employee_study_goals')
+      .select('id, attraction_id, attractions(name)')
+      .eq('employee_id', profile.id)
+      .maybeSingle();
+    if (goalError) console.error('Ошибка загрузки цели:', goalError);
+    if (goalData) {
+      setStudyGoal(goalData as StudyGoal);
+      setSelectedAttractionId(goalData.attraction_id);
+    } else {
+      setStudyGoal(null);
+      setSelectedAttractionId(null);
+    }
 
-      let available = allAttractions || [];
+    // 4. Доступные аттракционы
+    const attractionIdsWithPriority = prioRecords?.flatMap(r => r.attraction_ids || []) || [];
+    let query = supabase.from('attractions').select('id, name');
+    if (attractionIdsWithPriority.length > 0) {
+      query = query.not('id', 'in', `(${attractionIdsWithPriority.join(',')})`);
+    }
+    const { data: allAttractions, error: availError } = await query;
+    if (availError) console.error('Ошибка загрузки доступных аттракционов:', availError);
 
-      // Если у сотрудника уже есть цель, и её аттракцион не попал в список (например, он в приоритетах),
-      // добавляем его принудительно, чтобы можно было остаться на нём.
-      if (goalData && goalData.attraction_id) {
-        const alreadyInList = available.some(a => a.id === goalData.attraction_id);
-        if (!alreadyInList) {
-          const { data: currentGoalAttraction } = await supabase
-            .from('attractions')
-            .select('id, name')
-            .eq('id', goalData.attraction_id)
-            .single();
-          if (currentGoalAttraction) {
-            available = [currentGoalAttraction, ...available];
-          }
+    let available = allAttractions || [];
+
+    if (goalData && goalData.attraction_id) {
+      const alreadyInList = available.some(a => a.id === goalData.attraction_id);
+      if (!alreadyInList) {
+        const { data: currentGoalAttraction } = await supabase
+          .from('attractions')
+          .select('id, name')
+          .eq('id', goalData.attraction_id)
+          .single();
+        if (currentGoalAttraction) {
+          available = [currentGoalAttraction, ...available];
         }
       }
-      setAvailableAttractions(available);
+    }
+    setAvailableAttractions(available);
 
-      // 5. График от администратора
-      const { data: scheduleData } = await supabase
-        .from('schedule_assignments')
-        .select(`
-          id, work_date, employee_id, attraction_id, start_time, end_time,
-          created_at, updated_at,
-          attractions ( name, coefficient )
-        `)
-        .eq('employee_id', profile.id)
-        .order('work_date', { ascending: true });
-      if (scheduleData) setScheduleAssignments(scheduleData as ScheduleAssignment[]);
+    // 5. График от администратора
+    const { data: scheduleData, error: schedError } = await supabase
+      .from('schedule_assignments')
+      .select(`
+        id, work_date, employee_id, attraction_id, start_time, end_time,
+        created_at, updated_at,
+        attractions ( name, coefficient )
+      `)
+      .eq('employee_id', profile.id)
+      .order('work_date', { ascending: true });
+    if (schedError) console.error('Ошибка загрузки графика:', schedError);
+    if (scheduleData) setScheduleAssignments(scheduleData as ScheduleAssignment[]);
 
-      // 6. Фактические отметки
-      const { data: logsData } = await supabase
+    // 6. Фактические отметки
+    if (scheduleData && scheduleData.length > 0) {
+      const scheduleIds = scheduleData.map(s => s.id);
+      const { data: logsData, error: logsError } = await supabase
         .from('actual_work_log')
         .select('*')
-        .in('schedule_assignment_id', (scheduleData || []).map(s => s.id));
+        .in('schedule_assignment_id', scheduleIds);
+      if (logsError) console.error('Ошибка загрузки отметок:', logsError);
       if (logsData) setActualLogs(logsData as ActualWorkLog[]);
-
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+    } else {
+      setActualLogs([]);
     }
-  }, [profile.id]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  } catch (err) {
+    console.error('Критическая ошибка в fetchData:', err);
+  } finally {
+    setLoading(false);
+  }
+}, [profile.id]);
 
   // ============================================================
   // БЛОК 7: Вычисляемые данные (useMemo)
