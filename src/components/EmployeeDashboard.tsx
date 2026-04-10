@@ -233,86 +233,90 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     return () => clearInterval(interval);
   }, [dataManager]);
   
-  // ========================================================================================
-  // MEMO - ДАННЫЕ ИЗ МЕНЕДЖЕРА
-  // ========================================================================================
+// ========================================================================================
+// MEMO - ДАННЫЕ ИЗ МЕНЕДЖЕРА
+// ========================================================================================
+
+/**
+ * Все аттракционы
+ */
+const attractions = useMemo(() => 
+  dataManager?.getAttractions() || [], 
+  [dataManager, updateTrigger]
+);
+
+/**
+ * Все смены доступности (самозапись)
+ */
+const allAvailability = useMemo(() => 
+  dataManager?.getAvailability() || [], 
+  [dataManager, updateTrigger]
+);
+
+/**
+ * Все смены расписания от админа
+ */
+const allSchedules = useMemo(() => 
+  dataManager?.getScheduleAssignments() || [], 
+  [dataManager, updateTrigger]
+);
+
+/**
+ * Фактические отметки времени
+ */
+const actualLogs = useMemo(() => 
+  dataManager?.getActualWorkLogs() || [], 
+  [dataManager, updateTrigger]
+);
+
+/**
+ * Текущая цель обучения
+ */
+const studyGoal = useMemo(() => 
+  dataManager?.getStudyGoal() || null, 
+  [dataManager, updateTrigger]
+);
+
+/**
+ * Приоритеты аттракционов
+ */
+const priorities = useMemo(() => 
+  dataManager?.getPriorities() || [], 
+  [dataManager, updateTrigger]
+);
+
+/**
+ * Аттракционы, доступные для выбора в цели обучения
+ * (исключаем те, что уже в приоритетах)
+ */
+const availableAttractionsForGoal = useMemo(() => {
+  if (!dataManager) return [];
   
-  /**
-   * Все аттракционы
-   */
-  const attractions = useMemo(() => 
-    dataManager?.getAttractions() || [], 
-    [dataManager, updateTrigger]
+  // Собираем все ID аттракционов из приоритетов
+  const priorityAttractionIds = new Set(
+    priorities.flatMap(p => {
+      if (!p.attraction_ids) return [];
+      const ids = Array.isArray(p.attraction_ids) ? p.attraction_ids : [p.attraction_ids];
+      return ids.map(id => typeof id === 'string' ? parseInt(id, 10) : id);
+    })
   );
-
-  /**
-   * Все смены доступности (самозапись)
-   */
-  const allAvailability = useMemo(() => 
-    dataManager?.getAvailability() || [], 
-    [dataManager, updateTrigger]
-  );
-
-  /**
-   * Все смены расписания от админа
-   */
-  const allSchedules = useMemo(() => 
-    dataManager?.getScheduleAssignments() || [], 
-    [dataManager, updateTrigger]
-  );
-
-  /**
-   * Фактические отметки времени
-   */
-  const actualLogs = useMemo(() => 
-    dataManager?.getActualWorkLogs() || [], 
-    [dataManager, updateTrigger]
-  );
-
-  /**
-   * Текущая цель обучения
-   */
-  const studyGoal = useMemo(() => 
-    dataManager?.getStudyGoal() || null, 
-    [dataManager, updateTrigger]
-  );
-
-  /**
-   * Приоритеты аттракционов
-   */
-  const priorities = useMemo(() => 
-    dataManager?.getPriorities() || [], 
-    [dataManager, updateTrigger]
-  );
-
-  /**
-   * Аттракционы, доступные для выбора в цели обучения
-   * (исключаем те, что уже в приоритетах)
-   */
-  const availableAttractionsForGoal = useMemo(() => {
-    if (!dataManager) return [];
-    
-    // Собираем все ID аттракционов из приоритетов
-    const priorityAttractionIds = new Set(
-      priorities.flatMap(p => p.attraction_ids || [])
-    );
-    
-    // Фильтруем аттракционы
-    let available = attractions.filter(a => !priorityAttractionIds.has(a.id));
-    
-    // Добавляем текущую цель, если она есть и её нет в списке
-    if (studyGoal && studyGoal.attraction_id) {
-      const alreadyInList = available.some(a => a.id === studyGoal.attraction_id);
-      if (!alreadyInList) {
-        const currentGoalAttraction = attractions.find(a => a.id === studyGoal.attraction_id);
-        if (currentGoalAttraction) {
-          available = [currentGoalAttraction, ...available];
-        }
+  
+  // Фильтруем аттракционы
+  let available = attractions.filter(a => !priorityAttractionIds.has(a.id));
+  
+  // Добавляем текущую цель, если она есть и её нет в списке
+  if (studyGoal && studyGoal.attraction_id) {
+    const alreadyInList = available.some(a => a.id === studyGoal.attraction_id);
+    if (!alreadyInList) {
+      const currentGoalAttraction = attractions.find(a => a.id === studyGoal.attraction_id);
+      if (currentGoalAttraction) {
+        available = [currentGoalAttraction, ...available];
       }
     }
-    
-    return available;
-  }, [dataManager, studyGoal, attractions, priorities, updateTrigger]);
+  }
+  
+  return available;
+}, [dataManager, studyGoal, attractions, priorities, updateTrigger]);
   
   // ========================================================================================
   // MEMO - ФИЛЬТРАЦИЯ ПО МЕСЯЦУ
@@ -452,63 +456,63 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   };
   
-  // ========================================================================================
-  // ОБРАБОТЧИКИ - ФАКТИЧЕСКОЕ ВРЕМЯ
-  // ========================================================================================
-  
-  /**
-   * Открытие модалки отметки фактического времени
-   */
-  const openTimeLogModal = (schedule: ScheduleAssignment) => {
-    if (!dataManager) return;
+// ========================================================================================
+// ОБРАБОТЧИКИ - ФАКТИЧЕСКОЕ ВРЕМЯ
+// ========================================================================================
 
-    const validation = dataManager.canLogActualTime(schedule);
-    if (!validation.allowed) {
-      alert(validation.reason);
-      return;
-    }
+/**
+ * Открытие модалки отметки фактического времени
+ */
+const openTimeLogModal = (schedule: ScheduleAssignment) => {
+  if (!dataManager) return;
 
-    const existingLog = dataManager.getActualWorkLog(schedule.id);
-    if (existingLog) {
-      alert('Вы уже отметили время для этой смены. Изменить нельзя.');
-      return;
-    }
+  const validation = dataManager.canLogActualTime(schedule);
+  if (!validation.allowed) {
+    alert(validation.reason);
+    return;
+  }
 
-    setSelectedSchedule(schedule);
-    setActualStart(schedule.start_time.slice(0, 5));
-    setActualEnd(schedule.end_time.slice(0, 5));
-    setTimeLogError('');
-    setIsTimeLogModalOpen(true);
-  };
+  const existingLog = dataManager.getActualWorkLog(schedule.id);
+  if (existingLog) {
+    alert('Вы уже отметили время для этой смены. Изменить нельзя.');
+    return;
+  }
 
-  /**
-   * Сохранение фактического времени
-   */
-  const handleSaveTimeLog = async () => {
-    if (!dataManager || !selectedSchedule) return;
+  setSelectedSchedule(schedule);
+  setActualStart(schedule.start_time ? schedule.start_time.slice(0, 5) : '10:00');
+  setActualEnd(schedule.end_time ? schedule.end_time.slice(0, 5) : '22:00');
+  setTimeLogError('');
+  setIsTimeLogModalOpen(true);
+};
 
-    if (actualStart >= actualEnd) {
-      setTimeLogError('Время окончания должно быть позже начала');
-      return;
-    }
+/**
+ * Сохранение фактического времени
+ */
+const handleSaveTimeLog = async () => {
+  if (!dataManager || !selectedSchedule) return;
 
-    setSavingTimeLog(true);
+  if (actualStart >= actualEnd) {
+    setTimeLogError('Время окончания должно быть позже начала');
+    return;
+  }
 
-    const result = await dataManager.addActualWorkLog({
-      schedule_assignment_id: selectedSchedule.id,
-      actual_start: actualStart + ':00',
-      actual_end: actualEnd + ':00',
-    });
+  setSavingTimeLog(true);
 
-    if (result.success) {
-      setIsTimeLogModalOpen(false);
-      setUpdateTrigger(prev => prev + 1);
-    } else {
-      setTimeLogError(result.error || 'Ошибка сохранения');
-    }
+  const result = await dataManager.addActualWorkLog({
+    schedule_assignment_id: selectedSchedule.id,
+    actual_start: actualStart + ':00',
+    actual_end: actualEnd + ':00',
+  });
 
-    setSavingTimeLog(false);
-  };
+  if (result.success) {
+    setIsTimeLogModalOpen(false);
+    setUpdateTrigger(prev => prev + 1);
+  } else {
+    setTimeLogError(result.error || 'Ошибка сохранения');
+  }
+
+  setSavingTimeLog(false);
+};
   
   // ========================================================================================
   // ОБРАБОТЧИКИ - ЦЕЛЬ ОБУЧЕНИЯ
@@ -649,220 +653,225 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     return days;
   };
   
-  // ========================================================================================
-  // RENDER ФУНКЦИИ - ТАБЛИЦА СМЕН
-  // ========================================================================================
-  
-  /**
-   * Рендер таблицы смен самозаписи
-   */
-  const renderShiftsTable = () => {
-    if (shiftsForMonth.length === 0) {
-      return (
-        <div className="text-center py-10 bg-gray-50 rounded-lg">
-          <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50 text-gray-400" />
-          <p className="text-gray-500">Смен в этом месяце пока нет</p>
-        </div>
-      );
-    }
+// ========================================================================================
+// RENDER ФУНКЦИИ - ТАБЛИЦА СМЕН
+// ========================================================================================
 
+/**
+ * Рендер таблицы смен самозаписи
+ */
+const renderShiftsTable = () => {
+  if (shiftsForMonth.length === 0) {
     return (
-      <div className="overflow-x-auto hide-scrollbar">
-        <table className="min-w-full divide-y divide-gray-100">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Дата</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Тип</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Время</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Комментарий</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Действие</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {shiftsForMonth.map(shift => {
-              const canDelete = dataManager?.canDeleteAvailability(shift);
-              
-              return (
-                <tr 
-                  key={shift.id} 
-                  className="hover:bg-gray-50 cursor-pointer transition"
-                  onClick={() => openViewModal(shift)}
-                >
-                  <td className="px-4 py-3 text-sm">
-                    {format(parseISO(shift.work_date), 'dd.MM.yyyy')}
-                  </td>
-                  <td className="px-4 py-3">
-                    {shift.is_full_day ? (
-                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
-                        Полная
-                      </span>
-                    ) : (
-                      <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">
-                        Неполная
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {shift.is_full_day 
-                      ? 'Весь день' 
-                      : `${shift.start_time?.slice(0, 5)}–${shift.end_time?.slice(0, 5)}`
-                    }
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {shift.comment ? (
-                      <span className="flex items-center gap-1">
-                        <MessageCircle className="h-3 w-3" />
-                        {shift.comment.slice(0, 30)}
-                        {shift.comment.length > 30 && '...'}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    {canDelete?.allowed ? (
-                      <button
-                        onClick={() => handleDeleteShift(shift)}
-                        className="text-red-500 hover:text-red-700 p-2 transition"
-                        title="Удалить смену"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    ) : (
-                      <span className="text-gray-400 text-xs">Блок</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="text-center py-10 bg-gray-50 rounded-lg">
+        <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50 text-gray-400" />
+        <p className="text-gray-500">Смен в этом месяце пока нет</p>
       </div>
     );
-  };
-  
-  // ========================================================================================
-  // RENDER ФУНКЦИИ - ТАБЛИЦА РАСПИСАНИЯ
-  // ========================================================================================
-  
-  /**
-   * Рендер таблицы расписания от админа
-   */
-  const renderScheduleTable = () => {
-    if (scheduleForMonth.length === 0) {
-      return (
-        <div className="text-center py-10 bg-gray-50 rounded-lg">
-          <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50 text-gray-400" />
-          <p className="text-gray-500">График от администратора не найден</p>
-        </div>
-      );
-    }
+  }
 
+  return (
+    <div className="overflow-x-auto hide-scrollbar">
+      <table className="min-w-full divide-y divide-gray-100">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Дата</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Тип</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Время</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Комментарий</th>
+            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Действие</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {shiftsForMonth.map(shift => {
+            const canDelete = dataManager?.canDeleteAvailability(shift);
+            
+            return (
+              <tr 
+                key={shift.id} 
+                className="hover:bg-gray-50 cursor-pointer transition"
+                onClick={() => openViewModal(shift)}
+              >
+                <td className="px-4 py-3 text-sm">
+                  {format(parseISO(shift.work_date), 'dd.MM.yyyy')}
+                </td>
+                <td className="px-4 py-3">
+                  {shift.is_full_day ? (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
+                      Полная
+                    </span>
+                  ) : (
+                    <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">
+                      Неполная
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {shift.is_full_day 
+                    ? 'Весь день' 
+                    : `${shift.start_time ? shift.start_time.slice(0, 5) : '00:00'}–${shift.end_time ? shift.end_time.slice(0, 5) : '00:00'}`
+                  }
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {shift.comment ? (
+                    <span className="flex items-center gap-1">
+                      <MessageCircle className="h-3 w-3" />
+                      {shift.comment.slice(0, 30)}
+                      {shift.comment.length > 30 && '...'}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                  {canDelete?.allowed ? (
+                    <button
+                      onClick={() => handleDeleteShift(shift)}
+                      className="text-red-500 hover:text-red-700 p-2 transition"
+                      title="Удалить смену"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <span className="text-gray-400 text-xs">Блок</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+  
+// ========================================================================================
+// RENDER ФУНКЦИИ - ТАБЛИЦА РАСПИСАНИЯ
+// ========================================================================================
+
+/**
+ * Рендер таблицы расписания от админа
+ */
+const renderScheduleTable = () => {
+  if (scheduleForMonth.length === 0) {
     return (
-      <div className="overflow-x-auto hide-scrollbar">
-        <table className="min-w-full divide-y divide-gray-100">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Дата</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Аттракцион</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Плановое время</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Отметка</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Статус</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {scheduleForMonth.map(schedule => {
-              const log = dataManager?.getActualWorkLog(schedule.id);
-              const canLog = dataManager?.canLogActualTime(schedule);
-              const attraction = dataManager?.getAttraction(schedule.attraction_id);
-
-              return (
-                <tr key={schedule.id} className="hover:bg-gray-50 transition">
-                  <td className="px-4 py-3 text-sm">
-                    {format(parseISO(schedule.work_date), 'dd.MM.yyyy')}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-medium">
-                    {attraction?.name || '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {schedule.start_time.slice(0, 5)} – {schedule.end_time.slice(0, 5)}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {log 
-                      ? `${log.actual_start.slice(0, 5)}–${log.actual_end.slice(0, 5)}`
-                      : <span className="text-gray-400">—</span>
-                    }
-                  </td>
-                  <td className="px-4 py-3">
-                    {log ? (
-                      <span className="text-green-600 text-sm flex items-center gap-1">
-                        <CheckCircle className="h-4 w-4" />
-                        Отмечено
-                      </span>
-                    ) : canLog?.allowed ? (
-                      <button
-                        onClick={() => openTimeLogModal(schedule)}
-                        className="text-blue-600 text-sm underline hover:text-blue-800 transition"
-                      >
-                        Отметить время
-                      </button>
-                    ) : (
-                      <span className="text-gray-400 text-sm">Недоступно</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="text-center py-10 bg-gray-50 rounded-lg">
+        <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50 text-gray-400" />
+        <p className="text-gray-500">График от администратора не найден</p>
       </div>
     );
-  };
-  
-  // ========================================================================================
-  // RENDER ФУНКЦИИ - ПРИОРИТЕТЫ
-  // ========================================================================================
-  
-  /**
-   * Рендер блока приоритетов аттракционов
-   * Исправлено: теперь корректно отображаются аттракционы из БД
-   */
-  const renderPriorities = () => {
-    // Создаём карту приоритетов: уровень → названия аттракционов
-    const priorityMap: Record<number, string> = {
-      1: 'Не задан',
-      2: 'Не задан',
-      3: 'Не задан'
-    };
+  }
 
-    // Заполняем карту данными из БД
-    priorities.forEach(prio => {
-      if (prio.priority_level >= 1 && prio.priority_level <= 3) {
-        // Получаем названия аттракционов по их ID
-        const attractionNames = prio.attraction_ids
-          .map(id => {
-            const attraction = attractions.find(a => a.id === id);
-            return attraction?.name || 'Неизвестный';
-          })
-          .join(', ');
-        
-        priorityMap[prio.priority_level] = attractionNames || 'Не задан';
-      }
-    });
+  return (
+    <div className="overflow-x-auto hide-scrollbar">
+      <table className="min-w-full divide-y divide-gray-100">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Дата</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Аттракцион</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Плановое время</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Отметка</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Статус</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {scheduleForMonth.map(schedule => {
+            const log = dataManager?.getActualWorkLog(schedule.id);
+            const canLog = dataManager?.canLogActualTime(schedule);
+            const attraction = dataManager?.getAttraction(schedule.attraction_id);
 
-    return (
-      <ul className="divide-y divide-gray-100">
-        {[1, 2, 3].map(level => (
-          <li key={level} className="py-3 flex justify-between items-center">
-            <span className="font-medium text-gray-700">{level}-й приоритет</span>
-            <span className="text-sm bg-blue-50 text-blue-800 px-3 py-1 rounded-full">
-              {priorityMap[level]}
-            </span>
-          </li>
-        ))}
-      </ul>
-    );
+            return (
+              <tr key={schedule.id} className="hover:bg-gray-50 transition">
+                <td className="px-4 py-3 text-sm">
+                  {format(parseISO(schedule.work_date), 'dd.MM.yyyy')}
+                </td>
+                <td className="px-4 py-3 text-sm font-medium">
+                  {attraction?.name || '—'}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {schedule.start_time ? schedule.start_time.slice(0, 5) : '00:00'} – {schedule.end_time ? schedule.end_time.slice(0, 5) : '00:00'}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {log 
+                    ? `${log.actual_start ? log.actual_start.slice(0, 5) : '00:00'}–${log.actual_end ? log.actual_end.slice(0, 5) : '00:00'}`
+                    : <span className="text-gray-400">—</span>
+                  }
+                </td>
+                <td className="px-4 py-3">
+                  {log ? (
+                    <span className="text-green-600 text-sm flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" />
+                      Отмечено
+                    </span>
+                  ) : canLog?.allowed ? (
+                    <button
+                      onClick={() => openTimeLogModal(schedule)}
+                      className="text-blue-600 text-sm underline hover:text-blue-800 transition"
+                    >
+                      Отметить время
+                    </button>
+                  ) : (
+                    <span className="text-gray-400 text-sm">Недоступно</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+  
+// ========================================================================================
+// RENDER ФУНКЦИИ - ПРИОРИТЕТЫ
+// ========================================================================================
+
+/**
+ * Рендер блока приоритетов аттракционов
+ */
+const renderPriorities = () => {
+  // Создаём карту приоритетов: уровень → названия аттракционов
+  const priorityMap: Record<number, string> = {
+    1: 'Не задан',
+    2: 'Не задан',
+    3: 'Не задан'
   };
+
+  // Заполняем карту данными из БД
+  priorities.forEach(prio => {
+    if (prio.priority_level >= 1 && prio.priority_level <= 3) {
+      // Безопасно получаем массив ID аттракционов
+      const attractionIds = Array.isArray(prio.attraction_ids) 
+        ? prio.attraction_ids 
+        : (prio.attraction_ids ? [prio.attraction_ids] : []);
+      
+      // Получаем названия аттракционов по их ID
+      const attractionNames = attractionIds
+        .map(id => {
+          const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+          const attraction = attractions.find(a => a.id === numId);
+          return attraction?.name || 'Неизвестный';
+        })
+        .join(', ');
+      
+      priorityMap[prio.priority_level] = attractionNames || 'Не задан';
+    }
+  });
+
+  return (
+    <ul className="divide-y divide-gray-100">
+      {[1, 2, 3].map(level => (
+        <li key={level} className="py-3 flex justify-between items-center">
+          <span className="font-medium text-gray-700">{level}-й приоритет</span>
+          <span className="text-sm bg-blue-50 text-blue-800 px-3 py-1 rounded-full">
+            {priorityMap[level]}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+};
   
   // ========================================================================================
   // RENDER ФУНКЦИИ - ЦЕЛЬ ОБУЧЕНИЯ
