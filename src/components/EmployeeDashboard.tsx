@@ -1,25 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   initializeEmployeeData, 
-  getEmployeeDataManager, 
   destroyEmployeeData,
   type EmployeeDataManager,
   type Employee,
-  type Attraction,
   type EmployeeAvailability,
   type ScheduleAssignment,
-  type ActualWorkLog,
-  type EmployeeStudyGoal,
-  type EmployeeAttractionPriority
 } from '../lib/employeeDatabase';
 import { getRandomGreeting } from '../utils/greetings';
-import { format, parseISO, addMonths, subMonths, startOfDay, differenceInMinutes } from 'date-fns';
+import { format, parseISO, addMonths, subMonths } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { 
   Loader2, Calendar, Star, ChevronLeft, ChevronRight,
   Trash2, X, Clock, FileText, MessageCircle,
-  CheckCircle, DollarSign, Map, Home, BarChart3
+  CheckCircle, DollarSign, Home, Target, TrendingUp,
+  Briefcase, Award, Activity
 } from 'lucide-react';
+import { Card, Badge, Button, Modal } from './ui';
 
 // ========================================================================================
 // ТИПЫ
@@ -47,9 +44,6 @@ type TabType = 'home' | 'calendar' | 'schedule' | 'priorities' | 'salary' | 'for
 // УТИЛИТЫ
 // ========================================================================================
 
-/**
- * Форматирует дату из формата YYYY-MM-DD в DD.MM.YYYY
- */
 function formatDateStr(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
   return `${d}.${m}.${y}`;
@@ -62,27 +56,19 @@ function formatDateStr(dateStr: string): string {
 export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   
   // ========================================================================================
-  // STATE - ОСНОВНЫЕ ДАННЫЕ
+  // STATE
   // ========================================================================================
   
   const [dataManager, setDataManager] = useState<EmployeeDataManager | null>(null);
   const [loading, setLoading] = useState(true);
   const [updateTrigger, setUpdateTrigger] = useState(0);
   
-  // ========================================================================================
-  // STATE - UI И НАВИГАЦИЯ
-  // ========================================================================================
-  
   const [now, setNow] = useState(new Date());
   const [greeting, setGreeting] = useState('');
-  const [ping, setPing] = useState(120);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeTab, setActiveTab] = useState<TabType>('home');
   
-  // ========================================================================================
-  // STATE - МОДАЛКА ДОБАВЛЕНИЯ СМЕНЫ
-  // ========================================================================================
-  
+  // Модалки
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState('');
   const [isFullDayModal, setIsFullDayModal] = useState(true);
@@ -92,16 +78,8 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [modalError, setModalError] = useState('');
   const [savingShift, setSavingShift] = useState(false);
   
-  // ========================================================================================
-  // STATE - МОДАЛКА ПРОСМОТРА СМЕНЫ
-  // ========================================================================================
-  
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewShift, setViewShift] = useState<EmployeeAvailability | null>(null);
-  
-  // ========================================================================================
-  // STATE - МОДАЛКА ОТМЕТКИ ВРЕМЕНИ
-  // ========================================================================================
   
   const [isTimeLogModalOpen, setIsTimeLogModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleAssignment | null>(null);
@@ -110,24 +88,16 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [timeLogError, setTimeLogError] = useState('');
   const [savingTimeLog, setSavingTimeLog] = useState(false);
   
-  // ========================================================================================
-  // STATE - ЦЕЛЬ ОБУЧЕНИЯ
-  // ========================================================================================
-  
   const [selectedAttractionId, setSelectedAttractionId] = useState<number | null>(null);
   const [savingGoal, setSavingGoal] = useState(false);
   const [goalError, setGoalError] = useState('');
-  
-  // ========================================================================================
-  // STATE - ЗАРПЛАТА
-  // ========================================================================================
   
   const [salaryPeriod, setSalaryPeriod] = useState<'first' | 'second'>('first');
   const [salaryData, setSalaryData] = useState<{ days: SalaryDay[]; total: number } | null>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
   
   // ========================================================================================
-  // КОНСТАНТЫ - ВРЕМЕННЫЕ ИНТЕРВАЛЫ
+  // ВРЕМЕННЫЕ ИНТЕРВАЛЫ
   // ========================================================================================
   
   const START_TIMES = useMemo(() => {
@@ -153,19 +123,15 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   }, []);
   
   // ========================================================================================
-  // ЭФФЕКТЫ - ИНИЦИАЛИЗАЦИЯ
+  // ИНИЦИАЛИЗАЦИЯ
   // ========================================================================================
   
-  /**
-   * Инициализация менеджера данных при монтировании компонента
-   */
   useEffect(() => {
     async function init() {
       try {
         const manager = await initializeEmployeeData(profile.id);
         setDataManager(manager);
         
-        // Устанавливаем текущую цель обучения
         const studyGoal = manager.getStudyGoal();
         if (studyGoal) {
           setSelectedAttractionId(studyGoal.attraction_id);
@@ -179,152 +145,87 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
 
     init();
-
-    return () => {
-      destroyEmployeeData();
-    };
+    return () => destroyEmployeeData();
   }, [profile.id]);
   
   // ========================================================================================
-  // ЭФФЕКТЫ - ТАЙМЕРЫ
+  // ТАЙМЕРЫ
   // ========================================================================================
   
-  /**
-   * Обновление текущего времени каждую секунду
-   */
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  /**
-   * Эмуляция пинга для footer
-   */
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPing(prev => {
-        let newPing = prev + (Math.random() * 30) - 15;
-        newPing = Math.min(458, Math.max(78, newPing));
-        return Math.round(newPing);
-      });
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  /**
-   * Установка приветствия
-   */
   useEffect(() => {
     if (profile.full_name) {
       setGreeting(getRandomGreeting(profile.full_name, new Date()));
     }
   }, [profile.full_name]);
 
-  /**
-   * Подписка на обновления данных (для Realtime)
-   */
   useEffect(() => {
     if (!dataManager) return;
-
     const interval = setInterval(() => {
       setUpdateTrigger(prev => prev + 1);
     }, 1000);
-
     return () => clearInterval(interval);
   }, [dataManager]);
   
-// ========================================================================================
-// MEMO - ДАННЫЕ ИЗ МЕНЕДЖЕРА
-// ========================================================================================
+  // ========================================================================================
+  // ДАННЫЕ
+  // ========================================================================================
 
-/**
- * Все аттракционы
- */
-const attractions = useMemo(() => 
-  dataManager?.getAttractions() || [], 
-  [dataManager, updateTrigger]
-);
-
-/**
- * Все смены доступности (самозапись)
- */
-const allAvailability = useMemo(() => 
-  dataManager?.getAvailability() || [], 
-  [dataManager, updateTrigger]
-);
-
-/**
- * Все смены расписания от админа
- */
-const allSchedules = useMemo(() => 
-  dataManager?.getScheduleAssignments() || [], 
-  [dataManager, updateTrigger]
-);
-
-/**
- * Фактические отметки времени
- */
-const actualLogs = useMemo(() => 
-  dataManager?.getActualWorkLogs() || [], 
-  [dataManager, updateTrigger]
-);
-
-/**
- * Текущая цель обучения
- */
-const studyGoal = useMemo(() => 
-  dataManager?.getStudyGoal() || null, 
-  [dataManager, updateTrigger]
-);
-
-/**
- * Приоритеты аттракционов
- */
-const priorities = useMemo(() => 
-  dataManager?.getPriorities() || [], 
-  [dataManager, updateTrigger]
-);
-
-/**
- * Аттракционы, доступные для выбора в цели обучения
- * (исключаем те, что уже в приоритетах)
- */
-const availableAttractionsForGoal = useMemo(() => {
-  if (!dataManager) return [];
-  
-  // Собираем все ID аттракционов из приоритетов
-  const priorityAttractionIds = new Set(
-    priorities.flatMap(p => {
-      if (!p.attraction_ids) return [];
-      const ids = Array.isArray(p.attraction_ids) ? p.attraction_ids : [p.attraction_ids];
-      return ids.map(id => typeof id === 'string' ? parseInt(id, 10) : id);
-    })
+  const attractions = useMemo(() => 
+    dataManager?.getAttractions() || [], 
+    [dataManager, updateTrigger]
   );
-  
-  // Фильтруем аттракционы
-  let available = attractions.filter(a => !priorityAttractionIds.has(a.id));
-  
-  // Добавляем текущую цель, если она есть и её нет в списке
-  if (studyGoal && studyGoal.attraction_id) {
-    const alreadyInList = available.some(a => a.id === studyGoal.attraction_id);
-    if (!alreadyInList) {
-      const currentGoalAttraction = attractions.find(a => a.id === studyGoal.attraction_id);
-      if (currentGoalAttraction) {
-        available = [currentGoalAttraction, ...available];
+
+  const allAvailability = useMemo(() => 
+    dataManager?.getAvailability() || [], 
+    [dataManager, updateTrigger]
+  );
+
+  const allSchedules = useMemo(() => 
+    dataManager?.getScheduleAssignments() || [], 
+    [dataManager, updateTrigger]
+  );
+
+  const studyGoal = useMemo(() => 
+    dataManager?.getStudyGoal() || null, 
+    [dataManager, updateTrigger]
+  );
+
+  const priorities = useMemo(() => 
+    dataManager?.getPriorities() || [], 
+    [dataManager, updateTrigger]
+  );
+
+  const availableAttractionsForGoal = useMemo(() => {
+    if (!dataManager) return [];
+    
+    const priorityAttractionIds = new Set(
+      priorities.flatMap(p => {
+        if (!p.attraction_ids) return [];
+        const ids = Array.isArray(p.attraction_ids) ? p.attraction_ids : [p.attraction_ids];
+        return ids.map(id => typeof id === 'string' ? parseInt(id, 10) : id);
+      })
+    );
+    
+    let available = attractions.filter(a => !priorityAttractionIds.has(a.id));
+    
+    if (studyGoal && studyGoal.attraction_id) {
+      const alreadyInList = available.some(a => a.id === studyGoal.attraction_id);
+      if (!alreadyInList) {
+        const currentGoalAttraction = attractions.find(a => a.id === studyGoal.attraction_id);
+        if (currentGoalAttraction) {
+          available = [currentGoalAttraction, ...available];
+        }
       }
     }
-  }
-  
-  return available;
-}, [dataManager, studyGoal, attractions, priorities, updateTrigger]);
-  
-  // ========================================================================================
-  // MEMO - ФИЛЬТРАЦИЯ ПО МЕСЯЦУ
-  // ========================================================================================
-  
-  /**
-   * Смены доступности за текущий месяц
-   */
+    
+    return available;
+  }, [dataManager, studyGoal, attractions, priorities, updateTrigger]);
+
   const shiftsForMonth = useMemo(() => {
     return allAvailability.filter(s => {
       const d = parseISO(s.work_date);
@@ -333,9 +234,6 @@ const availableAttractionsForGoal = useMemo(() => {
     });
   }, [allAvailability, currentDate]);
 
-  /**
-   * Смены расписания за текущий месяц
-   */
   const scheduleForMonth = useMemo(() => {
     return allSchedules.filter(s => {
       const d = parseISO(s.work_date);
@@ -344,21 +242,246 @@ const availableAttractionsForGoal = useMemo(() => {
     });
   }, [allSchedules, currentDate]);
 
-  /**
-   * Набор занятых дат (для предотвращения дублирования)
-   */
   const occupiedDates = useMemo(() => 
     new Set(allAvailability.map(s => s.work_date)), 
     [allAvailability]
   );
   
   // ========================================================================================
+  // ЗАГРУЗКА
+  // ========================================================================================
+  
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="animate-spin h-12 w-12 mx-auto mb-4" style={{ color: 'var(--primary)' }} />
+          <p style={{ color: 'var(--text-muted)' }}>Загрузка данных...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!dataManager) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <Card padding="lg" className="text-center max-w-md">
+          <div className="mb-4" style={{ color: 'var(--error)' }}>
+            <X className="h-16 w-16 mx-auto mb-4" />
+            <h3 className="text-lg font-bold mb-2">Ошибка загрузки данных</h3>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              Не удалось загрузить информацию
+            </p>
+          </div>
+          <Button
+            onClick={() => window.location.reload()}
+            variant="primary"
+          >
+            Перезагрузить страницу
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+  
+  // ========================================================================================
+  // RENDER - ГЛАВНАЯ СТРАНИЦА
+  // ========================================================================================
+  
+  const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
+
+  return (
+    <div className="space-y-6">
+      {/* Приветствие и статистика */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Приветствие */}
+        <Card padding="lg" className="lg:col-span-2">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+                {greeting || `Здравствуйте, ${profile.full_name?.split(' ')[0]}!`}
+              </h2>
+              <div className="flex flex-wrap gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                <div className="flex items-center gap-1.5">
+                  <Briefcase className="h-4 w-4" />
+                  <span>Возраст: {profile.age ?? 'Не указан'}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <DollarSign className="h-4 w-4" />
+                  <span>Ставка: {profile.base_hourly_rate || 250}₽/ч</span>
+                </div>
+              </div>
+            </div>
+            <div className="text-right hidden sm:block">
+              <div className="text-3xl font-bold font-mono" style={{ color: 'var(--primary)' }}>
+                {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="text-xs mt-1" style={{ color: 'var(--text-subtle)' }}>
+                {format(now, 'dd MMMM yyyy', { locale: ru })}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Быстрая статистика */}
+        <Card padding="md">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--success-light)' }}>
+                  <CheckCircle className="h-4 w-4" style={{ color: 'var(--success)' }} />
+                </div>
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
+              </div>
+              <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                {shiftsForMonth.length}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--info-light)' }}>
+                  <Calendar className="h-4 w-4" style={{ color: 'var(--info)' }} />
+                </div>
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
+              </div>
+              <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                {scheduleForMonth.length}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                  <Activity className="h-4 w-4" style={{ color: 'var(--primary)' }} />
+                </div>
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Отработано</span>
+              </div>
+              <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                {scheduleForMonth.filter(s => dataManager?.getActualWorkLog(s.id)).length}
+              </span>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Текущие цели */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Приоритеты */}
+        <Card padding="md">
+          <div className="flex items-center gap-2 mb-4">
+            <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
+            <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+              Приоритеты аттракционов
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {[1, 2, 3].map(level => {
+              const priority = priorities.find(p => p.priority_level === level);
+              const attractionIds = Array.isArray(priority?.attraction_ids) 
+                ? priority.attraction_ids 
+                : (priority?.attraction_ids ? [priority.attraction_ids] : []);
+              
+              const attractionNames = attractionIds
+                .map(id => {
+                  const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+                  return attractions.find(a => a.id === numId)?.name || 'Неизвестный';
+                })
+                .join(', ') || 'Не задан';
+
+              return (
+                <div key={level} className="flex items-center justify-between py-2">
+                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    {level}-й приоритет
+                  </span>
+                  <Badge variant={level === 1 ? 'success' : level === 2 ? 'warning' : 'info'}>
+                    {attractionNames}
+                  </Badge>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* Цель обучения */}
+        <Card padding="md">
+          <div className="flex items-center gap-2 mb-4">
+            <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+            <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+              Цель для изучения
+            </h3>
+          </div>
+
+          {goalError && (
+            <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+              {goalError}
+            </div>
+          )}
+
+          <select
+            value={selectedAttractionId || ''}
+            onChange={e => setSelectedAttractionId(Number(e.target.value))}
+            className="input mb-3"
+          >
+            <option value="">-- Выберите аттракцион --</option>
+            {availableAttractionsForGoal.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+
+          <Button
+            onClick={async () => {
+              if (!dataManager || !selectedAttractionId) {
+                setGoalError('Выберите аттракцион');
+                return;
+              }
+
+              setSavingGoal(true);
+              setGoalError('');
+
+              const result = await dataManager.setStudyGoal(selectedAttractionId);
+
+              if (result.success) {
+                alert('Цель изучения сохранена');
+                setUpdateTrigger(prev => prev + 1);
+              } else {
+                setGoalError(result.error || 'Ошибка сохранения');
+              }
+
+              setSavingGoal(false);
+            }}
+            disabled={savingGoal || !selectedAttractionId}
+            variant="primary"
+            size="sm"
+            loading={savingGoal}
+            className="w-full"
+          >
+            Сохранить цель
+          </Button>
+
+          {studyGoal && studyGoal.attraction && (
+            <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+              <p className="text-sm" style={{ color: 'var(--primary)' }}>
+                <strong>Текущая цель:</strong> {studyGoal.attraction.name}
+              </p>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Здесь будет остальной контент */}
+      <Card padding="lg">
+        <p style={{ color: 'var(--text-muted)' }} className="text-center">
+          🚧 Остальные разделы в процессе рефакторинга...
+        </p>
+      </Card>
+    </div>
+  );
+}
+  // ========================================================================================
   // ОБРАБОТЧИКИ - СМЕНЫ ДОСТУПНОСТИ
   // ========================================================================================
   
-  /**
-   * Открытие модалки добавления смены
-   */
   const openAddModal = (dateStr: string) => {
     if (!dataManager) return;
     
@@ -381,17 +504,11 @@ const availableAttractionsForGoal = useMemo(() => {
     setIsAddModalOpen(true);
   };
 
-  /**
-   * Открытие модалки просмотра смены
-   */
   const openViewModal = (shift: EmployeeAvailability) => {
     setViewShift(shift);
     setIsViewModalOpen(true);
   };
 
-  /**
-   * Добавление новой смены
-   */
   const handleAddShift = async () => {
     if (!dataManager) return;
     
@@ -432,9 +549,6 @@ const availableAttractionsForGoal = useMemo(() => {
     setSavingShift(false);
   };
 
-  /**
-   * Удаление смены
-   */
   const handleDeleteShift = async (shift: EmployeeAvailability) => {
     if (!dataManager) return;
 
@@ -455,102 +569,63 @@ const availableAttractionsForGoal = useMemo(() => {
       alert(result.error || 'Ошибка при удалении');
     }
   };
-  
-// ========================================================================================
-// ОБРАБОТЧИКИ - ФАКТИЧЕСКОЕ ВРЕМЯ
-// ========================================================================================
 
-/**
- * Открытие модалки отметки фактического времени
- */
-const openTimeLogModal = (schedule: ScheduleAssignment) => {
-  if (!dataManager) return;
-
-  const validation = dataManager.canLogActualTime(schedule);
-  if (!validation.allowed) {
-    alert(validation.reason);
-    return;
-  }
-
-  const existingLog = dataManager.getActualWorkLog(schedule.id);
-  if (existingLog) {
-    alert('Вы уже отметили время для этой смены. Изменить нельзя.');
-    return;
-  }
-
-  setSelectedSchedule(schedule);
-  setActualStart(schedule.start_time ? schedule.start_time.slice(0, 5) : '10:00');
-  setActualEnd(schedule.end_time ? schedule.end_time.slice(0, 5) : '22:00');
-  setTimeLogError('');
-  setIsTimeLogModalOpen(true);
-};
-
-/**
- * Сохранение фактического времени
- */
-const handleSaveTimeLog = async () => {
-  if (!dataManager || !selectedSchedule) return;
-
-  if (actualStart >= actualEnd) {
-    setTimeLogError('Время окончания должно быть позже начала');
-    return;
-  }
-
-  setSavingTimeLog(true);
-
-  const result = await dataManager.addActualWorkLog({
-    schedule_assignment_id: selectedSchedule.id,
-    actual_start: actualStart + ':00',
-    actual_end: actualEnd + ':00',
-  });
-
-  if (result.success) {
-    setIsTimeLogModalOpen(false);
-    setUpdateTrigger(prev => prev + 1);
-  } else {
-    setTimeLogError(result.error || 'Ошибка сохранения');
-  }
-
-  setSavingTimeLog(false);
-};
-  
   // ========================================================================================
-  // ОБРАБОТЧИКИ - ЦЕЛЬ ОБУЧЕНИЯ
+  // ОБРАБОТЧИКИ - ФАКТИЧЕСКОЕ ВРЕМЯ
   // ========================================================================================
-  
-  /**
-   * Сохранение цели обучения
-   */
-  const handleSaveStudyGoal = async () => {
+
+  const openTimeLogModal = (schedule: ScheduleAssignment) => {
     if (!dataManager) return;
-    
-    if (!selectedAttractionId) {
-      setGoalError('Выберите аттракцион');
+
+    const validation = dataManager.canLogActualTime(schedule);
+    if (!validation.allowed) {
+      alert(validation.reason);
       return;
     }
 
-    setSavingGoal(true);
-    setGoalError('');
-
-    const result = await dataManager.setStudyGoal(selectedAttractionId);
-
-    if (result.success) {
-      alert('Цель изучения сохранена');
-      setUpdateTrigger(prev => prev + 1);
-    } else {
-      setGoalError(result.error || 'Ошибка сохранения');
+    const existingLog = dataManager.getActualWorkLog(schedule.id);
+    if (existingLog) {
+      alert('Вы уже отметили время для этой смены. Изменить нельзя.');
+      return;
     }
 
-    setSavingGoal(false);
+    setSelectedSchedule(schedule);
+    setActualStart(schedule.start_time ? schedule.start_time.slice(0, 5) : '10:00');
+    setActualEnd(schedule.end_time ? schedule.end_time.slice(0, 5) : '22:00');
+    setTimeLogError('');
+    setIsTimeLogModalOpen(true);
   };
-  
+
+  const handleSaveTimeLog = async () => {
+    if (!dataManager || !selectedSchedule) return;
+
+    if (actualStart >= actualEnd) {
+      setTimeLogError('Время окончания должно быть позже начала');
+      return;
+    }
+
+    setSavingTimeLog(true);
+
+    const result = await dataManager.addActualWorkLog({
+      schedule_assignment_id: selectedSchedule.id,
+      actual_start: actualStart + ':00',
+      actual_end: actualEnd + ':00',
+    });
+
+    if (result.success) {
+      setIsTimeLogModalOpen(false);
+      setUpdateTrigger(prev => prev + 1);
+    } else {
+      setTimeLogError(result.error || 'Ошибка сохранения');
+    }
+
+    setSavingTimeLog(false);
+  };
+
   // ========================================================================================
   // ОБРАБОТЧИКИ - ЗАРПЛАТА
   // ========================================================================================
-  
-  /**
-   * Расчёт зарплаты за период
-   */
+
   const calculateSalary = async (period: 'first' | 'second') => {
     if (!dataManager) return;
 
@@ -567,60 +642,40 @@ const handleSaveTimeLog = async () => {
     }
   };
 
-  /**
-   * Пересчёт зарплаты при смене периода или вкладки
-   */
   useEffect(() => {
     if (activeTab === 'salary' && dataManager) {
       calculateSalary(salaryPeriod);
     }
   }, [activeTab, salaryPeriod, dataManager]);
-  
+
   // ========================================================================================
-  // RENDER ФУНКЦИИ - КАЛЕНДАРЬ
+  // RENDER - КАЛЕНДАРЬ
   // ========================================================================================
-  
-  /**
-   * Рендер календаря месяца с днями
-   */
-  const renderMonthDays = () => {
+
+  const renderCalendar = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDayOfMonth = new Date(year, month, 1).getDay();
-    const weekdays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const days = [];
 
-    // Пустые ячейки в начале (выравнивание по дням недели)
+    // Пустые ячейки
     for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) {
-      days.push(<div key={`empty-${i}`} className="p-3"></div>);
+      days.push(<div key={`empty-${i}`} className="aspect-square" />);
     }
 
     // Дни месяца
     for (let i = 1; i <= daysInMonth; i++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-      const dateObj = new Date(year, month, i);
       const isToday = dateStr === todayStr;
       const shift = allAvailability.find(s => s.work_date === dateStr);
       const active = dataManager?.isDateActive(dateStr) && !occupiedDates.has(dateStr);
 
-      let bgClass = 'bg-white border-gray-100 shadow-sm';
-      
-      if (shift) {
-        bgClass = shift.is_full_day 
-          ? 'bg-green-50 border-green-300' 
-          : 'bg-yellow-50 border-yellow-300';
-      } else if (!active) {
-        bgClass = 'opacity-40 bg-gray-50 border-gray-100 cursor-not-allowed';
-      } else {
-        bgClass = 'hover:border-blue-400 hover:bg-blue-50 cursor-pointer bg-white border-gray-100';
-      }
-
       days.push(
         <button
           key={dateStr}
-          className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition relative overflow-hidden ${bgClass}`}
           onClick={() => {
             if (shift) {
               openViewModal(shift);
@@ -629,396 +684,370 @@ const handleSaveTimeLog = async () => {
             }
           }}
           disabled={!active && !shift}
+          className="aspect-square flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all relative"
+          style={{
+            backgroundColor: shift 
+              ? (shift.is_full_day ? 'var(--success-light)' : 'var(--warning-light)')
+              : active 
+                ? 'var(--surface)' 
+                : 'var(--bg-tertiary)',
+            borderColor: isToday 
+              ? 'var(--primary)' 
+              : shift 
+                ? (shift.is_full_day ? 'var(--success)' : 'var(--warning)')
+                : 'var(--border)',
+            opacity: (!active && !shift) ? 0.4 : 1,
+            cursor: (active || shift) ? 'pointer' : 'not-allowed',
+          }}
         >
-          <span className={`text-xl font-bold ${isToday ? 'text-blue-600' : 'text-gray-800'} z-10`}>
+          <span 
+            className="text-base font-bold"
+            style={{ color: isToday ? 'var(--primary)' : 'var(--text)' }}
+          >
             {i}
           </span>
-          <span className="text-[10px] text-gray-500 font-bold uppercase mt-1 z-10">
-            {weekdays[dateObj.getDay()]}
-          </span>
           {shift && (
-            <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
-              shift.is_full_day ? 'bg-green-500' : 'bg-yellow-500'
-            }`} />
+            <div 
+              className="absolute top-1 right-1 w-2 h-2 rounded-full"
+              style={{ backgroundColor: shift.is_full_day ? 'var(--success)' : 'var(--warning)' }}
+            />
           )}
           {shift?.comment && (
-            <div className="absolute bottom-1 right-1" title="Есть комментарий">
-              <MessageCircle className="h-3 w-3 text-gray-400" />
-            </div>
+            <MessageCircle 
+              className="absolute bottom-1 right-1 h-3 w-3"
+              style={{ color: 'var(--text-subtle)' }}
+            />
           )}
         </button>
       );
     }
 
-    return days;
-  };
-  
-// ========================================================================================
-// RENDER ФУНКЦИИ - ТАБЛИЦА СМЕН
-// ========================================================================================
-
-/**
- * Рендер таблицы смен самозаписи
- */
-const renderShiftsTable = () => {
-  if (shiftsForMonth.length === 0) {
     return (
-      <div className="text-center py-10 bg-gray-50 rounded-lg">
-        <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50 text-gray-400" />
-        <p className="text-gray-500">Смен в этом месяце пока нет</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto hide-scrollbar">
-      <table className="min-w-full divide-y divide-gray-100">
-        <thead>
-          <tr className="bg-gray-50">
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Дата</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Тип</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Время</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Комментарий</th>
-            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Действие</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {shiftsForMonth.map(shift => {
-            const canDelete = dataManager?.canDeleteAvailability(shift);
-            
-            return (
-              <tr 
-                key={shift.id} 
-                className="hover:bg-gray-50 cursor-pointer transition"
-                onClick={() => openViewModal(shift)}
-              >
-                <td className="px-4 py-3 text-sm">
-                  {format(parseISO(shift.work_date), 'dd.MM.yyyy')}
-                </td>
-                <td className="px-4 py-3">
-                  {shift.is_full_day ? (
-                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
-                      Полная
-                    </span>
-                  ) : (
-                    <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">
-                      Неполная
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  {shift.is_full_day 
-                    ? 'Весь день' 
-                    : `${shift.start_time ? shift.start_time.slice(0, 5) : '00:00'}–${shift.end_time ? shift.end_time.slice(0, 5) : '00:00'}`
-                  }
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  {shift.comment ? (
-                    <span className="flex items-center gap-1">
-                      <MessageCircle className="h-3 w-3" />
-                      {shift.comment.slice(0, 30)}
-                      {shift.comment.length > 30 && '...'}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                  {canDelete?.allowed ? (
-                    <button
-                      onClick={() => handleDeleteShift(shift)}
-                      className="text-red-500 hover:text-red-700 p-2 transition"
-                      title="Удалить смену"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  ) : (
-                    <span className="text-gray-400 text-xs">Блок</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-  
-// ========================================================================================
-// RENDER ФУНКЦИИ - ТАБЛИЦА РАСПИСАНИЯ
-// ========================================================================================
-
-/**
- * Рендер таблицы расписания от админа
- */
-const renderScheduleTable = () => {
-  if (scheduleForMonth.length === 0) {
-    return (
-      <div className="text-center py-10 bg-gray-50 rounded-lg">
-        <Calendar className="mx-auto h-10 w-10 mb-2 opacity-50 text-gray-400" />
-        <p className="text-gray-500">График от администратора не найден</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto hide-scrollbar">
-      <table className="min-w-full divide-y divide-gray-100">
-        <thead>
-          <tr className="bg-gray-50">
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Дата</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Аттракцион</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Плановое время</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Отметка</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Статус</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {scheduleForMonth.map(schedule => {
-            const log = dataManager?.getActualWorkLog(schedule.id);
-            const canLog = dataManager?.canLogActualTime(schedule);
-            const attraction = dataManager?.getAttraction(schedule.attraction_id);
-
-            return (
-              <tr key={schedule.id} className="hover:bg-gray-50 transition">
-                <td className="px-4 py-3 text-sm">
-                  {format(parseISO(schedule.work_date), 'dd.MM.yyyy')}
-                </td>
-                <td className="px-4 py-3 text-sm font-medium">
-                  {attraction?.name || '—'}
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  {schedule.start_time ? schedule.start_time.slice(0, 5) : '00:00'} – {schedule.end_time ? schedule.end_time.slice(0, 5) : '00:00'}
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  {log 
-                    ? `${log.actual_start ? log.actual_start.slice(0, 5) : '00:00'}–${log.actual_end ? log.actual_end.slice(0, 5) : '00:00'}`
-                    : <span className="text-gray-400">—</span>
-                  }
-                </td>
-                <td className="px-4 py-3">
-                  {log ? (
-                    <span className="text-green-600 text-sm flex items-center gap-1">
-                      <CheckCircle className="h-4 w-4" />
-                      Отмечено
-                    </span>
-                  ) : canLog?.allowed ? (
-                    <button
-                      onClick={() => openTimeLogModal(schedule)}
-                      className="text-blue-600 text-sm underline hover:text-blue-800 transition"
-                    >
-                      Отметить время
-                    </button>
-                  ) : (
-                    <span className="text-gray-400 text-sm">Недоступно</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-  
-// ========================================================================================
-// RENDER ФУНКЦИИ - ПРИОРИТЕТЫ
-// ========================================================================================
-
-/**
- * Рендер блока приоритетов аттракционов
- */
-const renderPriorities = () => {
-  // Создаём карту приоритетов: уровень → названия аттракционов
-  const priorityMap: Record<number, string> = {
-    1: 'Не задан',
-    2: 'Не задан',
-    3: 'Не задан'
-  };
-
-  // Заполняем карту данными из БД
-  priorities.forEach(prio => {
-    if (prio.priority_level >= 1 && prio.priority_level <= 3) {
-      // Безопасно получаем массив ID аттракционов
-      const attractionIds = Array.isArray(prio.attraction_ids) 
-        ? prio.attraction_ids 
-        : (prio.attraction_ids ? [prio.attraction_ids] : []);
-      
-      // Получаем названия аттракционов по их ID
-      const attractionNames = attractionIds
-        .map(id => {
-          const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-          const attraction = attractions.find(a => a.id === numId);
-          return attraction?.name || 'Неизвестный';
-        })
-        .join(', ');
-      
-      priorityMap[prio.priority_level] = attractionNames || 'Не задан';
-    }
-  });
-
-  return (
-    <ul className="divide-y divide-gray-100">
-      {[1, 2, 3].map(level => (
-        <li key={level} className="py-3 flex justify-between items-center">
-          <span className="font-medium text-gray-700">{level}-й приоритет</span>
-          <span className="text-sm bg-blue-50 text-blue-800 px-3 py-1 rounded-full">
-            {priorityMap[level]}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-};
-  
-  // ========================================================================================
-  // RENDER ФУНКЦИИ - ЦЕЛЬ ОБУЧЕНИЯ
-  // ========================================================================================
-  
-  /**
-   * Рендер блока цели обучения
-   * Исправлено: 
-   * 1. Список аттракционов исключает те, что в приоритетах
-   * 2. Корректно отображается текущая цель
-   */
-  const renderStudyGoal = () => {
-    return (
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-          <Star className="text-purple-500" />
-          Цель для изучения
-        </h3>
-        
-        {goalError && (
-          <div className="bg-red-50 text-red-700 text-sm p-2 rounded mb-2">
-            {goalError}
-          </div>
-        )}
-
-        <select
-          value={selectedAttractionId || ''}
-          onChange={e => setSelectedAttractionId(Number(e.target.value))}
-          className="w-full border border-gray-200 rounded-lg p-2 mb-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="">-- Выберите аттракцион --</option>
-          {availableAttractionsForGoal.map(a => (
-            <option key={a.id} value={a.id}>{a.name}</option>
+      <div className="space-y-4">
+        {/* Заголовки дней недели */}
+        <div className="grid grid-cols-7 gap-2">
+          {weekdays.map(day => (
+            <div 
+              key={day} 
+              className="text-center text-xs font-semibold py-2"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              {day}
+            </div>
           ))}
-        </select>
-
-        <button
-          onClick={handleSaveStudyGoal}
-          disabled={savingGoal || !selectedAttractionId}
-          className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {savingGoal ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Сохранение...
-            </span>
-          ) : (
-            'Сохранить цель'
-          )}
-        </button>
-
-        {studyGoal && studyGoal.attraction && (
-          <div className="mt-4 p-3 bg-purple-50 rounded-lg">
-            <p className="text-sm text-purple-800">
-              <strong>Текущая цель:</strong> {studyGoal.attraction.name}
-            </p>
-          </div>
-        )}
-      </div>
-    );
-  };
-  
-  // ========================================================================================
-  // RENDER ФУНКЦИИ - ЗАРПЛАТА
-  // ========================================================================================
-  
-  /**
-   * Рендер блока расчёта зарплаты
-   */
-  const renderSalaryBlock = () => {
-    return (
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <h3 className="text-lg font-bold flex items-center gap-2 mb-2">
-          <DollarSign className="text-green-600" />
-          Примерный расчёт зарплаты
-        </h3>
-        
-        <div className="text-xs text-gray-500 mb-4">
-          *Данные носят ознакомительный характер. Точный расчёт производится бухгалтерией.
         </div>
 
-        <div className="flex gap-2 mb-4">
-          <button
+        {/* Дни */}
+        <div className="grid grid-cols-7 gap-2">
+          {days}
+        </div>
+
+        {/* Легенда */}
+        <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--success)' }} />
+            <span>Полная смена</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--warning)' }} />
+            <span>Неполная смена</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <MessageCircle className="h-3 w-3" />
+            <span>Есть комментарий</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ========================================================================================
+  // RENDER - ТАБЛИЦЫ
+  // ========================================================================================
+
+  const renderShiftsTable = () => {
+    if (shiftsForMonth.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <Calendar className="mx-auto h-12 w-12 mb-3 opacity-30" style={{ color: 'var(--text-subtle)' }} />
+          <p style={{ color: 'var(--text-muted)' }}>Смен в этом месяце пока нет</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto hide-scrollbar">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Дата
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Тип
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Время
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Комментарий
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Действие
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {shiftsForMonth.map(shift => {
+              const canDelete = dataManager?.canDeleteAvailability(shift);
+              
+              return (
+                <tr 
+                  key={shift.id}
+                  onClick={() => openViewModal(shift)}
+                  className="border-b cursor-pointer transition-colors hover:bg-opacity-50"
+                  style={{ 
+                    borderColor: 'var(--border)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <td className="px-4 py-3 text-sm" style={{ color: 'var(--text)' }}>
+                    {format(parseISO(shift.work_date), 'dd.MM.yyyy')}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={shift.is_full_day ? 'success' : 'warning'}>
+                      {shift.is_full_day ? 'Полная' : 'Неполная'}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-sm" style={{ color: 'var(--text)' }}>
+                    {shift.is_full_day 
+                      ? 'Весь день' 
+                      : `${shift.start_time?.slice(0, 5) || '00:00'}–${shift.end_time?.slice(0, 5) || '00:00'}`
+                    }
+                  </td>
+                  <td className="px-4 py-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    {shift.comment ? (
+                      <span className="flex items-center gap-1">
+                        <MessageCircle className="h-3 w-3" />
+                        {shift.comment.slice(0, 30)}
+                        {shift.comment.length > 30 && '...'}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td 
+                    className="px-4 py-3 text-right" 
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {canDelete?.allowed ? (
+                      <button
+                        onClick={() => handleDeleteShift(shift)}
+                        className="p-2 rounded-lg transition-colors"
+                        style={{ color: 'var(--error)' }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--error-light)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                        title="Удалить смену"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>Блок</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderScheduleTable = () => {
+    if (scheduleForMonth.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <Calendar className="mx-auto h-12 w-12 mb-3 opacity-30" style={{ color: 'var(--text-subtle)' }} />
+          <p style={{ color: 'var(--text-muted)' }}>График от администратора не найден</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto hide-scrollbar">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Дата
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Аттракцион
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Плановое время
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Отметка
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Статус
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {scheduleForMonth.map(schedule => {
+              const log = dataManager?.getActualWorkLog(schedule.id);
+              const canLog = dataManager?.canLogActualTime(schedule);
+              const attraction = dataManager?.getAttraction(schedule.attraction_id);
+
+              return (
+                <tr 
+                  key={schedule.id}
+                  className="border-b transition-colors"
+                  style={{ borderColor: 'var(--border)' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <td className="px-4 py-3 text-sm" style={{ color: 'var(--text)' }}>
+                    {format(parseISO(schedule.work_date), 'dd.MM.yyyy')}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium" style={{ color: 'var(--text)' }}>
+                    {attraction?.name || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm" style={{ color: 'var(--text)' }}>
+                    {schedule.start_time?.slice(0, 5) || '00:00'} – {schedule.end_time?.slice(0, 5) || '00:00'}
+                  </td>
+                  <td className="px-4 py-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    {log 
+                      ? `${log.actual_start?.slice(0, 5) || '00:00'}–${log.actual_end?.slice(0, 5) || '00:00'}`
+                      : '—'
+                    }
+                  </td>
+                  <td className="px-4 py-3">
+                    {log ? (
+                      <Badge variant="success" dot>
+                        <CheckCircle className="h-3 w-3" />
+                        Отмечено
+                      </Badge>
+                    ) : canLog?.allowed ? (
+                      <Button
+                        onClick={() => openTimeLogModal(schedule)}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        Отметить
+                      </Button>
+                    ) : (
+                      <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>
+                        Недоступно
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  // ========================================================================================
+  // RENDER - ЗАРПЛАТА
+  // ========================================================================================
+
+  const renderSalary = () => {
+    return (
+      <div className="space-y-4">
+        <div className="text-xs p-3 rounded-lg" style={{ backgroundColor: 'var(--warning-light)', color: 'var(--warning)' }}>
+          ⚠️ Данные носят ознакомительный характер. Точный расчёт производится бухгалтерией.
+        </div>
+
+        <div className="flex gap-2">
+          <Button
             onClick={() => setSalaryPeriod('first')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              salaryPeriod === 'first'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+            variant={salaryPeriod === 'first' ? 'primary' : 'secondary'}
+            size="sm"
           >
             7–21 число
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setSalaryPeriod('second')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              salaryPeriod === 'second'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+            variant={salaryPeriod === 'second' ? 'primary' : 'secondary'}
+            size="sm"
           >
             22–6 число
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => calculateSalary(salaryPeriod)}
-            className="px-4 py-2 bg-gray-500 text-white rounded-lg text-sm hover:bg-gray-600 transition"
+            variant="ghost"
+            size="sm"
           >
             Обновить
-          </button>
+          </Button>
         </div>
 
         {loadingSalary && (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin" style={{ color: 'var(--primary)' }} />
           </div>
         )}
 
         {!loadingSalary && salaryData && (
           <div>
-            <div className="max-h-96 overflow-y-auto">
-              {salaryData.days.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  Нет данных за выбранный период
-                </div>
-              ) : (
-                salaryData.days.map(day => (
-                  <div key={day.date} className="border-b border-gray-100 py-3">
-                    <div className="font-semibold text-gray-800 mb-2">
+            {salaryData.days.length === 0 ? (
+              <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
+                Нет данных за выбранный период
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {salaryData.days.map(day => (
+                  <Card key={day.date} padding="md">
+                    <div className="font-semibold mb-2" style={{ color: 'var(--text)' }}>
                       {format(parseISO(day.date), 'dd.MM.yyyy (EEEE)', { locale: ru })}
                     </div>
-                    {day.attractions.map((a, idx) => (
-                      <div key={idx} className="text-sm ml-4 text-gray-600">
-                        🎢 {a.name}: {a.hours.toFixed(2)} ч × {a.rate}₽ × {a.coefficient} = {Math.round(a.earn)}₽
-                      </div>
-                    ))}
-                    <div className="text-sm font-bold text-right text-blue-600 mt-1">
-                      Итого за день: {Math.round(day.total)} ₽
+                    <div className="space-y-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      {day.attractions.map((a, idx) => (
+                        <div key={idx} className="flex justify-between">
+                          <span>{a.name}</span>
+                          <span className="font-mono">
+                            {a.hours.toFixed(2)}ч × {a.rate}₽ × {a.coefficient} = {Math.round(a.earn)}₽
+                          </span>
+                        </div>
+                      ))}
                     </div>
+                    <div className="mt-2 pt-2 border-t flex justify-between font-bold" style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}>
+                      <span>Итого за день:</span>
+                      <span>{Math.round(day.total)} ₽</span>
+                    </div>
+                  </Card>
+                ))}
+
+                <Card padding="lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-bold" style={{ color: 'var(--text)' }}>
+                      Всего за период:
+                    </span>
+                    <span className="text-3xl font-bold" style={{ color: 'var(--success)' }}>
+                      {Math.round(salaryData.total)} ₽
+                    </span>
                   </div>
-                ))
-              )}
-            </div>
-            
-            {salaryData.days.length > 0 && (
-              <div className="mt-4 pt-4 border-t-2 border-gray-200">
-                <div className="text-xl font-bold text-right text-green-600">
-                  Всего за период: {Math.round(salaryData.total)} ₽
-                </div>
+                </Card>
               </div>
             )}
           </div>
@@ -1026,210 +1055,535 @@ const renderPriorities = () => {
       </div>
     );
   };
-  
   // ========================================================================================
-  // RENDER ФУНКЦИИ - СВОДКА
+  // RENDER - ВКЛАДКИ (МОБИЛЬНАЯ НАВИГАЦИЯ)
   // ========================================================================================
-  
-  /**
-   * Рендер блока сводной статистики
-   */
-  const renderSummary = () => (
-    <div className="space-y-2">
-      <div className="flex justify-between text-sm">
-        <span className="text-gray-600">Всего смен (самозапись):</span>
-        <span className="font-bold text-gray-800">{shiftsForMonth.length}</span>
-      </div>
-      <div className="flex justify-between text-sm">
-        <span className="text-gray-600">Полных:</span>
-        <span className="font-medium text-green-600">
-          {shiftsForMonth.filter(s => s.is_full_day).length}
-        </span>
-      </div>
-      <div className="flex justify-between text-sm">
-        <span className="text-gray-600">Неполных:</span>
-        <span className="font-medium text-yellow-600">
-          {shiftsForMonth.filter(s => !s.is_full_day).length}
-        </span>
-      </div>
-      <div className="flex justify-between text-sm pt-2 border-t">
-        <span className="text-gray-600">По графику админа:</span>
-        <span className="font-bold text-blue-600">{scheduleForMonth.length}</span>
-      </div>
-      <div className="flex justify-between text-sm">
-        <span className="text-gray-600">Отмечено фактически:</span>
-        <span className="font-medium text-green-600">
-          {scheduleForMonth.filter(s => dataManager?.getActualWorkLog(s.id)).length}
-        </span>
-      </div>
-    </div>
-  );
-  
-  // ========================================================================================
-  // RENDER ФУНКЦИИ - КОНТЕНТ ПО ВКЛАДКАМ (МОБИЛЬНАЯ ВЕРСИЯ)
-  // ========================================================================================
-  
-  /**
-   * Рендер контента в зависимости от активной вкладки (для мобильной версии)
-   */
-  const renderMobileContent = () => {
-    const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
 
+  const renderTabContent = () => {
     switch (activeTab) {
       case 'home':
         return (
-          <div className="space-y-4">
-            {/* Приветствие */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-              <h2 className="text-xl font-bold text-gray-800 mb-1">
-                {greeting || profile.full_name}
-              </h2>
-              <p className="text-gray-500 text-sm">
-                Возраст: {profile.age ?? 'Не указан'} • Ставка: {profile.base_hourly_rate || 250}₽/ч
-              </p>
+          <div className="space-y-6">
+            {/* Приветствие и статистика */}
+            <div className="grid grid-cols-1 gap-4">
+              <Card padding="lg">
+                <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+                  {greeting || `Здравствуйте, ${profile.full_name?.split(' ')[0]}!`}
+                </h2>
+                <div className="flex flex-wrap gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <div className="flex items-center gap-1.5">
+                    <Briefcase className="h-4 w-4" />
+                    <span>Возраст: {profile.age ?? 'Не указан'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4" />
+                    <span>Ставка: {profile.base_hourly_rate || 250}₽/ч</span>
+                  </div>
+                </div>
+                <div className="mt-4 text-center">
+                  <div className="text-4xl font-bold font-mono" style={{ color: 'var(--primary)' }}>
+                    {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: 'var(--text-subtle)' }}>
+                    {format(now, 'dd MMMM yyyy, EEEE', { locale: ru })}
+                  </div>
+                </div>
+              </Card>
+
+              <Card padding="md">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--success-light)' }}>
+                        <CheckCircle className="h-4 w-4" style={{ color: 'var(--success)' }} />
+                      </div>
+                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
+                    </div>
+                    <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                      {shiftsForMonth.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--info-light)' }}>
+                        <Calendar className="h-4 w-4" style={{ color: 'var(--info)' }} />
+                      </div>
+                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
+                    </div>
+                    <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                      {scheduleForMonth.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                        <Activity className="h-4 w-4" style={{ color: 'var(--primary)' }} />
+                      </div>
+                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Отработано</span>
+                    </div>
+                    <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                      {scheduleForMonth.filter(s => dataManager?.getActualWorkLog(s.id)).length}
+                    </span>
+                  </div>
+                </div>
+              </Card>
             </div>
 
-            {/* Текущее время */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 rounded-xl shadow-lg text-white">
-              <div className="text-3xl font-bold font-mono">
-                {now.toLocaleTimeString('ru-RU')}
+            {/* Приоритеты и цели */}
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+                  Приоритеты аттракционов
+                </h3>
               </div>
-              <div className="text-sm opacity-90 mt-1">
-                {now.toLocaleDateString('ru-RU', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
+              <div className="space-y-2">
+                {[1, 2, 3].map(level => {
+                  const priority = priorities.find(p => p.priority_level === level);
+                  const attractionIds = Array.isArray(priority?.attraction_ids) 
+                    ? priority.attraction_ids 
+                    : (priority?.attraction_ids ? [priority.attraction_ids] : []);
+                  
+                  const attractionNames = attractionIds
+                    .map(id => {
+                      const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+                      return attractions.find(a => a.id === numId)?.name || 'Неизвестный';
+                    })
+                    .join(', ') || 'Не задан';
+
+                  return (
+                    <div key={level} className="flex items-center justify-between py-2">
+                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                        {level}-й приоритет
+                      </span>
+                      <Badge variant={level === 1 ? 'success' : level === 2 ? 'warning' : 'info'}>
+                        {attractionNames}
+                      </Badge>
+                    </div>
+                  );
                 })}
               </div>
-            </div>
+            </Card>
 
-            {/* Сводка */}
-            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-              <h3 className="font-semibold text-blue-800 mb-3">
-                Сводка — {currentMonthLabel}
-              </h3>
-              {renderSummary()}
-            </div>
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+                  Цель для изучения
+                </h3>
+              </div>
 
-            {/* Приоритеты */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold flex items-center gap-2 mb-3">
-                <Star className="text-yellow-500" />
-                Приоритеты аттракционов
-              </h3>
-              {renderPriorities()}
-            </div>
+              {goalError && (
+                <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+                  {goalError}
+                </div>
+              )}
 
-            {/* Цель обучения */}
-            {renderStudyGoal()}
+              <select
+                value={selectedAttractionId || ''}
+                onChange={e => setSelectedAttractionId(Number(e.target.value))}
+                className="input mb-3"
+              >
+                <option value="">-- Выберите аттракцион --</option>
+                {availableAttractionsForGoal.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+
+              <Button
+                onClick={async () => {
+                  if (!dataManager || !selectedAttractionId) {
+                    setGoalError('Выберите аттракцион');
+                    return;
+                  }
+
+                  setSavingGoal(true);
+                  setGoalError('');
+
+                  const result = await dataManager.setStudyGoal(selectedAttractionId);
+
+                  if (result.success) {
+                    alert('Цель изучения сохранена');
+                    setUpdateTrigger(prev => prev + 1);
+                  } else {
+                    setGoalError(result.error || 'Ошибка сохранения');
+                  }
+
+                  setSavingGoal(false);
+                }}
+                disabled={savingGoal || !selectedAttractionId}
+                variant="primary"
+                size="sm"
+                loading={savingGoal}
+                className="w-full"
+              >
+                Сохранить цель
+              </Button>
+
+              {studyGoal && studyGoal.attraction && (
+                <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                  <p className="text-sm" style={{ color: 'var(--primary)' }}>
+                    <strong>Текущая цель:</strong> {studyGoal.attraction.name}
+                  </p>
+                </div>
+              )}
+            </Card>
           </div>
         );
 
       case 'calendar':
         return (
           <div className="space-y-4">
-            {/* Навигация по месяцам */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
-              <button
+            <div className="flex items-center justify-between">
+              <Button
                 onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <h3 className="text-lg font-semibold text-gray-800 capitalize">
+                variant="ghost"
+                size="sm"
+                icon={<ChevronLeft className="h-4 w-4" />}
+              />
+              <h3 className="text-lg font-semibold capitalize" style={{ color: 'var(--text)' }}>
                 {currentMonthLabel}
               </h3>
-              <button
+              <Button
                 onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
+                variant="ghost"
+                size="sm"
+                icon={<ChevronRight className="h-4 w-4" />}
+              />
             </div>
 
-            {/* Календарь */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-                <Calendar className="text-blue-500" />
-                Мои смены
+            <Card padding="md">
+              {renderCalendar()}
+            </Card>
+
+            <Card padding="md">
+              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>
+                Список смен
               </h3>
-              <div className="grid grid-cols-4 gap-2">
-                {renderMonthDays()}
-              </div>
-            </div>
-
-            {/* Таблица смен */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold mb-3">Список смен</h3>
               {renderShiftsTable()}
-            </div>
+            </Card>
           </div>
         );
 
       case 'schedule':
         return (
           <div className="space-y-4">
-            {/* Навигация по месяцам */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
-              <button
+            <div className="flex items-center justify-between">
+              <Button
                 onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <h3 className="text-lg font-semibold text-gray-800 capitalize">
+                variant="ghost"
+                size="sm"
+                icon={<ChevronLeft className="h-4 w-4" />}
+              />
+              <h3 className="text-lg font-semibold capitalize" style={{ color: 'var(--text)' }}>
                 {currentMonthLabel}
               </h3>
-              <button
+              <Button
                 onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
+                variant="ghost"
+                size="sm"
+                icon={<ChevronRight className="h-4 w-4" />}
+              />
             </div>
 
-            {/* График от админа */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold mb-3">График от администратора</h3>
-              {renderScheduleTable()}
-            </div>
-          </div>
-        );
-
-      case 'priorities':
-        return (
-          <div className="space-y-4">
-            {/* Приоритеты */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold flex items-center gap-2 mb-3">
-                <Star className="text-yellow-500" />
-                Приоритеты аттракционов
+            <Card padding="md">
+              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>
+                График от администратора
               </h3>
-              {renderPriorities()}
-            </div>
-
-            {/* Цель обучения */}
-            {renderStudyGoal()}
+              {renderScheduleTable()}
+            </Card>
           </div>
         );
 
       case 'salary':
         return (
-          <div className="space-y-4">
-            {renderSalaryBlock()}
-          </div>
+          <Card padding="md">
+            <div className="flex items-center gap-2 mb-4">
+              <DollarSign className="h-5 w-5" style={{ color: 'var(--success)' }} />
+              <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+                Расчёт зарплаты
+              </h3>
+            </div>
+            {renderSalary()}
+          </Card>
         );
 
       case 'form':
         return (
-          <div className="space-y-4">
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-                <FileText className="text-purple-500" />
+          <Card padding="md">
+            <div className="flex items-center gap-2 mb-4">
+              <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+              <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
                 Опрос сотрудника
               </h3>
-              <div className="relative h-[calc(100vh-200px)] overflow-hidden rounded-xl border border-gray-200">
+            </div>
+            <div className="relative h-[calc(100vh-250px)] overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+              <iframe
+                src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
+                className="absolute top-0 left-0 w-full h-full"
+                frameBorder="0"
+                title="Google Form"
+              >
+                Загрузка…
+              </iframe>
+            </div>
+          </Card>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // ========================================================================================
+  // ОСНОВНОЙ RENDER
+  // ========================================================================================
+
+  return (
+    <>
+      {/* ДЕСКТОПНАЯ ВЕРСИЯ */}
+      <div className="hidden md:block space-y-6">
+        {/* Приветствие и статистика */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card padding="lg" className="lg:col-span-2">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+                  {greeting || `Здравствуйте, ${profile.full_name?.split(' ')[0]}!`}
+                </h2>
+                <div className="flex flex-wrap gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <div className="flex items-center gap-1.5">
+                    <Briefcase className="h-4 w-4" />
+                    <span>Возраст: {profile.age ?? 'Не указан'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4" />
+                    <span>Ставка: {profile.base_hourly_rate || 250}₽/ч</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold font-mono" style={{ color: 'var(--primary)' }}>
+                  {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div className="text-xs mt-1" style={{ color: 'var(--text-subtle)' }}>
+                  {format(now, 'dd MMMM yyyy', { locale: ru })}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card padding="md">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--success-light)' }}>
+                    <CheckCircle className="h-4 w-4" style={{ color: 'var(--success)' }} />
+                  </div>
+                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
+                </div>
+                <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                  {shiftsForMonth.length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--info-light)' }}>
+                    <Calendar className="h-4 w-4" style={{ color: 'var(--info)' }} />
+                  </div>
+                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
+                </div>
+                <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                  {scheduleForMonth.length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                    <Activity className="h-4 w-4" style={{ color: 'var(--primary)' }} />
+                  </div>
+                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Отработано</span>
+                </div>
+                <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+                  {scheduleForMonth.filter(s => dataManager?.getActualWorkLog(s.id)).length}
+                </span>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Основная сетка */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Левая колонка - 2/3 */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Навигация по месяцам */}
+            <div className="flex items-center justify-between">
+              <Button
+                onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
+                variant="ghost"
+                icon={<ChevronLeft className="h-5 w-5" />}
+              />
+              <h3 className="text-xl font-semibold capitalize" style={{ color: 'var(--text)' }}>
+                {currentMonthLabel}
+              </h3>
+              <Button
+                onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
+                variant="ghost"
+                icon={<ChevronRight className="h-5 w-5" />}
+              />
+            </div>
+
+            {/* Календарь */}
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+                  Календарь смен
+                </h3>
+              </div>
+              {renderCalendar()}
+            </Card>
+
+            {/* Таблица смен */}
+            <Card padding="md">
+              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>
+                Мои смены (самозапись)
+              </h3>
+              {renderShiftsTable()}
+            </Card>
+
+            {/* Таблица расписания */}
+            <Card padding="md">
+              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>
+                График от администратора
+              </h3>
+              {renderScheduleTable()}
+            </Card>
+
+            {/* Зарплата */}
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <DollarSign className="h-5 w-5" style={{ color: 'var(--success)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+                  Расчёт зарплаты
+                </h3>
+              </div>
+              {renderSalary()}
+            </Card>
+          </div>
+
+          {/* Правая колонка - 1/3 */}
+          <div className="space-y-6">
+            {/* Приоритеты */}
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+                  Приоритеты
+                </h3>
+              </div>
+              <div className="space-y-2">
+                {[1, 2, 3].map(level => {
+                  const priority = priorities.find(p => p.priority_level === level);
+                  const attractionIds = Array.isArray(priority?.attraction_ids) 
+                    ? priority.attraction_ids 
+                    : (priority?.attraction_ids ? [priority.attraction_ids] : []);
+                  
+                  const attractionNames = attractionIds
+                    .map(id => {
+                      const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+                      return attractions.find(a => a.id === numId)?.name || 'Неизвестный';
+                    })
+                    .join(', ') || 'Не задан';
+
+                  return (
+                    <div key={level} className="flex items-center justify-between py-2">
+                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                        {level}-й приоритет
+                      </span>
+                      <Badge variant={level === 1 ? 'success' : level === 2 ? 'warning' : 'info'}>
+                        {attractionNames}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Цель обучения */}
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+                  Цель изучения
+                </h3>
+              </div>
+
+              {goalError && (
+                <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+                  {goalError}
+                </div>
+              )}
+
+              <select
+                value={selectedAttractionId || ''}
+                onChange={e => setSelectedAttractionId(Number(e.target.value))}
+                className="input mb-3"
+              >
+                <option value="">-- Выберите аттракцион --</option>
+                {availableAttractionsForGoal.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+
+              <Button
+                onClick={async () => {
+                  if (!dataManager || !selectedAttractionId) {
+                    setGoalError('Выберите аттракцион');
+                    return;
+                  }
+
+                  setSavingGoal(true);
+                  setGoalError('');
+
+                  const result = await dataManager.setStudyGoal(selectedAttractionId);
+
+                  if (result.success) {
+                    alert('Цель изучения сохранена');
+                    setUpdateTrigger(prev => prev + 1);
+                  } else {
+                    setGoalError(result.error || 'Ошибка сохранения');
+                  }
+
+                  setSavingGoal(false);
+                }}
+                disabled={savingGoal || !selectedAttractionId}
+                variant="primary"
+                size="sm"
+                loading={savingGoal}
+                className="w-full"
+              >
+                Сохранить цель
+              </Button>
+
+              {studyGoal && studyGoal.attraction && (
+                <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                  <p className="text-sm" style={{ color: 'var(--primary)' }}>
+                    <strong>Текущая цель:</strong> {studyGoal.attraction.name}
+                  </p>
+                </div>
+              )}
+            </Card>
+
+            {/* Опрос */}
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+                  Опрос сотрудника
+                </h3>
+              </div>
+              <div className="relative h-[500px] overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
                 <iframe
                   src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
                   className="absolute top-0 left-0 w-full h-full"
@@ -1239,551 +1593,272 @@ const renderPriorities = () => {
                   Загрузка…
                 </iframe>
               </div>
-            </div>
+            </Card>
           </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-  
-  // ========================================================================================
-  // СОСТОЯНИЕ ЗАГРУЗКИ
-  // ========================================================================================
-  
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="animate-spin text-blue-600 h-12 w-12 mx-auto mb-4" />
-          <p className="text-gray-600">Загрузка данных...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!dataManager) {
-    return (
-      <div className="flex justify-center items-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">Ошибка загрузки данных</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            Перезагрузить страницу
-          </button>
-        </div>
-      </div>
-    );
-  }
-  
-  // ========================================================================================
-  // ОСНОВНОЙ RENDER
-  // ========================================================================================
-  
-  const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
-
-  return (
-    <div className="bg-gray-50 text-gray-900 min-h-screen pb-20 md:pb-0">
-      {/* ====================================================================== */}
-      {/* ДЕСКТОПНАЯ ВЕРСИЯ */}
-      {/* ====================================================================== */}
-      <div className="hidden md:block">
-        <div className="max-w-7xl mx-auto px-4 pt-6">
-          {/* Шапка */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-1">
-                {greeting || profile.full_name}
-              </h2>
-              <p className="text-gray-500 text-sm">
-                {profile.full_name} • Возраст: {profile.age ?? 'Не указан'} • 
-                Ставка: {profile.base_hourly_rate || 250}₽/ч
-              </p>
-            </div>
-            <div className="text-right mt-4 md:mt-0">
-              <div className="text-2xl font-mono text-blue-600 font-bold">
-                {now.toLocaleTimeString('ru-RU')}
-              </div>
-              <div className="text-gray-500 text-sm">
-                {now.toLocaleDateString('ru-RU', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Навигация по месяцам */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6 flex justify-between items-center">
-            <button
-              onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
-              className="p-2 hover:bg-gray-100 rounded-lg transition"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <h3 className="text-lg font-semibold text-gray-800 capitalize">
-              {currentMonthLabel}
-            </h3>
-            <button
-              onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
-              className="p-2 hover:bg-gray-100 rounded-lg transition"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
-
-          {/* Основная сетка */}
-          <div className="md:grid md:grid-cols-3 md:gap-6">
-            {/* Левая колонка - 2/3 */}
-            <div className="md:col-span-2 space-y-6">
-              {/* Календарь */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-                  <Calendar className="text-blue-500" />
-                  Календарь — {currentMonthLabel}
-                </h3>
-                <div className="grid grid-cols-7 gap-2">
-                  {renderMonthDays()}
-                </div>
-              </div>
-
-              {/* Таблица смен самозаписи */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold mb-4">Мои смены (самозапись)</h3>
-                {renderShiftsTable()}
-              </div>
-
-              {/* Таблица расписания */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold mb-4">График от администратора</h3>
-                {renderScheduleTable()}
-              </div>
-
-              {/* Блок зарплаты */}
-              {renderSalaryBlock()}
-            </div>
-
-            {/* Правая колонка - 1/3 */}
-            <div className="space-y-6 mt-6 md:mt-0">
-              {/* Приоритеты */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-                  <Star className="text-yellow-500" />
-                  Приоритеты аттракционов
-                </h3>
-                {renderPriorities()}
-              </div>
-
-              {/* Цель обучения */}
-              {renderStudyGoal()}
-
-              {/* Сводка */}
-              <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-                <h3 className="font-semibold text-blue-800 mb-4">
-                  Сводка — {currentMonthLabel}
-                </h3>
-                {renderSummary()}
-              </div>
-
-              {/* Опрос */}
-              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <h3 className="text-lg font-bold flex items-center gap-2 mb-4">
-                  <FileText className="text-purple-500" />
-                  Опрос сотрудника
-                </h3>
-                <div className="relative h-[590px] overflow-hidden rounded-xl border border-gray-200">
-                  <iframe
-                    src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
-                    className="absolute top-0 left-0 w-full h-full"
-                    frameBorder="0"
-                    title="Google Form"
-                  >
-                    Загрузка…
-                  </iframe>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <footer className="mt-12 mb-8 text-center text-xs text-gray-400">
-            <p>
-              Hand-coded by{' '}
-              <strong>
-                <a
-                  href="https://vk.com/albars_studio"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  AlBars
-                </a>
-              </strong>{' '}
-              • Vite build:{' '}
-              <span className="text-green-500 font-mono font-bold">{ping}</span> ms • 
-              Supabase • Host: GitHub Pages
-            </p>
-            <p className="italic mt-1">
-              Ни один искусственный интеллект не пострадал при создании
-            </p>
-          </footer>
         </div>
       </div>
 
-      {/* ====================================================================== */}
       {/* МОБИЛЬНАЯ ВЕРСИЯ */}
-      {/* ====================================================================== */}
-      <div className="md:hidden">
-        <div className="px-4 pt-4 pb-20">
-          {renderMobileContent()}
-        </div>
+      <div className="md:hidden pb-20">
+        {renderTabContent()}
 
         {/* Мобильная навигация */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+        <nav 
+          className="fixed bottom-0 left-0 right-0 z-50 border-t safe-area-inset-bottom"
+          style={{ 
+            backgroundColor: 'var(--surface)',
+            borderColor: 'var(--border)'
+          }}
+        >
           <div className="grid grid-cols-5 h-16">
-            <button
-              onClick={() => setActiveTab('home')}
-              className={`flex flex-col items-center justify-center transition ${
-                activeTab === 'home' 
-                  ? 'text-blue-600 bg-blue-50' 
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <Home className="h-5 w-5" />
-              <span className="text-xs mt-1">Главная</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('calendar')}
-              className={`flex flex-col items-center justify-center transition ${
-                activeTab === 'calendar' 
-                  ? 'text-blue-600 bg-blue-50' 
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <Calendar className="h-5 w-5" />
-              <span className="text-xs mt-1">Календарь</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('schedule')}
-              className={`flex flex-col items-center justify-center transition ${
-                activeTab === 'schedule' 
-                  ? 'text-blue-600 bg-blue-50' 
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <Clock className="h-5 w-5" />
-              <span className="text-xs mt-1">График</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('salary')}
-              className={`flex flex-col items-center justify-center transition ${
-                activeTab === 'salary' 
-                  ? 'text-blue-600 bg-blue-50' 
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <DollarSign className="h-5 w-5" />
-              <span className="text-xs mt-1">Зарплата</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('form')}
-              className={`flex flex-col items-center justify-center transition ${
-                activeTab === 'form' 
-                  ? 'text-blue-600 bg-blue-50' 
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              <FileText className="h-5 w-5" />
-              <span className="text-xs mt-1">Опрос</span>
-            </button>
+            {[
+              { id: 'home' as const, icon: Home, label: 'Главная' },
+              { id: 'calendar' as const, icon: Calendar, label: 'Календарь' },
+              { id: 'schedule' as const, icon: Clock, label: 'График' },
+              { id: 'salary' as const, icon: DollarSign, label: 'Зарплата' },
+              { id: 'form' as const, icon: FileText, label: 'Опрос' },
+            ].map(({ id, icon: Icon, label }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className="flex flex-col items-center justify-center transition-all"
+                style={{
+                  backgroundColor: activeTab === id ? 'var(--primary-light)' : 'transparent',
+                  color: activeTab === id ? 'var(--primary)' : 'var(--text-subtle)',
+                }}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-xs mt-1">{label}</span>
+              </button>
+            ))}
           </div>
         </nav>
       </div>
 
-      {/* ====================================================================== */}
-      {/* МОДАЛЬНЫЕ ОКНА */}
-      {/* ====================================================================== */}
-      
-      {/* Модалка добавления смены */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-2xl w-full max-w-md relative max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setIsAddModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
+      {/* ========================================
+          МОДАЛЬНЫЕ ОКНА
+          ======================================== */}
 
-            <h3 className="text-xl font-bold mb-4">
-              Смена на {formatDateStr(modalDate)}
-            </h3>
-
-            {modalError && (
-              <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4 text-sm">
-                {modalError}
-              </div>
-            )}
-
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => setIsFullDayModal(true)}
-                className={`flex-1 py-2 rounded-lg font-medium transition ${
-                  isFullDayModal
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Полная
-              </button>
-              <button
-                onClick={() => setIsFullDayModal(false)}
-                className={`flex-1 py-2 rounded-lg font-medium transition ${
-                  !isFullDayModal
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Неполная
-              </button>
+      {/* Добавление смены */}
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title={`Смена на ${formatDateStr(modalDate)}`}
+      >
+        <div className="p-6 space-y-4">
+          {modalError && (
+            <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+              {modalError}
             </div>
+          )}
 
-            {!isFullDayModal && (
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Начало
-                  </label>
-                  <select
-                    value={modalStartTime}
-                    onChange={e => setModalStartTime(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {START_TIMES.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Конец
-                  </label>
-                  <select
-                    value={modalEndTime}
-                    onChange={e => setModalEndTime(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {END_TIMES.filter(t => t > modalStartTime).map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setIsFullDayModal(true)}
+              variant={isFullDayModal ? 'primary' : 'secondary'}
+              className="flex-1"
+            >
+              Полная
+            </Button>
+            <Button
+              onClick={() => setIsFullDayModal(false)}
+              variant={!isFullDayModal ? 'primary' : 'secondary'}
+              className="flex-1"
+            >
+              Неполная
+            </Button>
+          </div>
+
+          {!isFullDayModal && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
+                  Начало
+                </label>
+                <select
+                  value={modalStartTime}
+                  onChange={e => setModalStartTime(e.target.value)}
+                  className="input"
+                >
+                  {START_TIMES.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
-            )}
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
+                  Конец
+                </label>
+                <select
+                  value={modalEndTime}
+                  onChange={e => setModalEndTime(e.target.value)}
+                  className="input"
+                >
+                  {END_TIMES.filter(t => t > modalStartTime).map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
-            <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Комментарий (необязательно)
-              </label>
-              <textarea
-                value={modalComment}
-                onChange={e => setModalComment(e.target.value)}
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                placeholder="Напишите комментарий..."
-                maxLength={4096}
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {modalComment.length} / 4096 символов
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
+              Комментарий (необязательно)
+            </label>
+            <textarea
+              value={modalComment}
+              onChange={e => setModalComment(e.target.value)}
+              rows={3}
+              className="input resize-none"
+              placeholder="Напишите комментарий..."
+              maxLength={4096}
+            />
+            <p className="text-xs mt-1" style={{ color: 'var(--text-subtle)' }}>
+              {modalComment.length} / 4096 символов
+            </p>
+          </div>
+
+          <div className="text-xs p-2 rounded-lg" style={{ backgroundColor: 'var(--warning-light)', color: 'var(--warning)' }}>
+            ⚠️ Комментарий нельзя будет изменить после создания.
+          </div>
+
+          <Button
+            onClick={handleAddShift}
+            disabled={savingShift}
+            variant="primary"
+            size="lg"
+            loading={savingShift}
+            className="w-full"
+          >
+            Добавить смену
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Просмотр смены */}
+      <Modal
+        isOpen={isViewModalOpen}
+        onClose={() => setIsViewModalOpen(false)}
+        title="Детали смены"
+      >
+        {viewShift && (
+          <div className="p-6 space-y-4">
+            <div>
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Дата:</span>
+              <p className="font-medium" style={{ color: 'var(--text)' }}>
+                {format(parseISO(viewShift.work_date), 'dd MMMM yyyy (EEEE)', { locale: ru })}
               </p>
             </div>
 
-            <p className="text-xs text-gray-500 mb-4">
-              ⚠️ Комментарий нельзя будет изменить после создания.
-            </p>
-
-            <button
-              onClick={handleAddShift}
-              disabled={savingShift}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {savingShift ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Добавление...
-                </span>
-              ) : (
-                'Добавить смену'
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Модалка просмотра смены */}
-      {isViewModalOpen && viewShift && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-2xl w-full max-w-md relative">
-            <button
-              onClick={() => setIsViewModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <h3 className="text-xl font-bold mb-4">Детали смены</h3>
-
-            <div className="space-y-3">
-              <div>
-                <span className="text-sm text-gray-600">Дата:</span>
-                <p className="font-medium">
-                  {format(parseISO(viewShift.work_date), 'dd MMMM yyyy (EEEE)', { locale: ru })}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-sm text-gray-600">Тип:</span>
-                <p>
-                  {viewShift.is_full_day ? (
-                    <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                      Полная смена
-                    </span>
-                  ) : (
-                    <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
-                      Неполная смена
-                    </span>
-                  )}
-                </p>
-              </div>
-
-              {!viewShift.is_full_day && (
-                <div>
-                  <span className="text-sm text-gray-600">Время:</span>
-                  <p className="font-medium">
-                    {viewShift.start_time?.slice(0, 5)} – {viewShift.end_time?.slice(0, 5)}
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <span className="text-sm text-gray-600">Комментарий:</span>
-                <p className="font-medium">
-                  {viewShift.comment || <span className="text-gray-400">Нет комментария</span>}
-                </p>
+            <div>
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Тип:</span>
+              <div className="mt-1">
+                <Badge variant={viewShift.is_full_day ? 'success' : 'warning'}>
+                  {viewShift.is_full_day ? 'Полная смена' : 'Неполная смена'}
+                </Badge>
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
+            {!viewShift.is_full_day && (
+              <div>
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Время:</span>
+                <p className="font-medium" style={{ color: 'var(--text)' }}>
+                  {viewShift.start_time?.slice(0, 5)} – {viewShift.end_time?.slice(0, 5)}
+                </p>
+              </div>
+            )}
+
+            <div>
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Комментарий:</span>
+              <p className="font-medium" style={{ color: 'var(--text)' }}>
+                {viewShift.comment || <span style={{ color: 'var(--text-subtle)' }}>Нет комментария</span>}
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <Button
                 onClick={() => setIsViewModalOpen(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                variant="secondary"
+                className="flex-1"
               >
                 Закрыть
-              </button>
+              </Button>
               {dataManager?.canDeleteAvailability(viewShift).allowed && (
-                <button
+                <Button
                   onClick={() => handleDeleteShift(viewShift)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                  variant="danger"
+                  className="flex-1"
                 >
                   Удалить
-                </button>
+                </Button>
               )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
-      {/* Модалка отметки фактического времени */}
-      {isTimeLogModalOpen && selectedSchedule && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 rounded-2xl w-full max-w-md relative">
-            <button
-              onClick={() => setIsTimeLogModalOpen(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <h3 className="text-xl font-bold mb-2">Отметка фактического времени</h3>
-            <p className="text-sm text-gray-600 mb-4">
+      {/* Отметка времени */}
+      <Modal
+        isOpen={isTimeLogModalOpen}
+        onClose={() => setIsTimeLogModalOpen(false)}
+        title="Отметка фактического времени"
+      >
+        {selectedSchedule && (
+          <div className="p-6 space-y-4">
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
               {format(parseISO(selectedSchedule.work_date), 'dd.MM.yyyy')} –{' '}
               {dataManager?.getAttraction(selectedSchedule.attraction_id)?.name}
             </p>
 
             {timeLogError && (
-              <div className="bg-red-50 text-red-700 p-3 rounded-lg mb-4 text-sm">
+              <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
                 {timeLogError}
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
                   Время прихода
                 </label>
                 <input
                   type="time"
                   value={actualStart}
                   onChange={e => setActualStart(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="input"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
                   Время ухода
                 </label>
                 <input
                   type="time"
                   value={actualEnd}
                   onChange={e => setActualEnd(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="input"
                 />
               </div>
             </div>
 
-            <div className="bg-blue-50 p-3 rounded-lg mb-4 text-sm text-blue-800">
+            <div className="text-sm p-3 rounded-lg" style={{ backgroundColor: 'var(--info-light)', color: 'var(--info)' }}>
               ℹ️ Оплата начинается с 11:00. Если пришли раньше, время до 11:00 не оплачивается.
             </div>
 
-            <button
+            <Button
               onClick={handleSaveTimeLog}
               disabled={savingTimeLog}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
+              size="lg"
+              loading={savingTimeLog}
+              className="w-full"
             >
-              {savingTimeLog ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Сохранение...
-                </span>
-              ) : (
-                'Сохранить'
-              )}
-            </button>
+              Сохранить
+            </Button>
           </div>
-        </div>
-      )}
-
-      {/* ====================================================================== */}
-      {/* СТИЛИ */}
-      {/* ====================================================================== */}
-      <style>{`
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
-    </div>
+        )}
+      </Modal>
+    </>
   );
 }
