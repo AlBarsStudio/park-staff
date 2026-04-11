@@ -1,1 +1,523 @@
 @import "tailwindcss";
+
+/* ============================================================
+   🎨 DESIGN SYSTEM - CSS Variables
+   ============================================================ */
+
+@layer base {
+  :root {
+    /* ========================================
+       PRIMARY COLORS (Orange Accent)
+       ======================================== */
+    --color-primary-50: #fff7ed;
+    --color-primary-100: #ffedd5;
+    --color-primary-200: #fed7aa;
+    --color-primary-300: #fdba74;
+    --color-primary-400: #fb923c;
+    --color-primary-500: #f97316;  /* Main Orange */
+    --color-primary-600: #ea580c;
+    --color-primary-700: #c2410c;
+    --color-primary-800: #9a3412;
+    --color-primary-900: #7c2d12;
+
+    /* ========================================
+       NEUTRAL COLORS
+       ======================================== */
+    --color-neutral-50: #fafafa;
+    --color-neutral-100: #f5f5f5;
+    --color-neutral-200: #e5e5e5;
+    --color-neutral-300: #d4d4d4;
+    --color-neutral-400: #a3a3a3;
+    --color-neutral-500: #737373;
+    --color-neutral-600: #525252;
+    --color-neutral-700: #404040;
+    --color-neutral-800: #262626;
+    --color-neutral-900: #171717;
+
+    /* ========================================
+       SEMANTIC COLORS
+       ======================================== */
+    --color-success-light: #d1fae5;
+    --color-success: #10b981;
+    --color-success-dark: #059669;
+
+    --color-warning-light: #fef3c7;
+    --color-warning: #f59e0b;
+    --color-warning-dark: #d97706;
+
+    --color-error-light: #fee2e2;
+    --color-error: #ef4444;
+    --color-error-dark: #dc2626;
+
+    --color-info-light: #dbeafe;
+    --color-info: #3b82f6;
+    --color-info-dark: #2563eb;
+
+    /* ========================================
+       LIGHT THEME
+       ======================================== */
+    --bg-primary: var(--color-neutral-50);
+    --bg-secondary: #ffffff;
+    --bg-tertiary: var(--color-neutral-100);
+    
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --surface-overlay: rgba(0, 0, 0, 0.5);
+
+    --border-primary: var(--color-neutral-200);
+    --border-secondary: var(--color-neutral-300);
+    --border-focus: var(--color-primary-500);
+
+    --text-primary: var(--color-neutral-900);
+    --text-secondary: var(--color-neutral-600);
+    --text-tertiary: var(--color-neutral-400);
+    --text-inverse: #ffffff;
+
+    --accent: var(--color-primary-500);
+    --accent-hover: var(--color-primary-600);
+    --accent-light: var(--color-primary-50);
+
+    /* ========================================
+       SHADOWS
+       ======================================== */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+    /* ========================================
+       SPACING (8px base)
+       ======================================== */
+    --space-xs: 0.5rem;   /* 8px */
+    --space-sm: 0.75rem;  /* 12px */
+    --space-md: 1rem;     /* 16px */
+    --space-lg: 1.5rem;   /* 24px */
+    --space-xl: 2rem;     /* 32px */
+    --space-2xl: 3rem;    /* 48px */
+
+    /* ========================================
+       BORDER RADIUS
+       ======================================== */
+    --radius-sm: 0.375rem;  /* 6px */
+    --radius-md: 0.5rem;    /* 8px */
+    --radius-lg: 0.75rem;   /* 12px */
+    --radius-xl: 1rem;      /* 16px */
+    --radius-2xl: 1.5rem;   /* 24px */
+    --radius-full: 9999px;
+
+    /* ========================================
+       TRANSITIONS
+       ======================================== */
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ============================================================
+     🌙 DARK THEME
+     ============================================================ */
+  .dark {
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #171717;
+    --bg-tertiary: #262626;
+    
+    --surface: #171717;
+    --surface-raised: #262626;
+    --surface-overlay: rgba(0, 0, 0, 0.8);
+
+    --border-primary: #404040;
+    --border-secondary: #525252;
+    --border-focus: var(--color-primary-500);
+
+    --text-primary: #fafafa;
+    --text-secondary: #a3a3a3;
+    --text-tertiary: #737373;
+    --text-inverse: #0a0a0a;
+
+    --accent: var(--color-primary-500);
+    --accent-hover: var(--color-primary-400);
+    --accent-light: var(--color-primary-900);
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+    --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  }
+
+  /* ============================================================
+     🎯 BASE STYLES
+     ============================================================ */
+  * {
+    @apply border-border-primary;
+  }
+
+  html {
+    @apply antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-bg-primary text-text-primary;
+    @apply transition-colors duration-200;
+    font-feature-settings: 'cv11', 'ss01';
+    font-variation-settings: 'opsz' 32;
+  }
+
+  /* ============================================================
+     📱 SCROLLBAR CUSTOMIZATION
+     ============================================================ */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-neutral-300) transparent;
+  }
+
+  .dark * {
+    scrollbar-color: var(--color-neutral-700) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    @apply bg-neutral-300 rounded-full;
+  }
+
+  .dark *::-webkit-scrollbar-thumb {
+    @apply bg-neutral-700;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    @apply bg-neutral-400;
+  }
+
+  .dark *::-webkit-scrollbar-thumb:hover {
+    @apply bg-neutral-600;
+  }
+
+  /* Hide scrollbar utility */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ============================================================
+     ✨ ANIMATIONS
+     ============================================================ */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(10px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideDown {
+    from {
+      transform: translateY(-10px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn var(--transition-base) ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp var(--transition-base) ease-out;
+  }
+
+  .animate-slide-down {
+    animation: slideDown var(--transition-base) ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn var(--transition-base) ease-out;
+  }
+
+  /* ============================================================
+     🎨 FOCUS STYLES
+     ============================================================ */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-bg-primary;
+    @apply transition-shadow duration-200;
+  }
+
+  button:focus-visible,
+  a:focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-bg-primary;
+  }
+
+  /* ============================================================
+     📱 MOBILE OPTIMIZATIONS
+     ============================================================ */
+  @media (max-width: 768px) {
+    /* Larger touch targets */
+    button,
+    a,
+    input[type="checkbox"],
+    input[type="radio"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    /* Prevent zoom on input focus */
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  /* ============================================================
+     🎯 UTILITY CLASSES
+     ============================================================ */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .glass-effect {
+    @apply backdrop-blur-md bg-surface/80 border border-border-primary;
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%);
+  }
+
+  .gradient-success {
+    background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-dark) 100%);
+  }
+
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* ============================================================
+   🧩 COMPONENT LAYER
+   ============================================================ */
+@layer components {
+  /* ========================================
+     BUTTONS
+     ======================================== */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply px-4 py-2.5 rounded-lg;
+    @apply font-medium text-sm;
+    @apply transition-all duration-200;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none;
+    @apply select-none;
+  }
+
+  .btn-primary {
+    @apply btn;
+    @apply bg-accent text-text-inverse;
+    @apply hover:bg-accent-hover active:scale-95;
+    @apply shadow-md hover:shadow-lg;
+    @apply focus-visible:ring-accent;
+  }
+
+  .btn-secondary {
+    @apply btn;
+    @apply bg-surface border border-border-primary text-text-primary;
+    @apply hover:bg-bg-tertiary active:scale-95;
+    @apply shadow-sm hover:shadow-md;
+    @apply focus-visible:ring-accent;
+  }
+
+  .btn-ghost {
+    @apply btn;
+    @apply text-text-secondary;
+    @apply hover:bg-bg-tertiary hover:text-text-primary active:scale-95;
+    @apply focus-visible:ring-accent;
+  }
+
+  .btn-danger {
+    @apply btn;
+    @apply bg-error text-white;
+    @apply hover:bg-error-dark active:scale-95;
+    @apply shadow-md hover:shadow-lg;
+    @apply focus-visible:ring-error;
+  }
+
+  .btn-success {
+    @apply btn;
+    @apply bg-success text-white;
+    @apply hover:bg-success-dark active:scale-95;
+    @apply shadow-md hover:shadow-lg;
+    @apply focus-visible:ring-success;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  /* ========================================
+     CARDS
+     ======================================== */
+  .card {
+    @apply bg-surface border border-border-primary rounded-xl;
+    @apply shadow-md;
+    @apply transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card;
+    @apply hover:shadow-lg hover:border-border-secondary;
+    @apply cursor-pointer;
+  }
+
+  .card-interactive {
+    @apply card;
+    @apply hover:shadow-lg hover:border-accent;
+    @apply active:scale-[0.98];
+    @apply cursor-pointer;
+  }
+
+  /* ========================================
+     INPUTS
+     ======================================== */
+  .input {
+    @apply w-full px-4 py-2.5 rounded-lg;
+    @apply bg-surface border border-border-primary;
+    @apply text-text-primary placeholder:text-text-tertiary;
+    @apply transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .input-error {
+    @apply input;
+    @apply border-error focus:ring-error;
+  }
+
+  /* ========================================
+     BADGES
+     ======================================== */
+  .badge {
+    @apply inline-flex items-center gap-1;
+    @apply px-2.5 py-1 rounded-full;
+    @apply text-xs font-medium;
+    @apply transition-colors duration-200;
+  }
+
+  .badge-primary {
+    @apply badge;
+    @apply bg-accent-light text-accent;
+  }
+
+  .badge-success {
+    @apply badge;
+    @apply bg-success-light text-success-dark;
+  }
+
+  .badge-warning {
+    @apply badge;
+    @apply bg-warning-light text-warning-dark;
+  }
+
+  .badge-error {
+    @apply badge;
+    @apply bg-error-light text-error-dark;
+  }
+
+  .badge-info {
+    @apply badge;
+    @apply bg-info-light text-info-dark;
+  }
+
+  .badge-neutral {
+    @apply badge;
+    @apply bg-neutral-100 text-neutral-700;
+  }
+
+  .dark .badge-neutral {
+    @apply bg-neutral-800 text-neutral-300;
+  }
+
+  /* ========================================
+     LOADING STATES
+     ======================================== */
+  .skeleton {
+    @apply bg-neutral-200 dark:bg-neutral-800 rounded-lg;
+    @apply animate-pulse;
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--bg-tertiary) 0%,
+      var(--border-primary) 50%,
+      var(--bg-tertiary) 100%
+    );
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  /* ========================================
+     DIVIDERS
+     ======================================== */
+  .divider {
+    @apply h-px bg-border-primary;
+  }
+
+  .divider-vertical {
+    @apply w-px bg-border-primary;
+  }
+}
