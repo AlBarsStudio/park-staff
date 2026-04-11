@@ -37,6 +37,11 @@ import {
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Employee, Attraction, ScheduleAssignment } from '../lib/DatabaseService';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Badge } from './ui/Badge';
+import { Input } from './ui/Input';
+import { cn } from '../utils/cn';
 
 // ============================================================
 // Типы
@@ -121,7 +126,6 @@ export function ScheduleView({
         end: addDays(currentWeekStart, 6),
       });
     } else {
-      // month
       const start = startOfMonth(currentMonth);
       const end = endOfMonth(currentMonth);
       return eachDayOfInterval({ start, end });
@@ -129,7 +133,7 @@ export function ScheduleView({
   }, [viewMode, currentDate, currentMonth, currentWeekStart]);
 
   // ============================================================
-  // Фильтрация назначений по датам
+  // Фильтрация назначений
   // ============================================================
   const filteredAssignments = useMemo(() => {
     const startDate = format(displayDays[0], 'yyyy-MM-dd');
@@ -139,12 +143,10 @@ export function ScheduleView({
       (a) => a.work_date >= startDate && a.work_date <= endDate
     );
 
-    // Фильтр по выбранным аттракционам
     if (selectedAttractionIds.size > 0) {
       filtered = filtered.filter((a) => selectedAttractionIds.has(a.attraction_id));
     }
 
-    // Фильтр по поиску сотрудника
     if (employeeSearchQuery.trim()) {
       const query = employeeSearchQuery.toLowerCase();
       const matchingEmployeeIds = employees
@@ -164,7 +166,7 @@ export function ScheduleView({
   ]);
 
   // ============================================================
-  // Группировка данных по аттракционам и датам
+  // Группировка данных
   // ============================================================
   const scheduleByAttractionAndDate = useMemo(() => {
     const grouped = new Map<number, Map<string, ScheduleAssignment[]>>();
@@ -254,7 +256,7 @@ export function ScheduleView({
   const hasActiveFilters = selectedAttractionIds.size > 0 || employeeSearchQuery.trim() !== '';
 
   // ============================================================
-  // Формирование заголовка периода
+  // Формирование заголовка
   // ============================================================
   const getPeriodTitle = () => {
     if (viewMode === 'day') {
@@ -271,23 +273,14 @@ export function ScheduleView({
     }
   };
 
-  // ============================================================
-  // Получение аттракционов для отображения
-  // ============================================================
   const displayAttractions = useMemo(() => {
-    // Если есть фильтр, показываем только выбранные
     if (selectedAttractionIds.size > 0) {
       return attractions.filter((attr) => selectedAttractionIds.has(attr.id));
     }
-    // Иначе показываем все аттракционы
     return attractions;
   }, [attractions, selectedAttractionIds]);
 
-  // ============================================================
-  // Экспорт данных (заглушка для будущей реализации)
-  // ============================================================
   const handleExport = () => {
-    // TODO: Реализовать экспорт в Excel
     alert('Функция экспорта будет добавлена в следующей версии');
   };
 
@@ -297,189 +290,164 @@ export function ScheduleView({
   return (
     <div className="space-y-6">
       {/* ========================================== */}
-      {/* Шапка с навигацией и статистикой */}
+      {/* Шапка с навигацией */}
       {/* ========================================== */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl shadow-lg p-6 text-white">
+      <Card 
+        className="p-6"
+        style={{ 
+          background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
+          color: 'white',
+          border: 'none'
+        }}
+      >
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
           {/* Навигация */}
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handlePrevious}
-              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition"
+              icon={<ChevronLeft className="h-5 w-5" />}
+              className="bg-white/10 hover:bg-white/20 text-white border-none"
               title="Предыдущий период"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
+            />
 
             <div className="flex flex-col items-center min-w-[280px]">
               <h2 className="text-2xl font-bold capitalize">{getPeriodTitle()}</h2>
               <button
                 onClick={handleToday}
-                className="text-sm text-blue-100 hover:text-white transition mt-1"
+                className="text-sm hover:underline mt-1 opacity-90"
               >
                 Сегодня
               </button>
             </div>
 
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleNext}
-              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition"
+              icon={<ChevronRight className="h-5 w-5" />}
+              className="bg-white/10 hover:bg-white/20 text-white border-none"
               title="Следующий период"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            />
           </div>
 
           {/* Кнопки режимов */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setViewMode('day');
-                setCurrentDate(new Date());
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                viewMode === 'day'
-                  ? 'bg-white text-blue-600 shadow-md'
-                  : 'bg-white/10 hover:bg-white/20'
-              }`}
-            >
-              День
-            </button>
-            <button
-              onClick={() => {
-                setViewMode('week');
-                setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                viewMode === 'week'
-                  ? 'bg-white text-blue-600 shadow-md'
-                  : 'bg-white/10 hover:bg-white/20'
-              }`}
-            >
-              Неделя
-            </button>
-            <button
-              onClick={() => {
-                setViewMode('month');
-                setCurrentMonth(new Date());
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                viewMode === 'month'
-                  ? 'bg-white text-blue-600 shadow-md'
-                  : 'bg-white/10 hover:bg-white/20'
-              }`}
-            >
-              Месяц
-            </button>
+          <div className="flex items-center gap-2 p-1 rounded-lg" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+            {(['day', 'week', 'month'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => {
+                  setViewMode(mode);
+                  if (mode === 'day') setCurrentDate(new Date());
+                  if (mode === 'week') setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
+                  if (mode === 'month') setCurrentMonth(new Date());
+                }}
+                className={cn(
+                  'px-4 py-2 rounded-lg text-sm font-medium transition',
+                  viewMode === mode
+                    ? 'bg-white shadow-md'
+                    : 'text-white hover:bg-white/10'
+                )}
+                style={viewMode === mode ? { color: 'var(--primary)' } : {}}
+              >
+                {mode === 'day' ? 'День' : mode === 'week' ? 'Неделя' : 'Месяц'}
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Статистика */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
-                <Calendar className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-blue-100">Всего смен</p>
-                <p className="text-2xl font-bold">{statistics.totalShifts}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
-                <Users className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-blue-100">Сотрудников</p>
-                <p className="text-2xl font-bold">{statistics.uniqueEmployees}</p>
+          {[
+            { icon: Calendar, label: 'Всего смен', value: statistics.totalShifts },
+            { icon: Users, label: 'Сотрудников', value: statistics.uniqueEmployees },
+            { icon: Calendar, label: 'Аттракционов', value: statistics.workingAttractions },
+          ].map((stat, index) => (
+            <div
+              key={index}
+              className="rounded-lg p-4 backdrop-blur-sm"
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <stat.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm opacity-90">{stat.label}</p>
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
-                <Calendar className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-blue-100">Аттракционов</p>
-                <p className="text-2xl font-bold">{statistics.workingAttractions}</p>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
-      </div>
+      </Card>
 
       {/* ========================================== */}
       {/* Панель инструментов */}
       {/* ========================================== */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <Card>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          {/* Поиск по сотрудникам */}
+          {/* Поиск */}
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
+            <Input
               type="text"
               placeholder="Поиск сотрудника..."
               value={employeeSearchQuery}
               onChange={(e) => setEmployeeSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              icon={<Search className="h-4 w-4" style={{ color: 'var(--text-subtle)' }} />}
             />
             {employeeSearchQuery && (
               <button
                 onClick={() => setEmployeeSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 transition"
+                style={{ color: 'var(--text-subtle)' }}
               >
                 <X className="h-4 w-4" />
               </button>
             )}
           </div>
 
-          {/* Кнопки действий */}
+          {/* Кнопки */}
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              variant={hasActiveFilters ? 'primary' : 'secondary'}
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                hasActiveFilters
-                  ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent'
-              }`}
+              icon={<Filter className="h-4 w-4" />}
             >
-              <Filter className="h-4 w-4" />
               Фильтры
               {hasActiveFilters && (
-                <span className="ml-1 px-2 py-0.5 bg-blue-600 text-white rounded-full text-xs">
+                <Badge variant="error" className="ml-1">
                   {selectedAttractionIds.size + (employeeSearchQuery ? 1 : 0)}
-                </span>
+                </Badge>
               )}
-            </button>
+            </Button>
 
-            <button
+            <Button
+              variant="success"
               onClick={handleExport}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition"
+              icon={<Download className="h-4 w-4" />}
             >
-              <Download className="h-4 w-4" />
               Экспорт
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Панель фильтров */}
         {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
             <div className="flex items-center justify-between mb-3">
-              <h4 className="font-medium text-gray-900">Фильтр по аттракционам</h4>
+              <h4 className="font-medium" style={{ color: 'var(--text)' }}>
+                Фильтр по аттракционам
+              </h4>
               {hasActiveFilters && (
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={clearFilters}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                 >
                   Сбросить всё
-                </button>
+                </Button>
               )}
             </div>
 
@@ -487,59 +455,75 @@ export function ScheduleView({
               {attractions.map((attr) => (
                 <label
                   key={attr.id}
-                  className={`flex items-center gap-2 p-3 border-2 rounded-lg cursor-pointer transition ${
+                  className={cn(
+                    'flex items-center gap-2 p-3 border-2 rounded-lg cursor-pointer transition',
                     selectedAttractionIds.has(attr.id)
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
+                      ? 'bg-primary-light'
+                      : 'hover:bg-tertiary'
+                  )}
+                  style={{
+                    borderColor: selectedAttractionIds.has(attr.id) ? 'var(--primary)' : 'var(--border)',
+                  }}
                 >
                   <input
                     type="checkbox"
                     checked={selectedAttractionIds.has(attr.id)}
                     onChange={() => toggleAttractionFilter(attr.id)}
-                    className="rounded text-blue-600 focus:ring-blue-500"
+                    className="rounded"
+                    style={{ accentColor: 'var(--primary)' }}
                   />
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-gray-900 truncate block">
+                    <span className="text-sm font-medium truncate block" style={{ color: 'var(--text)' }}>
                       {attr.name}
                     </span>
-                    <span className="text-xs text-gray-500">×{attr.coefficient}</span>
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      ×{attr.coefficient}
+                    </span>
                   </div>
                 </label>
               ))}
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* ========================================== */}
       {/* Выбор даты для режима "День" */}
       {/* ========================================== */}
       {viewMode === 'day' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <Card>
           <div className="flex items-center gap-3">
-            <Calendar className="h-5 w-5 text-gray-400" />
-            <label className="text-sm font-medium text-gray-700">Выберите дату:</label>
+            <Calendar className="h-5 w-5" style={{ color: 'var(--text-subtle)' }} />
+            <label className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+              Выберите дату:
+            </label>
             <input
               type="date"
               value={format(currentDate, 'yyyy-MM-dd')}
               onChange={(e) => setCurrentDate(new Date(e.target.value))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="input"
             />
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ========================================== */}
       {/* Таблица графика */}
       {/* ========================================== */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <Card padding="none">
         <div ref={tableRef} className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            {/* Заголовок таблицы */}
-            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-10">
+          <table className="min-w-full divide-y" style={{ borderColor: 'var(--border)' }}>
+            {/* Заголовок */}
+            <thead className="sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider border-r border-gray-200 bg-white sticky left-0 z-20 shadow-sm">
+                <th 
+                  className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider border-r sticky left-0 z-20 shadow-sm"
+                  style={{ 
+                    color: 'var(--text)',
+                    backgroundColor: 'var(--surface)',
+                    borderColor: 'var(--border)'
+                  }}
+                >
                   Аттракцион
                 </th>
                 {displayDays.map((day) => {
@@ -547,16 +531,17 @@ export function ScheduleView({
                   return (
                     <th
                       key={day.toISOString()}
-                      className={`px-4 py-4 text-center text-xs font-bold uppercase tracking-wider border-r border-gray-200 min-w-[140px] ${
-                        isWeekendDay
-                          ? 'bg-red-50 text-red-700'
-                          : 'text-gray-700'
-                      }`}
+                      className={cn(
+                        'px-4 py-4 text-center text-xs font-bold uppercase tracking-wider border-r min-w-[140px]',
+                      )}
+                      style={{
+                        backgroundColor: isWeekendDay ? 'var(--error-light)' : 'var(--bg-tertiary)',
+                        color: isWeekendDay ? 'var(--error)' : 'var(--text)',
+                        borderColor: 'var(--border)'
+                      }}
                     >
                       <div className="flex flex-col items-center gap-1">
-                        <span className="text-lg font-bold">
-                          {format(day, 'd')}
-                        </span>
+                        <span className="text-lg font-bold">{format(day, 'd')}</span>
                         <span className="text-[10px] font-semibold opacity-75">
                           {format(day, 'EEE', { locale: ru }).toUpperCase()}
                         </span>
@@ -568,12 +553,13 @@ export function ScheduleView({
             </thead>
 
             {/* Тело таблицы */}
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
               {displayAttractions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={displayDays.length + 1}
-                    className="px-6 py-12 text-center text-gray-500"
+                    className="px-6 py-12 text-center"
+                    style={{ color: 'var(--text-muted)' }}
                   >
                     {hasActiveFilters
                       ? 'Нет данных, соответствующих фильтрам'
@@ -588,30 +574,44 @@ export function ScheduleView({
                   return (
                     <tr
                       key={attraction.id}
-                      className={`hover:bg-gray-50 transition ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
-                      }`}
+                      className="transition"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)';
+                      }}
+                      style={{
+                        backgroundColor: index % 2 === 0 ? 'transparent' : 'var(--bg-tertiary)'
+                      }}
                     >
                       {/* Название аттракциона */}
-                      <td className="px-6 py-4 border-r border-gray-200 bg-white sticky left-0 z-10 shadow-sm">
+                      <td 
+                        className="px-6 py-4 border-r sticky left-0 z-10 shadow-sm"
+                        style={{ 
+                          backgroundColor: 'var(--surface)',
+                          borderColor: 'var(--border)'
+                        }}
+                      >
                         <div className="flex items-center gap-3">
                           <div
-                            className={`w-1 h-12 rounded-full ${
-                              hasAnySchedule ? 'bg-blue-500' : 'bg-gray-300'
-                            }`}
+                            className="w-1 h-12 rounded-full"
+                            style={{ 
+                              backgroundColor: hasAnySchedule ? 'var(--primary)' : 'var(--border)' 
+                            }}
                           />
                           <div>
-                            <p className="text-sm font-semibold text-gray-900">
+                            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
                               {attraction.name}
                             </p>
-                            <p className="text-xs text-gray-500 mt-0.5">
+                            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
                               Коэффициент: ×{attraction.coefficient}
                             </p>
                           </div>
                         </div>
                       </td>
 
-                      {/* Ячейки с назначениями по дням */}
+                      {/* Ячейки с назначениями */}
                       {displayDays.map((day) => {
                         const dateStr = format(day, 'yyyy-MM-dd');
                         const assignments = attractionSchedule?.get(dateStr) || [];
@@ -620,9 +620,11 @@ export function ScheduleView({
                         return (
                           <td
                             key={day.toISOString()}
-                            className={`px-3 py-3 border-r border-gray-200 align-top ${
-                              isWeekendDay ? 'bg-red-50/30' : ''
-                            }`}
+                            className="px-3 py-3 border-r align-top"
+                            style={{
+                              backgroundColor: isWeekendDay ? 'rgba(239, 68, 68, 0.05)' : 'transparent',
+                              borderColor: 'var(--border)'
+                            }}
                           >
                             {assignments.length > 0 ? (
                               <div className="space-y-2">
@@ -641,11 +643,14 @@ export function ScheduleView({
                                   return (
                                     <div
                                       key={assignment.id}
-                                      className={`rounded-lg px-3 py-2 text-xs font-medium shadow-sm transition hover:shadow-md ${
-                                        hasPartialShift
-                                          ? 'bg-gradient-to-r from-orange-100 to-orange-50 text-orange-800 border border-orange-200'
-                                          : 'bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border border-blue-200'
-                                      }`}
+                                      className="rounded-lg px-3 py-2 text-xs font-medium shadow-sm transition hover:shadow-md"
+                                      style={{
+                                        background: hasPartialShift
+                                          ? 'linear-gradient(135deg, var(--warning-light) 0%, var(--warning-light) 100%)'
+                                          : 'linear-gradient(135deg, var(--info-light) 0%, var(--info-light) 100%)',
+                                        color: hasPartialShift ? 'var(--warning)' : 'var(--info)',
+                                        border: `1px solid ${hasPartialShift ? 'var(--warning)' : 'var(--info)'}`,
+                                      }}
                                     >
                                       <div className="flex items-center gap-1.5">
                                         <Users className="h-3 w-3 opacity-70" />
@@ -666,7 +671,7 @@ export function ScheduleView({
                               </div>
                             ) : (
                               <div className="flex items-center justify-center h-12">
-                                <span className="text-gray-300 text-xs">—</span>
+                                <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>—</span>
                               </div>
                             )}
                           </td>
@@ -679,28 +684,54 @@ export function ScheduleView({
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {/* ========================================== */}
       {/* Легенда */}
       {/* ========================================== */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <h4 className="text-sm font-semibold text-gray-900 mb-3">Легенда:</h4>
+      <Card>
+        <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text)' }}>
+          Легенда:
+        </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-gradient-to-r from-blue-100 to-blue-50 border border-blue-200 rounded"></div>
-            <span className="text-sm text-gray-700">Полная смена (10:00 – 22:00)</span>
+            <div 
+              className="w-4 h-4 rounded border"
+              style={{ 
+                background: 'linear-gradient(135deg, var(--info-light) 0%, var(--info-light) 100%)',
+                borderColor: 'var(--info)'
+              }}
+            />
+            <span className="text-sm" style={{ color: 'var(--text)' }}>
+              Полная смена (10:00 – 22:00)
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-gradient-to-r from-orange-100 to-orange-50 border border-orange-200 rounded"></div>
-            <span className="text-sm text-gray-700">Частичная смена</span>
+            <div 
+              className="w-4 h-4 rounded border"
+              style={{ 
+                background: 'linear-gradient(135deg, var(--warning-light) 0%, var(--warning-light) 100%)',
+                borderColor: 'var(--warning)'
+              }}
+            />
+            <span className="text-sm" style={{ color: 'var(--text)' }}>
+              Частичная смена
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-50 border border-red-200 rounded"></div>
-            <span className="text-sm text-gray-700">Выходной день</span>
+            <div 
+              className="w-4 h-4 rounded border"
+              style={{ 
+                backgroundColor: 'var(--error-light)',
+                borderColor: 'var(--error)'
+              }}
+            />
+            <span className="text-sm" style={{ color: 'var(--text)' }}>
+              Выходной день
+            </span>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
