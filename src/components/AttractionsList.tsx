@@ -1,21 +1,8 @@
-// AttractionsList.tsx
-/**
- * Компонент управления аттракционами
- * 
- * Функционал:
- * - Отображение списка аттракционов с их параметрами (коэффициент, минимальный персонал)
- * - CRUD операции для суперадминистратора (создание, редактирование, удаление)
- * - Inline редактирование данных
- * - Адаптивный современный UI с модальными окнами
- * 
- * @param {boolean} isSuperAdmin - Флаг прав доступа суперадминистратора
- * @param {function} onAttractionUpdate - Callback при изменении данных
- */
-
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Attraction } from '../types';
-import { Plus, Trash2, Loader2, X, Edit2, Check, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Loader2, X, Edit2, Check, AlertCircle, Gamepad2 } from 'lucide-react';
+import { Card, Button, Modal, Badge } from './ui';
 
 interface AttractionsListProps {
   isSuperAdmin: boolean;
@@ -23,27 +10,23 @@ interface AttractionsListProps {
 }
 
 export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: AttractionsListProps) {
-  // ============ State Management ============
   const [attractions, setAttractions] = useState<Attraction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   
-  // Состояние для редактирования
   const [editName, setEditName] = useState('');
   const [editCoefficient, setEditCoefficient] = useState(1.0);
   const [editWeekday, setEditWeekday] = useState(1);
   const [editWeekend, setEditWeekend] = useState(1);
   
-  // Состояние для добавления нового аттракциона
   const [newName, setNewName] = useState('');
   const [newCoefficient, setNewCoefficient] = useState(1.0);
   const [newWeekday, setNewWeekday] = useState(1);
   const [newWeekend, setNewWeekend] = useState(1);
   const [formError, setFormError] = useState('');
 
-  // ============ Загрузка данных из Supabase ============
   const fetchAttractions = async () => {
     setLoading(true);
     setError(null);
@@ -67,7 +50,6 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
     fetchAttractions();
   }, []);
 
-  // ============ Удаление аттракциона ============
   const handleDelete = async (id: number) => {
     if (!isSuperAdmin) {
       alert('Недостаточно прав для выполнения операции');
@@ -89,7 +71,6 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
     }
   };
 
-  // ============ Добавление нового аттракциона ============
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -112,7 +93,6 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
     if (insertError) {
       setFormError(insertError.message);
     } else {
-      // Сброс формы и обновление списка
       setShowAddForm(false);
       setNewName('');
       setNewCoefficient(1.0);
@@ -123,7 +103,6 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
     }
   };
 
-  // ============ Inline редактирование ============
   const startEdit = (att: Attraction) => {
     if (!isSuperAdmin) {
       alert('Недостаточно прав для выполнения операции');
@@ -166,216 +145,190 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
     }
   };
 
-  // ============ Render: Загрузка ============
   if (loading) {
     return (
       <div className="flex justify-center items-center p-12">
         <div className="text-center">
-          <Loader2 className="animate-spin text-blue-600 h-10 w-10 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">Загрузка аттракционов...</p>
+          <Loader2 className="animate-spin h-10 w-10 mx-auto mb-3" style={{ color: 'var(--primary)' }} />
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Загрузка аттракционов...</p>
         </div>
       </div>
     );
   }
 
-  // ============ Render: Ошибка ============
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 flex items-start gap-3">
-        <AlertCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
-        <div>
-          <h3 className="font-semibold text-red-900 mb-1">Ошибка загрузки данных</h3>
-          <p className="text-red-700 text-sm">{error}</p>
+      <Card padding="md">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--error-light)' }}>
+            <AlertCircle className="h-6 w-6" style={{ color: 'var(--error)' }} />
+          </div>
+          <div>
+            <h3 className="font-semibold mb-1" style={{ color: 'var(--text)' }}>
+              Ошибка загрузки данных
+            </h3>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{error}</p>
+          </div>
         </div>
-      </div>
+      </Card>
     );
   }
 
-  // ============ Main Render ============
   return (
     <div className="space-y-6">
-      {/* Заголовок и кнопка добавления */}
-      <div className="flex justify-between items-center">
+      {/* Заголовок */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Аттракционы</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>
+            Аттракционы
+          </h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
             Управление списком аттракционов и их параметрами
           </p>
         </div>
         
         {isSuperAdmin && (
-          <button
+          <Button
             onClick={() => setShowAddForm(true)}
-            className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2.5 rounded-lg 
-                     flex items-center gap-2 hover:from-blue-700 hover:to-blue-800 
-                     transition-all duration-200 shadow-md hover:shadow-lg font-medium"
+            variant="primary"
+            icon={<Plus className="h-5 w-5" />}
           >
-            <Plus className="h-5 w-5" />
-            Добавить аттракцион
-          </button>
+            Добавить
+          </Button>
         )}
       </div>
 
       {/* Модальное окно добавления */}
-      {showAddForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all">
-            {/* Шапка модального окна */}
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Новый аттракцион</h3>
-                <p className="text-sm text-gray-500 mt-1">Заполните информацию об аттракционе</p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowAddForm(false);
-                  setFormError('');
-                }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="h-6 w-6" />
-              </button>
+      <Modal
+        isOpen={showAddForm}
+        onClose={() => {
+          setShowAddForm(false);
+          setFormError('');
+        }}
+        title="Новый аттракцион"
+      >
+        <form onSubmit={handleAdd} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>
+              Название аттракциона
+            </label>
+            <input
+              type="text"
+              placeholder="Например: Американские горки"
+              className="input"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>
+              Коэффициент нагрузки
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="1.0 = 100%"
+              className="input"
+              value={newCoefficient}
+              onChange={e => setNewCoefficient(parseFloat(e.target.value) || 0)}
+              required
+            />
+            <p className="text-xs mt-1.5" style={{ color: 'var(--text-subtle)' }}>
+              Коэффициент загруженности (1.0 = стандартная нагрузка)
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>
+                Персонал в будни
+              </label>
+              <input
+                type="number"
+                min="1"
+                placeholder="Мин. сотрудников"
+                className="input"
+                value={newWeekday}
+                onChange={e => setNewWeekday(Number(e.target.value) || 1)}
+                required
+              />
             </div>
 
-            {/* Форма */}
-            <form onSubmit={handleAdd} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Название аттракциона
-                </label>
-                <input
-                  type="text"
-                  placeholder="Например: Американские горки"
-                  className="w-full border border-gray-300 px-4 py-2.5 rounded-lg 
-                           focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                           transition-all outline-none"
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Коэффициент нагрузки
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="1.0 = 100%"
-                  className="w-full border border-gray-300 px-4 py-2.5 rounded-lg 
-                           focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                           transition-all outline-none"
-                  value={newCoefficient}
-                  onChange={e => setNewCoefficient(parseFloat(e.target.value) || 0)}
-                  required
-                />
-                <p className="text-xs text-gray-500 mt-1.5">
-                  Коэффициент загруженности (1.0 = стандартная нагрузка)
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Персонал в будни
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Мин. сотрудников"
-                    className="w-full border border-gray-300 px-4 py-2.5 rounded-lg 
-                             focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                             transition-all outline-none"
-                    value={newWeekday}
-                    onChange={e => setNewWeekday(Number(e.target.value) || 1)}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Персонал в выходные
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Мин. сотрудников"
-                    className="w-full border border-gray-300 px-4 py-2.5 rounded-lg 
-                             focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                             transition-all outline-none"
-                    value={newWeekend}
-                    onChange={e => setNewWeekend(Number(e.target.value) || 1)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {formError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
-                  <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-red-700 text-sm">{formError}</p>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white py-2.5 rounded-lg 
-                           hover:from-green-700 hover:to-green-800 transition-all duration-200 
-                           font-medium shadow-md hover:shadow-lg"
-                >
-                  Сохранить
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowAddForm(false);
-                    setFormError('');
-                  }}
-                  className="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 
-                           hover:bg-gray-50 transition-all duration-200 font-medium"
-                >
-                  Отмена
-                </button>
-              </div>
-            </form>
+            <div>
+              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>
+                Персонал в выходные
+              </label>
+              <input
+                type="number"
+                min="1"
+                placeholder="Мин. сотрудников"
+                className="input"
+                value={newWeekend}
+                onChange={e => setNewWeekend(Number(e.target.value) || 1)}
+                required
+              />
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Таблица аттракционов */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          {formError && (
+            <div className="p-3 rounded-lg flex items-start gap-2" style={{ backgroundColor: 'var(--error-light)' }}>
+              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--error)' }} />
+              <p className="text-sm" style={{ color: 'var(--error)' }}>{formError}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button type="submit" variant="success" className="flex-1">
+              Сохранить
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowAddForm(false);
+                setFormError('');
+              }}
+            >
+              Отмена
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Таблица */}
+      <Card padding="none">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="w-full">
             <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100">
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+              <tr className="border-b" style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg-tertiary)' }}>
+                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                   Название
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                   Коэффициент
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                   Будни
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                   Выходные
                 </th>
                 {isSuperAdmin && (
-                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
                     Действия
                   </th>
                 )}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
               {attractions.length === 0 ? (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 5 : 4} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center text-gray-400">
-                      <AlertCircle className="h-12 w-12 mb-3" />
+                  <td colSpan={isSuperAdmin ? 5 : 4} className="px-6 py-12">
+                    <div className="flex flex-col items-center justify-center" style={{ color: 'var(--text-subtle)' }}>
+                      <Gamepad2 className="h-12 w-12 mb-3 opacity-30" />
                       <p className="text-sm font-medium">Аттракционы не найдены</p>
                       <p className="text-xs mt-1">Добавьте первый аттракцион</p>
                     </div>
@@ -385,18 +338,21 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
                 attractions.map(att => (
                   <tr
                     key={att.id}
-                    className="hover:bg-blue-50/50 transition-colors duration-150"
+                    className="transition-colors"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
                   >
                     {editingId === att.id ? (
-                      // ============ Режим редактирования ============
                       <>
                         <td className="px-6 py-4">
                           <input
                             value={editName}
                             onChange={e => setEditName(e.target.value)}
-                            className="w-full border border-blue-300 px-3 py-2 rounded-lg 
-                                     focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                                     transition-all outline-none"
+                            className="input"
                           />
                         </td>
                         <td className="px-6 py-4">
@@ -406,9 +362,7 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
                             min="0"
                             value={editCoefficient}
                             onChange={e => setEditCoefficient(parseFloat(e.target.value) || 0)}
-                            className="w-28 border border-blue-300 px-3 py-2 rounded-lg 
-                                     focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                                     transition-all outline-none"
+                            className="input w-28"
                           />
                         </td>
                         <td className="px-6 py-4">
@@ -417,9 +371,7 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
                             min="1"
                             value={editWeekday}
                             onChange={e => setEditWeekday(Number(e.target.value) || 1)}
-                            className="w-24 border border-blue-300 px-3 py-2 rounded-lg 
-                                     focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                                     transition-all outline-none"
+                            className="input w-24"
                           />
                         </td>
                         <td className="px-6 py-4">
@@ -428,26 +380,34 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
                             min="1"
                             value={editWeekend}
                             onChange={e => setEditWeekend(Number(e.target.value) || 1)}
-                            className="w-24 border border-blue-300 px-3 py-2 rounded-lg 
-                                     focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                                     transition-all outline-none"
+                            className="input w-24"
                           />
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4">
                           <div className="flex justify-end gap-2">
                             <button
                               onClick={() => saveEdit(att.id)}
-                              className="p-2 text-green-600 hover:bg-green-100 rounded-lg 
-                                       transition-all duration-200"
-                              title="Сохранить"
+                              className="p-2 rounded-lg transition-colors"
+                              style={{ color: 'var(--success)' }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--success-light)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }}
                             >
                               <Check className="h-5 w-5" />
                             </button>
                             <button
                               onClick={cancelEdit}
-                              className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg 
-                                       transition-all duration-200"
-                              title="Отмена"
+                              className="p-2 rounded-lg transition-colors"
+                              style={{ color: 'var(--text-muted)' }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }}
                             >
                               <X className="h-5 w-5" />
                             </button>
@@ -455,53 +415,63 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
                         </td>
                       </>
                     ) : (
-                      // ============ Режим просмотра ============
                       <>
                         <td className="px-6 py-4">
-                          <div className="flex items-center">
-                            <div className="h-10 w-10 flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-600 
-                                          rounded-lg flex items-center justify-center mr-3">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="h-10 w-10 flex-shrink-0 rounded-lg flex items-center justify-center"
+                              style={{ backgroundColor: 'var(--primary)' }}
+                            >
                               <span className="text-white font-bold text-lg">
                                 {att.name.charAt(0).toUpperCase()}
                               </span>
                             </div>
-                            <div className="text-sm font-semibold text-gray-900">{att.name}</div>
+                            <div className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+                              {att.name}
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium 
-                                         bg-purple-100 text-purple-800">
-                            {att.coefficient.toFixed(2)}
-                          </span>
+                          <Badge variant="warning">
+                            ×{att.coefficient.toFixed(2)}
+                          </Badge>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium 
-                                         bg-blue-100 text-blue-800">
+                          <Badge variant="info">
                             {att.min_staff_weekday} чел.
-                          </span>
+                          </Badge>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium 
-                                         bg-orange-100 text-orange-800">
+                          <Badge variant="primary">
                             {att.min_staff_weekend} чел.
-                          </span>
+                          </Badge>
                         </td>
                         {isSuperAdmin && (
-                          <td className="px-6 py-4 text-right">
+                          <td className="px-6 py-4">
                             <div className="flex justify-end gap-2">
                               <button
                                 onClick={() => startEdit(att)}
-                                className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg 
-                                         transition-all duration-200"
-                                title="Редактировать"
+                                className="p-2 rounded-lg transition-colors"
+                                style={{ color: 'var(--info)' }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'var(--info-light)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
                               >
                                 <Edit2 className="h-5 w-5" />
                               </button>
                               <button
                                 onClick={() => handleDelete(att.id)}
-                                className="p-2 text-red-600 hover:bg-red-100 rounded-lg 
-                                         transition-all duration-200"
-                                title="Удалить"
+                                className="p-2 rounded-lg transition-colors"
+                                style={{ color: 'var(--error)' }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'var(--error-light)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = 'transparent';
+                                }}
                               >
                                 <Trash2 className="h-5 w-5" />
                               </button>
@@ -517,15 +487,14 @@ export function AttractionsList({ isSuperAdmin, onAttractionUpdate }: Attraction
           </table>
         </div>
 
-        {/* Футер таблицы с подсчетом */}
         {attractions.length > 0 && (
-          <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-            <p className="text-sm text-gray-600">
-              Всего аттракционов: <span className="font-semibold text-gray-900">{attractions.length}</span>
+          <div className="px-6 py-3 border-t" style={{ backgroundColor: 'var(--bg-tertiary)', borderColor: 'var(--border)' }}>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              Всего аттракционов: <span className="font-semibold" style={{ color: 'var(--text)' }}>{attractions.length}</span>
             </p>
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
