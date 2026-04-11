@@ -13,14 +13,10 @@ import { ru } from 'date-fns/locale';
 import { 
   Loader2, Calendar, Star, ChevronLeft, ChevronRight,
   Trash2, X, Clock, FileText, MessageCircle,
-  CheckCircle, DollarSign, Home, Target, TrendingUp,
+  CheckCircle, DollarSign, Home, Target,
   Briefcase, Award, Activity
 } from 'lucide-react';
 import { Card, Badge, Button, Modal } from './ui';
-
-// ========================================================================================
-// ТИПЫ
-// ========================================================================================
 
 interface EmployeeDashboardProps {
   profile: Employee;
@@ -38,27 +34,14 @@ interface SalaryDay {
   total: number;
 }
 
-type TabType = 'home' | 'calendar' | 'schedule' | 'priorities' | 'salary' | 'form';
-
-// ========================================================================================
-// УТИЛИТЫ
-// ========================================================================================
+type TabType = 'home' | 'calendar' | 'schedule' | 'salary' | 'form';
 
 function formatDateStr(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
   return `${d}.${m}.${y}`;
 }
 
-// ========================================================================================
-// ОСНОВНОЙ КОМПОНЕНТ
-// ========================================================================================
-
 export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
-  
-  // ========================================================================================
-  // STATE
-  // ========================================================================================
-  
   const [dataManager, setDataManager] = useState<EmployeeDataManager | null>(null);
   const [loading, setLoading] = useState(true);
   const [updateTrigger, setUpdateTrigger] = useState(0);
@@ -68,7 +51,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeTab, setActiveTab] = useState<TabType>('home');
   
-  // Модалки
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState('');
   const [isFullDayModal, setIsFullDayModal] = useState(true);
@@ -95,11 +77,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [salaryPeriod, setSalaryPeriod] = useState<'first' | 'second'>('first');
   const [salaryData, setSalaryData] = useState<{ days: SalaryDay[]; total: number } | null>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
-  
-  // ========================================================================================
-  // ВРЕМЕННЫЕ ИНТЕРВАЛЫ
-  // ========================================================================================
-  
+
   const START_TIMES = useMemo(() => {
     const times: string[] = [];
     for (let h = 10; h <= 20; h++) {
@@ -121,11 +99,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
     return times;
   }, []);
-  
-  // ========================================================================================
-  // ИНИЦИАЛИЗАЦИЯ
-  // ========================================================================================
-  
+
   useEffect(() => {
     async function init() {
       try {
@@ -147,11 +121,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     init();
     return () => destroyEmployeeData();
   }, [profile.id]);
-  
-  // ========================================================================================
-  // ТАЙМЕРЫ
-  // ========================================================================================
-  
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
@@ -170,10 +140,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }, 1000);
     return () => clearInterval(interval);
   }, [dataManager]);
-  
-  // ========================================================================================
-  // ДАННЫЕ
-  // ========================================================================================
 
   const attractions = useMemo(() => 
     dataManager?.getAttractions() || [], 
@@ -246,247 +212,12 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     new Set(allAvailability.map(s => s.work_date)), 
     [allAvailability]
   );
-  
-  // ========================================================================================
-  // ЗАГРУЗКА
-  // ========================================================================================
-  
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="animate-spin h-12 w-12 mx-auto mb-4" style={{ color: 'var(--primary)' }} />
-          <p style={{ color: 'var(--text-muted)' }}>Загрузка данных...</p>
-        </div>
-      </div>
-    );
-  }
 
-  if (!dataManager) {
-    return (
-      <div className="flex justify-center items-center min-h-[60vh]">
-        <Card padding="lg" className="text-center max-w-md">
-          <div className="mb-4" style={{ color: 'var(--error)' }}>
-            <X className="h-16 w-16 mx-auto mb-4" />
-            <h3 className="text-lg font-bold mb-2">Ошибка загрузки данных</h3>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              Не удалось загрузить информацию
-            </p>
-          </div>
-          <Button
-            onClick={() => window.location.reload()}
-            variant="primary"
-          >
-            Перезагрузить страницу
-          </Button>
-        </Card>
-      </div>
-    );
-  }
-  
-  // ========================================================================================
-  // RENDER - ГЛАВНАЯ СТРАНИЦА
-  // ========================================================================================
-  
-  const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
-
-  return (
-    <div className="space-y-6">
-      {/* Приветствие и статистика */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Приветствие */}
-        <Card padding="lg" className="lg:col-span-2">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
-                {greeting || `Здравствуйте, ${profile.full_name?.split(' ')[0]}!`}
-              </h2>
-              <div className="flex flex-wrap gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-                <div className="flex items-center gap-1.5">
-                  <Briefcase className="h-4 w-4" />
-                  <span>Возраст: {profile.age ?? 'Не указан'}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <DollarSign className="h-4 w-4" />
-                  <span>Ставка: {profile.base_hourly_rate || 250}₽/ч</span>
-                </div>
-              </div>
-            </div>
-            <div className="text-right hidden sm:block">
-              <div className="text-3xl font-bold font-mono" style={{ color: 'var(--primary)' }}>
-                {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-              <div className="text-xs mt-1" style={{ color: 'var(--text-subtle)' }}>
-                {format(now, 'dd MMMM yyyy', { locale: ru })}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Быстрая статистика */}
-        <Card padding="md">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--success-light)' }}>
-                  <CheckCircle className="h-4 w-4" style={{ color: 'var(--success)' }} />
-                </div>
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
-              </div>
-              <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
-                {shiftsForMonth.length}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--info-light)' }}>
-                  <Calendar className="h-4 w-4" style={{ color: 'var(--info)' }} />
-                </div>
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
-              </div>
-              <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
-                {scheduleForMonth.length}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
-                  <Activity className="h-4 w-4" style={{ color: 'var(--primary)' }} />
-                </div>
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Отработано</span>
-              </div>
-              <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
-                {scheduleForMonth.filter(s => dataManager?.getActualWorkLog(s.id)).length}
-              </span>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Текущие цели */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Приоритеты */}
-        <Card padding="md">
-          <div className="flex items-center gap-2 mb-4">
-            <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
-            <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-              Приоритеты аттракционов
-            </h3>
-          </div>
-          <div className="space-y-2">
-            {[1, 2, 3].map(level => {
-              const priority = priorities.find(p => p.priority_level === level);
-              const attractionIds = Array.isArray(priority?.attraction_ids) 
-                ? priority.attraction_ids 
-                : (priority?.attraction_ids ? [priority.attraction_ids] : []);
-              
-              const attractionNames = attractionIds
-                .map(id => {
-                  const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-                  return attractions.find(a => a.id === numId)?.name || 'Неизвестный';
-                })
-                .join(', ') || 'Не задан';
-
-              return (
-                <div key={level} className="flex items-center justify-between py-2">
-                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {level}-й приоритет
-                  </span>
-                  <Badge variant={level === 1 ? 'success' : level === 2 ? 'warning' : 'info'}>
-                    {attractionNames}
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-
-        {/* Цель обучения */}
-        <Card padding="md">
-          <div className="flex items-center gap-2 mb-4">
-            <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
-            <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-              Цель для изучения
-            </h3>
-          </div>
-
-          {goalError && (
-            <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
-              {goalError}
-            </div>
-          )}
-
-          <select
-            value={selectedAttractionId || ''}
-            onChange={e => setSelectedAttractionId(Number(e.target.value))}
-            className="input mb-3"
-          >
-            <option value="">-- Выберите аттракцион --</option>
-            {availableAttractionsForGoal.map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-
-          <Button
-            onClick={async () => {
-              if (!dataManager || !selectedAttractionId) {
-                setGoalError('Выберите аттракцион');
-                return;
-              }
-
-              setSavingGoal(true);
-              setGoalError('');
-
-              const result = await dataManager.setStudyGoal(selectedAttractionId);
-
-              if (result.success) {
-                alert('Цель изучения сохранена');
-                setUpdateTrigger(prev => prev + 1);
-              } else {
-                setGoalError(result.error || 'Ошибка сохранения');
-              }
-
-              setSavingGoal(false);
-            }}
-            disabled={savingGoal || !selectedAttractionId}
-            variant="primary"
-            size="sm"
-            loading={savingGoal}
-            className="w-full"
-          >
-            Сохранить цель
-          </Button>
-
-          {studyGoal && studyGoal.attraction && (
-            <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
-              <p className="text-sm" style={{ color: 'var(--primary)' }}>
-                <strong>Текущая цель:</strong> {studyGoal.attraction.name}
-              </p>
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Здесь будет остальной контент */}
-      <Card padding="lg">
-        <p style={{ color: 'var(--text-muted)' }} className="text-center">
-          🚧 Остальные разделы в процессе рефакторинга...
-        </p>
-      </Card>
-    </div>
-  );
-}
-  // ========================================================================================
-  // ОБРАБОТЧИКИ - СМЕНЫ ДОСТУПНОСТИ
-  // ========================================================================================
-  
   const openAddModal = (dateStr: string) => {
     if (!dataManager) return;
     
     if (occupiedDates.has(dateStr)) {
-      alert('На эту дату уже установлена смена. Нажмите на смену для просмотра.');
+      alert('На эту дату уже установлена смена.');
       return;
     }
 
@@ -570,10 +301,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   };
 
-  // ========================================================================================
-  // ОБРАБОТЧИКИ - ФАКТИЧЕСКОЕ ВРЕМЯ
-  // ========================================================================================
-
   const openTimeLogModal = (schedule: ScheduleAssignment) => {
     if (!dataManager) return;
 
@@ -585,7 +312,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
     const existingLog = dataManager.getActualWorkLog(schedule.id);
     if (existingLog) {
-      alert('Вы уже отметили время для этой смены. Изменить нельзя.');
+      alert('Вы уже отметили время для этой смены.');
       return;
     }
 
@@ -622,10 +349,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingTimeLog(false);
   };
 
-  // ========================================================================================
-  // ОБРАБОТЧИКИ - ЗАРПЛАТА
-  // ========================================================================================
-
   const calculateSalary = async (period: 'first' | 'second') => {
     if (!dataManager) return;
 
@@ -648,10 +371,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   }, [activeTab, salaryPeriod, dataManager]);
 
-  // ========================================================================================
-  // RENDER - КАЛЕНДАРЬ
-  // ========================================================================================
-
   const renderCalendar = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -661,12 +380,10 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const days = [];
 
-    // Пустые ячейки
     for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) {
       days.push(<div key={`empty-${i}`} className="aspect-square" />);
     }
 
-    // Дни месяца
     for (let i = 1; i <= daysInMonth; i++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       const isToday = dateStr === todayStr;
@@ -724,7 +441,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
     return (
       <div className="space-y-4">
-        {/* Заголовки дней недели */}
         <div className="grid grid-cols-7 gap-2">
           {weekdays.map(day => (
             <div 
@@ -736,34 +452,22 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
             </div>
           ))}
         </div>
-
-        {/* Дни */}
         <div className="grid grid-cols-7 gap-2">
           {days}
         </div>
-
-        {/* Легенда */}
         <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--success)' }} />
-            <span>Полная смена</span>
+            <span>Полная</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--warning)' }} />
-            <span>Неполная смена</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <MessageCircle className="h-3 w-3" />
-            <span>Есть комментарий</span>
+            <span>Неполная</span>
           </div>
         </div>
       </div>
     );
   };
-
-  // ========================================================================================
-  // RENDER - ТАБЛИЦЫ
-  // ========================================================================================
 
   const renderShiftsTable = () => {
     if (shiftsForMonth.length === 0) {
@@ -776,25 +480,14 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
 
     return (
-      <div className="overflow-x-auto hide-scrollbar">
+      <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Дата
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Тип
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Время
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Комментарий
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Действие
-              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Дата</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Тип</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Время</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Действие</th>
             </tr>
           </thead>
           <tbody>
@@ -805,16 +498,8 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                 <tr 
                   key={shift.id}
                   onClick={() => openViewModal(shift)}
-                  className="border-b cursor-pointer transition-colors hover:bg-opacity-50"
-                  style={{ 
-                    borderColor: 'var(--border)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
+                  className="border-b cursor-pointer transition-colors"
+                  style={{ borderColor: 'var(--border)' }}
                 >
                   <td className="px-4 py-3 text-sm" style={{ color: 'var(--text)' }}>
                     {format(parseISO(shift.work_date), 'dd.MM.yyyy')}
@@ -830,33 +515,12 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                       : `${shift.start_time?.slice(0, 5) || '00:00'}–${shift.end_time?.slice(0, 5) || '00:00'}`
                     }
                   </td>
-                  <td className="px-4 py-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {shift.comment ? (
-                      <span className="flex items-center gap-1">
-                        <MessageCircle className="h-3 w-3" />
-                        {shift.comment.slice(0, 30)}
-                        {shift.comment.length > 30 && '...'}
-                      </span>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td 
-                    className="px-4 py-3 text-right" 
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                     {canDelete?.allowed ? (
                       <button
                         onClick={() => handleDeleteShift(shift)}
                         className="p-2 rounded-lg transition-colors"
                         style={{ color: 'var(--error)' }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--error-light)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
-                        title="Удалить смену"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -878,31 +542,20 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       return (
         <div className="text-center py-12">
           <Calendar className="mx-auto h-12 w-12 mb-3 opacity-30" style={{ color: 'var(--text-subtle)' }} />
-          <p style={{ color: 'var(--text-muted)' }}>График от администратора не найден</p>
+          <p style={{ color: 'var(--text-muted)' }}>График не найден</p>
         </div>
       );
     }
 
     return (
-      <div className="overflow-x-auto hide-scrollbar">
+      <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b" style={{ borderColor: 'var(--border)' }}>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Дата
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Аттракцион
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Плановое время
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Отметка
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                Статус
-              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Дата</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Аттракцион</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Время</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Статус</th>
             </tr>
           </thead>
           <tbody>
@@ -912,17 +565,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               const attraction = dataManager?.getAttraction(schedule.attraction_id);
 
               return (
-                <tr 
-                  key={schedule.id}
-                  className="border-b transition-colors"
-                  style={{ borderColor: 'var(--border)' }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
+                <tr key={schedule.id} className="border-b" style={{ borderColor: 'var(--border)' }}>
                   <td className="px-4 py-3 text-sm" style={{ color: 'var(--text)' }}>
                     {format(parseISO(schedule.work_date), 'dd.MM.yyyy')}
                   </td>
@@ -932,30 +575,17 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                   <td className="px-4 py-3 text-sm" style={{ color: 'var(--text)' }}>
                     {schedule.start_time?.slice(0, 5) || '00:00'} – {schedule.end_time?.slice(0, 5) || '00:00'}
                   </td>
-                  <td className="px-4 py-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-                    {log 
-                      ? `${log.actual_start?.slice(0, 5) || '00:00'}–${log.actual_end?.slice(0, 5) || '00:00'}`
-                      : '—'
-                    }
-                  </td>
                   <td className="px-4 py-3">
                     {log ? (
                       <Badge variant="success" dot>
-                        <CheckCircle className="h-3 w-3" />
                         Отмечено
                       </Badge>
                     ) : canLog?.allowed ? (
-                      <Button
-                        onClick={() => openTimeLogModal(schedule)}
-                        variant="secondary"
-                        size="sm"
-                      >
+                      <Button onClick={() => openTimeLogModal(schedule)} variant="secondary" size="sm">
                         Отметить
                       </Button>
                     ) : (
-                      <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>
-                        Недоступно
-                      </span>
+                      <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>Недоступно</span>
                     )}
                   </td>
                 </tr>
@@ -967,38 +597,15 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     );
   };
 
-  // ========================================================================================
-  // RENDER - ЗАРПЛАТА
-  // ========================================================================================
-
   const renderSalary = () => {
     return (
       <div className="space-y-4">
-        <div className="text-xs p-3 rounded-lg" style={{ backgroundColor: 'var(--warning-light)', color: 'var(--warning)' }}>
-          ⚠️ Данные носят ознакомительный характер. Точный расчёт производится бухгалтерией.
-        </div>
-
         <div className="flex gap-2">
-          <Button
-            onClick={() => setSalaryPeriod('first')}
-            variant={salaryPeriod === 'first' ? 'primary' : 'secondary'}
-            size="sm"
-          >
-            7–21 число
+          <Button onClick={() => setSalaryPeriod('first')} variant={salaryPeriod === 'first' ? 'primary' : 'secondary'} size="sm">
+            7–21
           </Button>
-          <Button
-            onClick={() => setSalaryPeriod('second')}
-            variant={salaryPeriod === 'second' ? 'primary' : 'secondary'}
-            size="sm"
-          >
-            22–6 число
-          </Button>
-          <Button
-            onClick={() => calculateSalary(salaryPeriod)}
-            variant="ghost"
-            size="sm"
-          >
-            Обновить
+          <Button onClick={() => setSalaryPeriod('second')} variant={salaryPeriod === 'second' ? 'primary' : 'secondary'} size="sm">
+            22–6
           </Button>
         </div>
 
@@ -1011,9 +618,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         {!loadingSalary && salaryData && (
           <div>
             {salaryData.days.length === 0 ? (
-              <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
-                Нет данных за выбранный период
-              </div>
+              <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>Нет данных</div>
             ) : (
               <div className="space-y-3">
                 {salaryData.days.map(day => (
@@ -1025,24 +630,19 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                       {day.attractions.map((a, idx) => (
                         <div key={idx} className="flex justify-between">
                           <span>{a.name}</span>
-                          <span className="font-mono">
-                            {a.hours.toFixed(2)}ч × {a.rate}₽ × {a.coefficient} = {Math.round(a.earn)}₽
-                          </span>
+                          <span>{Math.round(a.earn)}₽</span>
                         </div>
                       ))}
                     </div>
                     <div className="mt-2 pt-2 border-t flex justify-between font-bold" style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}>
-                      <span>Итого за день:</span>
+                      <span>Итого:</span>
                       <span>{Math.round(day.total)} ₽</span>
                     </div>
                   </Card>
                 ))}
-
                 <Card padding="lg">
                   <div className="flex justify-between items-center">
-                    <span className="text-xl font-bold" style={{ color: 'var(--text)' }}>
-                      Всего за период:
-                    </span>
+                    <span className="text-xl font-bold" style={{ color: 'var(--text)' }}>Всего:</span>
                     <span className="text-3xl font-bold" style={{ color: 'var(--success)' }}>
                       {Math.round(salaryData.total)} ₽
                     </span>
@@ -1055,432 +655,90 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       </div>
     );
   };
-  // ========================================================================================
-  // RENDER - ВКЛАДКИ (МОБИЛЬНАЯ НАВИГАЦИЯ)
-  // ========================================================================================
 
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'home':
-        return (
-          <div className="space-y-6">
-            {/* Приветствие и статистика */}
-            <div className="grid grid-cols-1 gap-4">
-              <Card padding="lg">
-                <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
-                  {greeting || `Здравствуйте, ${profile.full_name?.split(' ')[0]}!`}
-                </h2>
-                <div className="flex flex-wrap gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  <div className="flex items-center gap-1.5">
-                    <Briefcase className="h-4 w-4" />
-                    <span>Возраст: {profile.age ?? 'Не указан'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <DollarSign className="h-4 w-4" />
-                    <span>Ставка: {profile.base_hourly_rate || 250}₽/ч</span>
-                  </div>
-                </div>
-                <div className="mt-4 text-center">
-                  <div className="text-4xl font-bold font-mono" style={{ color: 'var(--primary)' }}>
-                    {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                  <div className="text-xs mt-1" style={{ color: 'var(--text-subtle)' }}>
-                    {format(now, 'dd MMMM yyyy, EEEE', { locale: ru })}
-                  </div>
-                </div>
-              </Card>
+  const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
 
-              <Card padding="md">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--success-light)' }}>
-                        <CheckCircle className="h-4 w-4" style={{ color: 'var(--success)' }} />
-                      </div>
-                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
-                    </div>
-                    <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
-                      {shiftsForMonth.length}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--info-light)' }}>
-                        <Calendar className="h-4 w-4" style={{ color: 'var(--info)' }} />
-                      </div>
-                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
-                    </div>
-                    <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
-                      {scheduleForMonth.length}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
-                        <Activity className="h-4 w-4" style={{ color: 'var(--primary)' }} />
-                      </div>
-                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Отработано</span>
-                    </div>
-                    <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
-                      {scheduleForMonth.filter(s => dataManager?.getActualWorkLog(s.id)).length}
-                    </span>
-                  </div>
-                </div>
-              </Card>
-            </div>
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <Loader2 className="animate-spin h-12 w-12" style={{ color: 'var(--primary)' }} />
+      </div>
+    );
+  }
 
-            {/* Приоритеты и цели */}
-            <Card padding="md">
-              <div className="flex items-center gap-2 mb-4">
-                <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
-                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-                  Приоритеты аттракционов
-                </h3>
-              </div>
-              <div className="space-y-2">
-                {[1, 2, 3].map(level => {
-                  const priority = priorities.find(p => p.priority_level === level);
-                  const attractionIds = Array.isArray(priority?.attraction_ids) 
-                    ? priority.attraction_ids 
-                    : (priority?.attraction_ids ? [priority.attraction_ids] : []);
-                  
-                  const attractionNames = attractionIds
-                    .map(id => {
-                      const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-                      return attractions.find(a => a.id === numId)?.name || 'Неизвестный';
-                    })
-                    .join(', ') || 'Не задан';
-
-                  return (
-                    <div key={level} className="flex items-center justify-between py-2">
-                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                        {level}-й приоритет
-                      </span>
-                      <Badge variant={level === 1 ? 'success' : level === 2 ? 'warning' : 'info'}>
-                        {attractionNames}
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
-            <Card padding="md">
-              <div className="flex items-center gap-2 mb-4">
-                <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
-                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-                  Цель для изучения
-                </h3>
-              </div>
-
-              {goalError && (
-                <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
-                  {goalError}
-                </div>
-              )}
-
-              <select
-                value={selectedAttractionId || ''}
-                onChange={e => setSelectedAttractionId(Number(e.target.value))}
-                className="input mb-3"
-              >
-                <option value="">-- Выберите аттракцион --</option>
-                {availableAttractionsForGoal.map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-
-              <Button
-                onClick={async () => {
-                  if (!dataManager || !selectedAttractionId) {
-                    setGoalError('Выберите аттракцион');
-                    return;
-                  }
-
-                  setSavingGoal(true);
-                  setGoalError('');
-
-                  const result = await dataManager.setStudyGoal(selectedAttractionId);
-
-                  if (result.success) {
-                    alert('Цель изучения сохранена');
-                    setUpdateTrigger(prev => prev + 1);
-                  } else {
-                    setGoalError(result.error || 'Ошибка сохранения');
-                  }
-
-                  setSavingGoal(false);
-                }}
-                disabled={savingGoal || !selectedAttractionId}
-                variant="primary"
-                size="sm"
-                loading={savingGoal}
-                className="w-full"
-              >
-                Сохранить цель
-              </Button>
-
-              {studyGoal && studyGoal.attraction && (
-                <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
-                  <p className="text-sm" style={{ color: 'var(--primary)' }}>
-                    <strong>Текущая цель:</strong> {studyGoal.attraction.name}
-                  </p>
-                </div>
-              )}
-            </Card>
-          </div>
-        );
-
-      case 'calendar':
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Button
-                onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
-                variant="ghost"
-                size="sm"
-                icon={<ChevronLeft className="h-4 w-4" />}
-              />
-              <h3 className="text-lg font-semibold capitalize" style={{ color: 'var(--text)' }}>
-                {currentMonthLabel}
-              </h3>
-              <Button
-                onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
-                variant="ghost"
-                size="sm"
-                icon={<ChevronRight className="h-4 w-4" />}
-              />
-            </div>
-
-            <Card padding="md">
-              {renderCalendar()}
-            </Card>
-
-            <Card padding="md">
-              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>
-                Список смен
-              </h3>
-              {renderShiftsTable()}
-            </Card>
-          </div>
-        );
-
-      case 'schedule':
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Button
-                onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
-                variant="ghost"
-                size="sm"
-                icon={<ChevronLeft className="h-4 w-4" />}
-              />
-              <h3 className="text-lg font-semibold capitalize" style={{ color: 'var(--text)' }}>
-                {currentMonthLabel}
-              </h3>
-              <Button
-                onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
-                variant="ghost"
-                size="sm"
-                icon={<ChevronRight className="h-4 w-4" />}
-              />
-            </div>
-
-            <Card padding="md">
-              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>
-                График от администратора
-              </h3>
-              {renderScheduleTable()}
-            </Card>
-          </div>
-        );
-
-      case 'salary':
-        return (
-          <Card padding="md">
-            <div className="flex items-center gap-2 mb-4">
-              <DollarSign className="h-5 w-5" style={{ color: 'var(--success)' }} />
-              <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-                Расчёт зарплаты
-              </h3>
-            </div>
-            {renderSalary()}
-          </Card>
-        );
-
-      case 'form':
-        return (
-          <Card padding="md">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
-              <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-                Опрос сотрудника
-              </h3>
-            </div>
-            <div className="relative h-[calc(100vh-250px)] overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
-              <iframe
-                src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
-                className="absolute top-0 left-0 w-full h-full"
-                frameBorder="0"
-                title="Google Form"
-              >
-                Загрузка…
-              </iframe>
-            </div>
-          </Card>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  // ========================================================================================
-  // ОСНОВНОЙ RENDER
-  // ========================================================================================
+  if (!dataManager) {
+    return (
+      <Card padding="lg" className="text-center max-w-md mx-auto">
+        <X className="h-16 w-16 mx-auto mb-4" style={{ color: 'var(--error)' }} />
+        <h3 className="text-lg font-bold mb-2">Ошибка загрузки</h3>
+        <Button onClick={() => window.location.reload()} variant="primary">
+          Перезагрузить
+        </Button>
+      </Card>
+    );
+  }
 
   return (
     <>
-      {/* ДЕСКТОПНАЯ ВЕРСИЯ */}
       <div className="hidden md:block space-y-6">
-        {/* Приветствие и статистика */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card padding="lg" className="lg:col-span-2">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
-                  {greeting || `Здравствуйте, ${profile.full_name?.split(' ')[0]}!`}
-                </h2>
-                <div className="flex flex-wrap gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  <div className="flex items-center gap-1.5">
-                    <Briefcase className="h-4 w-4" />
-                    <span>Возраст: {profile.age ?? 'Не указан'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <DollarSign className="h-4 w-4" />
-                    <span>Ставка: {profile.base_hourly_rate || 250}₽/ч</span>
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold font-mono" style={{ color: 'var(--primary)' }}>
-                  {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                </div>
-                <div className="text-xs mt-1" style={{ color: 'var(--text-subtle)' }}>
-                  {format(now, 'dd MMMM yyyy', { locale: ru })}
-                </div>
-              </div>
+            <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+              {greeting || `Здравствуйте, ${profile.full_name?.split(' ')[0]}!`}
+            </h2>
+            <div className="flex gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+              <span>Возраст: {profile.age ?? 'Не указан'}</span>
+              <span>Ставка: {profile.base_hourly_rate || 250}₽/ч</span>
             </div>
           </Card>
 
           <Card padding="md">
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--success-light)' }}>
-                    <CheckCircle className="h-4 w-4" style={{ color: 'var(--success)' }} />
-                  </div>
-                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
-                </div>
-                <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
-                  {shiftsForMonth.length}
-                </span>
+              <div className="flex justify-between">
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
+                <span className="font-bold" style={{ color: 'var(--text)' }}>{shiftsForMonth.length}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--info-light)' }}>
-                    <Calendar className="h-4 w-4" style={{ color: 'var(--info)' }} />
-                  </div>
-                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
-                </div>
-                <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
-                  {scheduleForMonth.length}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
-                    <Activity className="h-4 w-4" style={{ color: 'var(--primary)' }} />
-                  </div>
-                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Отработано</span>
-                </div>
-                <span className="text-lg font-bold" style={{ color: 'var(--text)' }}>
-                  {scheduleForMonth.filter(s => dataManager?.getActualWorkLog(s.id)).length}
-                </span>
+              <div className="flex justify-between">
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
+                <span className="font-bold" style={{ color: 'var(--text)' }}>{scheduleForMonth.length}</span>
               </div>
             </div>
           </Card>
         </div>
 
-        {/* Основная сетка */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Левая колонка - 2/3 */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Навигация по месяцам */}
             <div className="flex items-center justify-between">
-              <Button
-                onClick={() => setCurrentDate(prev => subMonths(prev, 1))}
-                variant="ghost"
-                icon={<ChevronLeft className="h-5 w-5" />}
-              />
-              <h3 className="text-xl font-semibold capitalize" style={{ color: 'var(--text)' }}>
-                {currentMonthLabel}
-              </h3>
-              <Button
-                onClick={() => setCurrentDate(prev => addMonths(prev, 1))}
-                variant="ghost"
-                icon={<ChevronRight className="h-5 w-5" />}
-              />
+              <Button onClick={() => setCurrentDate(prev => subMonths(prev, 1))} variant="ghost" icon={<ChevronLeft className="h-5 w-5" />} />
+              <h3 className="text-xl font-semibold capitalize" style={{ color: 'var(--text)' }}>{currentMonthLabel}</h3>
+              <Button onClick={() => setCurrentDate(prev => addMonths(prev, 1))} variant="ghost" icon={<ChevronRight className="h-5 w-5" />} />
             </div>
 
-            {/* Календарь */}
             <Card padding="md">
-              <div className="flex items-center gap-2 mb-4">
-                <Calendar className="h-5 w-5" style={{ color: 'var(--primary)' }} />
-                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-                  Календарь смен
-                </h3>
-              </div>
               {renderCalendar()}
             </Card>
 
-            {/* Таблица смен */}
             <Card padding="md">
-              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>
-                Мои смены (самозапись)
-              </h3>
+              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>Мои смены</h3>
               {renderShiftsTable()}
             </Card>
 
-            {/* Таблица расписания */}
             <Card padding="md">
-              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>
-                График от администратора
-              </h3>
+              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>График от администратора</h3>
               {renderScheduleTable()}
             </Card>
 
-            {/* Зарплата */}
             <Card padding="md">
-              <div className="flex items-center gap-2 mb-4">
-                <DollarSign className="h-5 w-5" style={{ color: 'var(--success)' }} />
-                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-                  Расчёт зарплаты
-                </h3>
-              </div>
+              <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>Зарплата</h3>
               {renderSalary()}
             </Card>
           </div>
 
-          {/* Правая колонка - 1/3 */}
           <div className="space-y-6">
-            {/* Приоритеты */}
             <Card padding="md">
               <div className="flex items-center gap-2 mb-4">
                 <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
-                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-                  Приоритеты
-                </h3>
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Приоритеты</h3>
               </div>
               <div className="space-y-2">
                 {[1, 2, 3].map(level => {
@@ -1497,10 +755,8 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                     .join(', ') || 'Не задан';
 
                   return (
-                    <div key={level} className="flex items-center justify-between py-2">
-                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                        {level}-й приоритет
-                      </span>
+                    <div key={level} className="flex justify-between py-2">
+                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{level}-й</span>
                       <Badge variant={level === 1 ? 'success' : level === 2 ? 'warning' : 'info'}>
                         {attractionNames}
                       </Badge>
@@ -1510,51 +766,33 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               </div>
             </Card>
 
-            {/* Цель обучения */}
             <Card padding="md">
               <div className="flex items-center gap-2 mb-4">
                 <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
-                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-                  Цель изучения
-                </h3>
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Цель изучения</h3>
               </div>
-
-              {goalError && (
-                <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
-                  {goalError}
-                </div>
-              )}
-
-              <select
-                value={selectedAttractionId || ''}
-                onChange={e => setSelectedAttractionId(Number(e.target.value))}
-                className="input mb-3"
-              >
-                <option value="">-- Выберите аттракцион --</option>
+              {goalError && <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>{goalError}</div>}
+              <select value={selectedAttractionId || ''} onChange={e => setSelectedAttractionId(Number(e.target.value))} className="input mb-3">
+                <option value="">-- Выберите --</option>
                 {availableAttractionsForGoal.map(a => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
-
               <Button
                 onClick={async () => {
                   if (!dataManager || !selectedAttractionId) {
                     setGoalError('Выберите аттракцион');
                     return;
                   }
-
                   setSavingGoal(true);
                   setGoalError('');
-
                   const result = await dataManager.setStudyGoal(selectedAttractionId);
-
                   if (result.success) {
-                    alert('Цель изучения сохранена');
+                    alert('Сохранено');
                     setUpdateTrigger(prev => prev + 1);
                   } else {
-                    setGoalError(result.error || 'Ошибка сохранения');
+                    setGoalError(result.error || 'Ошибка');
                   }
-
                   setSavingGoal(false);
                 }}
                 disabled={savingGoal || !selectedAttractionId}
@@ -1563,53 +801,97 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                 loading={savingGoal}
                 className="w-full"
               >
-                Сохранить цель
+                Сохранить
               </Button>
-
               {studyGoal && studyGoal.attraction && (
                 <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
                   <p className="text-sm" style={{ color: 'var(--primary)' }}>
-                    <strong>Текущая цель:</strong> {studyGoal.attraction.name}
+                    <strong>Текущая:</strong> {studyGoal.attraction.name}
                   </p>
                 </div>
               )}
             </Card>
 
-            {/* Опрос */}
             <Card padding="md">
               <div className="flex items-center gap-2 mb-4">
                 <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
-                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
-                  Опрос сотрудника
-                </h3>
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Опрос</h3>
               </div>
-              <div className="relative h-[500px] overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+              <div className="relative h-[400px] overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
                 <iframe
                   src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
-                  className="absolute top-0 left-0 w-full h-full"
+                  className="absolute inset-0 w-full h-full"
                   frameBorder="0"
                   title="Google Form"
-                >
-                  Загрузка…
-                </iframe>
+                />
               </div>
             </Card>
           </div>
         </div>
       </div>
 
-      {/* МОБИЛЬНАЯ ВЕРСИЯ */}
       <div className="md:hidden pb-20">
-        {renderTabContent()}
+        {activeTab === 'home' && (
+          <div className="space-y-4">
+            <Card padding="lg">
+              <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+                {greeting || `Здравствуйте!`}
+              </h2>
+              <div className="text-center mt-4">
+                <div className="text-4xl font-bold" style={{ color: 'var(--primary)' }}>
+                  {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            </Card>
+            <Card padding="md">
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
+                  <span className="font-bold" style={{ color: 'var(--text)' }}>{shiftsForMonth.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
+                  <span className="font-bold" style={{ color: 'var(--text)' }}>{scheduleForMonth.length}</span>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
 
-        {/* Мобильная навигация */}
-        <nav 
-          className="fixed bottom-0 left-0 right-0 z-50 border-t safe-area-inset-bottom"
-          style={{ 
-            backgroundColor: 'var(--surface)',
-            borderColor: 'var(--border)'
-          }}
-        >
+        {activeTab === 'calendar' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <Button onClick={() => setCurrentDate(prev => subMonths(prev, 1))} variant="ghost" size="sm" icon={<ChevronLeft className="h-4 w-4" />} />
+              <h3 className="text-lg font-semibold capitalize" style={{ color: 'var(--text)' }}>{currentMonthLabel}</h3>
+              <Button onClick={() => setCurrentDate(prev => addMonths(prev, 1))} variant="ghost" size="sm" icon={<ChevronRight className="h-4 w-4" />} />
+            </div>
+            <Card padding="md">{renderCalendar()}</Card>
+            <Card padding="md">{renderShiftsTable()}</Card>
+          </div>
+        )}
+
+        {activeTab === 'schedule' && (
+          <Card padding="md">{renderScheduleTable()}</Card>
+        )}
+
+        {activeTab === 'salary' && (
+          <Card padding="md">{renderSalary()}</Card>
+        )}
+
+        {activeTab === 'form' && (
+          <Card padding="md">
+            <div className="relative h-[calc(100vh-250px)] rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+              <iframe
+                src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
+                className="absolute inset-0 w-full h-full"
+                frameBorder="0"
+                title="Form"
+              />
+            </div>
+          </Card>
+        )}
+
+        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t" style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}>
           <div className="grid grid-cols-5 h-16">
             {[
               { id: 'home' as const, icon: Home, label: 'Главная' },
@@ -1621,7 +903,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className="flex flex-col items-center justify-center transition-all"
+                className="flex flex-col items-center justify-center"
                 style={{
                   backgroundColor: activeTab === id ? 'var(--primary-light)' : 'transparent',
                   color: activeTab === id ? 'var(--primary)' : 'var(--text-subtle)',
@@ -1635,227 +917,59 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         </nav>
       </div>
 
-      {/* ========================================
-          МОДАЛЬНЫЕ ОКНА
-          ======================================== */}
-
-      {/* Добавление смены */}
-      <Modal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        title={`Смена на ${formatDateStr(modalDate)}`}
-      >
+      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title={`Смена на ${formatDateStr(modalDate)}`}>
         <div className="p-6 space-y-4">
-          {modalError && (
-            <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
-              {modalError}
-            </div>
-          )}
-
+          {modalError && <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>{modalError}</div>}
           <div className="flex gap-2">
-            <Button
-              onClick={() => setIsFullDayModal(true)}
-              variant={isFullDayModal ? 'primary' : 'secondary'}
-              className="flex-1"
-            >
-              Полная
-            </Button>
-            <Button
-              onClick={() => setIsFullDayModal(false)}
-              variant={!isFullDayModal ? 'primary' : 'secondary'}
-              className="flex-1"
-            >
-              Неполная
-            </Button>
+            <Button onClick={() => setIsFullDayModal(true)} variant={isFullDayModal ? 'primary' : 'secondary'} className="flex-1">Полная</Button>
+            <Button onClick={() => setIsFullDayModal(false)} variant={!isFullDayModal ? 'primary' : 'secondary'} className="flex-1">Неполная</Button>
           </div>
-
           {!isFullDayModal && (
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
-                  Начало
-                </label>
-                <select
-                  value={modalStartTime}
-                  onChange={e => setModalStartTime(e.target.value)}
-                  className="input"
-                >
-                  {START_TIMES.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
-                  Конец
-                </label>
-                <select
-                  value={modalEndTime}
-                  onChange={e => setModalEndTime(e.target.value)}
-                  className="input"
-                >
-                  {END_TIMES.filter(t => t > modalStartTime).map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
+              <select value={modalStartTime} onChange={e => setModalStartTime(e.target.value)} className="input">
+                {START_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <select value={modalEndTime} onChange={e => setModalEndTime(e.target.value)} className="input">
+                {END_TIMES.filter(t => t > modalStartTime).map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
           )}
-
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
-              Комментарий (необязательно)
-            </label>
-            <textarea
-              value={modalComment}
-              onChange={e => setModalComment(e.target.value)}
-              rows={3}
-              className="input resize-none"
-              placeholder="Напишите комментарий..."
-              maxLength={4096}
-            />
-            <p className="text-xs mt-1" style={{ color: 'var(--text-subtle)' }}>
-              {modalComment.length} / 4096 символов
-            </p>
-          </div>
-
-          <div className="text-xs p-2 rounded-lg" style={{ backgroundColor: 'var(--warning-light)', color: 'var(--warning)' }}>
-            ⚠️ Комментарий нельзя будет изменить после создания.
-          </div>
-
-          <Button
-            onClick={handleAddShift}
-            disabled={savingShift}
-            variant="primary"
-            size="lg"
-            loading={savingShift}
-            className="w-full"
-          >
-            Добавить смену
-          </Button>
+          <textarea value={modalComment} onChange={e => setModalComment(e.target.value)} rows={3} className="input resize-none" placeholder="Комментарий..." maxLength={4096} />
+          <Button onClick={handleAddShift} disabled={savingShift} variant="primary" size="lg" loading={savingShift} className="w-full">Добавить</Button>
         </div>
       </Modal>
 
-      {/* Просмотр смены */}
-      <Modal
-        isOpen={isViewModalOpen}
-        onClose={() => setIsViewModalOpen(false)}
-        title="Детали смены"
-      >
+      <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Детали смены">
         {viewShift && (
           <div className="p-6 space-y-4">
             <div>
               <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Дата:</span>
-              <p className="font-medium" style={{ color: 'var(--text)' }}>
-                {format(parseISO(viewShift.work_date), 'dd MMMM yyyy (EEEE)', { locale: ru })}
-              </p>
+              <p className="font-medium" style={{ color: 'var(--text)' }}>{format(parseISO(viewShift.work_date), 'dd MMMM yyyy', { locale: ru })}</p>
             </div>
-
             <div>
-              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Тип:</span>
-              <div className="mt-1">
-                <Badge variant={viewShift.is_full_day ? 'success' : 'warning'}>
-                  {viewShift.is_full_day ? 'Полная смена' : 'Неполная смена'}
-                </Badge>
-              </div>
+              <Badge variant={viewShift.is_full_day ? 'success' : 'warning'}>
+                {viewShift.is_full_day ? 'Полная' : 'Неполная'}
+              </Badge>
             </div>
-
-            {!viewShift.is_full_day && (
-              <div>
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Время:</span>
-                <p className="font-medium" style={{ color: 'var(--text)' }}>
-                  {viewShift.start_time?.slice(0, 5)} – {viewShift.end_time?.slice(0, 5)}
-                </p>
-              </div>
-            )}
-
-            <div>
-              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Комментарий:</span>
-              <p className="font-medium" style={{ color: 'var(--text)' }}>
-                {viewShift.comment || <span style={{ color: 'var(--text-subtle)' }}>Нет комментария</span>}
-              </p>
-            </div>
-
             <div className="flex gap-3 pt-4">
-              <Button
-                onClick={() => setIsViewModalOpen(false)}
-                variant="secondary"
-                className="flex-1"
-              >
-                Закрыть
-              </Button>
+              <Button onClick={() => setIsViewModalOpen(false)} variant="secondary" className="flex-1">Закрыть</Button>
               {dataManager?.canDeleteAvailability(viewShift).allowed && (
-                <Button
-                  onClick={() => handleDeleteShift(viewShift)}
-                  variant="danger"
-                  className="flex-1"
-                >
-                  Удалить
-                </Button>
+                <Button onClick={() => handleDeleteShift(viewShift)} variant="danger" className="flex-1">Удалить</Button>
               )}
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Отметка времени */}
-      <Modal
-        isOpen={isTimeLogModalOpen}
-        onClose={() => setIsTimeLogModalOpen(false)}
-        title="Отметка фактического времени"
-      >
+      <Modal isOpen={isTimeLogModalOpen} onClose={() => setIsTimeLogModalOpen(false)} title="Отметка времени">
         {selectedSchedule && (
           <div className="p-6 space-y-4">
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              {format(parseISO(selectedSchedule.work_date), 'dd.MM.yyyy')} –{' '}
-              {dataManager?.getAttraction(selectedSchedule.attraction_id)?.name}
-            </p>
-
-            {timeLogError && (
-              <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
-                {timeLogError}
-              </div>
-            )}
-
+            {timeLogError && <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>{timeLogError}</div>}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
-                  Время прихода
-                </label>
-                <input
-                  type="time"
-                  value={actualStart}
-                  onChange={e => setActualStart(e.target.value)}
-                  className="input"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
-                  Время ухода
-                </label>
-                <input
-                  type="time"
-                  value={actualEnd}
-                  onChange={e => setActualEnd(e.target.value)}
-                  className="input"
-                />
-              </div>
+              <input type="time" value={actualStart} onChange={e => setActualStart(e.target.value)} className="input" />
+              <input type="time" value={actualEnd} onChange={e => setActualEnd(e.target.value)} className="input" />
             </div>
-
-            <div className="text-sm p-3 rounded-lg" style={{ backgroundColor: 'var(--info-light)', color: 'var(--info)' }}>
-              ℹ️ Оплата начинается с 11:00. Если пришли раньше, время до 11:00 не оплачивается.
-            </div>
-
-            <Button
-              onClick={handleSaveTimeLog}
-              disabled={savingTimeLog}
-              variant="primary"
-              size="lg"
-              loading={savingTimeLog}
-              className="w-full"
-            >
-              Сохранить
-            </Button>
+            <Button onClick={handleSaveTimeLog} disabled={savingTimeLog} variant="primary" size="lg" loading={savingTimeLog} className="w-full">Сохранить</Button>
           </div>
         )}
       </Modal>
