@@ -5,9 +5,6 @@
  * =====================================================================
  */
 
-// ============================================================
-// БЛОК 1: Импорты и типы
-// ============================================================
 import { useState, useEffect } from 'react';
 import { dbService } from '../lib/DatabaseService';
 import type { Employee, Attraction } from '../lib/DatabaseService';
@@ -19,8 +16,14 @@ import {
 } from 'lucide-react';
 import { format, addDays, parseISO, isWeekend } from 'date-fns';
 import { ru } from 'date-fns/locale';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Badge } from './ui/Badge';
+import { cn } from '../utils/cn';
 
-// Типы данных для генератора
+// ============================================================
+// Типы данных
+// ============================================================
 interface AttractionWithStaff {
   id: number;
   name: string;
@@ -67,12 +70,11 @@ interface ScheduleDay {
 type AlgorithmType = 'combined' | 'timeslot';
 
 // ============================================================
-// БЛОК 2: Вспомогательные функции
+// Вспомогательные функции
 // ============================================================
 
 const WORK_START_MIN = 0;
 const WORK_END_MIN = 780;
-const HOURS = Array.from({ length: 13 }, (_, i) => i);
 
 function minutesFrom10(timeStr: string): number {
   const [h, m] = timeStr.split(':').map(Number);
@@ -86,7 +88,6 @@ function formatTimeFromMinutes(minutesFrom10: number): string {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 
-// Покрытие дня неполными сменами
 function findCoverForAttraction(
   neededCount: number,
   partialEmployees: ScheduleEntry[],
@@ -124,7 +125,6 @@ function findCoverForAttraction(
   return null;
 }
 
-// Min-cost flow для назначения
 function solveAssignment(
   employees: EmployeeWithPriority[],
   slots: { attractionId: number }[]
@@ -142,10 +142,9 @@ function solveAssignment(
       const attractionId = slots[j].attractionId;
       const priority = emp.priorityMap.get(attractionId);
       if (priority !== undefined) {
-        // Улучшение: добавляем бонус для study goals
         let baseCost = priority * 10;
         if (emp.studyGoalAttractionId === attractionId) {
-          baseCost -= 5; // Приоритет для обучения
+          baseCost -= 5;
         }
         cost[i][j] = baseCost;
       }
@@ -238,7 +237,7 @@ function solveAssignment(
 }
 
 // ============================================================
-// БЛОК 3: Компонент ScheduleGenerator
+// Основной компонент
 // ============================================================
 
 export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: UserProfile; isSuperAdmin?: boolean }) {
@@ -246,14 +245,12 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
   const [attractions, setAttractions] = useState<AttractionWithStaff[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
 
-  // Параметры генерации
   const [startDate, setStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [daysCount, setDaysCount] = useState<number>(1);
   const [selectedAttractionIds, setSelectedAttractionIds] = useState<Set<number>>(new Set());
   const [minStaffPerAttraction, setMinStaffPerAttraction] = useState<number>(1);
   const [algorithm, setAlgorithm] = useState<AlgorithmType>('combined');
 
-  // Результат
   const [schedule, setSchedule] = useState<ScheduleDay[]>([]);
   const [unassigned, setUnassigned] = useState<ScheduleEntry[]>([]);
   const [isGenerated, setIsGenerated] = useState(false);
@@ -261,14 +258,9 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Кэши
   const [priorityMapCache, setPriorityMapCache] = useState<Map<number, Map<number, number>>>(new Map());
   const [studyGoalCache, setStudyGoalCache] = useState<Map<number, number>>(new Map());
 
-  // ============================================================
-  // Инициализация и загрузка данных через DatabaseService
-  // ============================================================
-  
   useEffect(() => {
     loadInitialData();
   }, []);
@@ -277,7 +269,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
     setLoading(true);
     
     try {
-      // Проверяем готовность DatabaseService
       if (!dbService.isReady()) {
         console.error('[ScheduleGenerator] DatabaseService не готов');
         alert('Ошибка: Сервис базы данных не инициализирован');
@@ -285,7 +276,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
         return;
       }
 
-      // Загружаем аттракционы из DatabaseService
       const attractionsData = dbService.getAttractions();
       const mapped = attractionsData.map(a => ({
         id: a.id,
@@ -296,11 +286,9 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
       setAttractions(mapped);
       setSelectedAttractionIds(new Set(mapped.map(a => a.id)));
 
-      // Загружаем сотрудников
       const employeesData = dbService.getEmployees();
       setEmployees(employeesData);
 
-      // Загружаем приоритеты
       const priorities = dbService.getPriorities();
       const priorityMap = new Map<number, Map<number, number>>();
       
@@ -315,7 +303,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
       }
       setPriorityMapCache(priorityMap);
 
-      // Загружаем цели обучения
       const goals = dbService.getStudyGoals();
       const goalMap = new Map<number, number>();
       for (const g of goals) {
@@ -338,10 +325,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
     }
   };
 
-  // ============================================================
-  // Получение доступности через DatabaseService
-  // ============================================================
-  
   const fetchAvailabilityForDate = async (date: string): Promise<Availability[]> => {
     const availData = dbService.getAvailabilityByDate(parseISO(date));
     
@@ -354,10 +337,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
     }));
   };
 
-  // ============================================================
-  // БЛОК 4: Генерация для одного дня (комбинированный алгоритм)
-  // ============================================================
-  
   const generateForDayCombined = async (date: string): Promise<{ rows: ScheduleAttractionRow[]; unassigned: ScheduleEntry[] }> => {
     const activeAttractions = attractions.filter(a => selectedAttractionIds.has(a.id));
     const isWeekendDay = isWeekend(parseISO(date));
@@ -375,7 +354,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
     const fullDayAvail = availabilities.filter(a => a.isFullDay);
     const partialAvail = availabilities.filter(a => !a.isFullDay);
 
-    // Сотрудники с полными сменами
     const fullEmployees: EmployeeWithPriority[] = [];
     for (const av of fullDayAvail) {
       const emp = employees.find(e => e.id === av.employeeId);
@@ -389,7 +367,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
       });
     }
 
-    // Создаём слоты
     const slots: { attractionId: number }[] = [];
     for (const req of attractionRequirements) {
       for (let i = 0; i < req.requiredCount; i++) {
@@ -397,7 +374,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
       }
     }
 
-    // Назначаем полные смены
     const assignment = solveAssignment(fullEmployees, slots);
 
     const rows: ScheduleAttractionRow[] = attractionRequirements.map(req => ({
@@ -432,7 +408,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
 
     const unassignedFull = fullEmployees.filter(emp => !assignedFullIds.includes(emp.id));
 
-    // Неполные смены
     let partialEntries: ScheduleEntry[] = [];
     for (const av of partialAvail) {
       const emp = employees.find(e => e.id === av.employeeId);
@@ -480,10 +455,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
     return { rows, unassigned: unassignedList };
   };
 
-  // ============================================================
-  // БЛОК 5: Основная генерация графика
-  // ============================================================
-  
   const generateSchedule = async () => {
     if (selectedAttractionIds.size === 0) {
       alert('Выберите хотя бы один аттракцион');
@@ -515,18 +486,8 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
     setSchedule(newSchedule);
     setIsGenerated(true);
     setGenerating(false);
-
-    console.log('[ScheduleGenerator] График сгенерирован:', {
-      days: daysCount,
-      algorithm,
-      unassigned: uniqueUnassigned.length
-    });
   };
 
-  // ============================================================
-  // БЛОК 6: Ручное редактирование
-  // ============================================================
-  
   const moveToUnassigned = (dayDate: string, attractionId: number, employeeId: number) => {
     setSchedule(prev => prev.map(day => {
       if (day.date !== dayDate) return day;
@@ -575,10 +536,6 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
     setUnassigned(prev => prev.filter(e => e.employeeId !== employeeId));
   };
 
-  // ============================================================
-  // БЛОК 7: Сохранение графика через DatabaseService
-  // ============================================================
-  
   const handleSaveSchedule = async () => {
     setSaving(true);
     
@@ -619,13 +576,11 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
         return;
       }
 
-      // Удаляем старые записи на эти даты
       const dates = [...new Set(schedule.map(d => d.date))];
       for (const date of dates) {
         await dbService.deleteScheduleByDate(date);
       }
 
-      // Массовое создание через DatabaseService
       const success = await dbService.bulkCreateScheduleAssignments(assignments);
 
       if (success) {
@@ -644,16 +599,14 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
     }
   };
 
-  // ============================================================
-  // БЛОК 8: Рендер (обновленный дизайн)
-  // ============================================================
-  
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
         <div className="text-center space-y-4">
-          <Loader2 className="animate-spin text-indigo-600 h-12 w-12 mx-auto" />
-          <p className="text-gray-600 font-medium">Загрузка данных из базы...</p>
+          <Loader2 className="animate-spin h-12 w-12 mx-auto" style={{ color: 'var(--primary)' }} />
+          <p className="font-medium" style={{ color: 'var(--text-muted)' }}>
+            Загрузка данных из базы...
+          </p>
         </div>
       </div>
     );
@@ -662,68 +615,67 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       
-      {/* Заголовок с градиентом */}
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-3xl shadow-xl p-6 text-white">
+      {/* Заголовок */}
+      <Card 
+        className="p-6"
+        style={{ 
+          background: 'linear-gradient(135deg, var(--primary) 0%, #9333ea 50%, #ec4899 100%)',
+          color: 'white',
+          border: 'none'
+        }}
+      >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-3">
               <Sparkles className="h-8 w-8" />
               Генератор графика 2.0
             </h1>
-            <p className="text-indigo-100 mt-2 flex items-center gap-2">
+            <p className="opacity-90 mt-2 flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
               Автоматическое составление расписания с ИИ-оптимизацией
             </p>
           </div>
           {isGenerated && (
-            <button
+            <Button
+              variant="secondary"
               onClick={handleSaveSchedule}
-              disabled={saving}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-indigo-600 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:transform-none font-semibold"
+              loading={saving}
+              icon={<Save className="h-5 w-5" />}
+              className="shadow-lg"
             >
-              {saving ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Сохранение...
-                </>
-              ) : (
-                <>
-                  <Save className="h-5 w-5" />
-                  Сохранить график
-                </>
-              )}
-            </button>
+              Сохранить график
+            </Button>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* Панель параметров */}
-      <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 space-y-8">
+      <Card className="p-8 space-y-8">
         
         {/* Основные параметры */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-indigo-500" />
+            <label className="block text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text)' }}>
+              <Calendar className="h-4 w-4" style={{ color: 'var(--primary)' }} />
               Дата начала
             </label>
             <input
               type="date"
               value={startDate}
               onChange={e => setStartDate(e.target.value)}
-              className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+              className="input w-full"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-indigo-500" />
+            <label className="block text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text)' }}>
+              <Clock className="h-4 w-4" style={{ color: 'var(--primary)' }} />
               Количество дней
             </label>
             <select
               value={daysCount}
               onChange={e => setDaysCount(Number(e.target.value))}
-              className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all bg-white"
+              className="input w-full"
             >
               {[1, 2, 3, 4, 5, 6, 7].map(d => (
                 <option key={d} value={d}>
@@ -734,8 +686,8 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Users className="h-4 w-4 text-indigo-500" />
+            <label className="block text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text)' }}>
+              <Users className="h-4 w-4" style={{ color: 'var(--primary)' }} />
               Мин. сотрудников
             </label>
             <input
@@ -744,20 +696,22 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
               max={10}
               value={minStaffPerAttraction}
               onChange={e => setMinStaffPerAttraction(Number(e.target.value))}
-              className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all"
+              className="input w-full"
             />
-            <p className="text-xs text-gray-500 mt-1">Дополнительно к требованиям БД</p>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Дополнительно к требованиям БД
+            </p>
           </div>
 
           <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Filter className="h-4 w-4 text-indigo-500" />
+            <label className="block text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text)' }}>
+              <Filter className="h-4 w-4" style={{ color: 'var(--primary)' }} />
               Алгоритм
             </label>
             <select
               value={algorithm}
               onChange={e => setAlgorithm(e.target.value as AlgorithmType)}
-              className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all bg-white"
+              className="input w-full"
             >
               <option value="combined">Комбинированный (оптимальный)</option>
               <option value="timeslot">Временные слоты (beta)</option>
@@ -768,29 +722,34 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
         {/* Выбор аттракционов */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <label className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text)' }}>
               🎢 Аттракционы
-              <span className="text-xs font-normal text-gray-500">
+              <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
                 ({selectedAttractionIds.size} из {attractions.length})
               </span>
             </label>
             <div className="flex gap-3 text-sm">
               <button
                 onClick={() => setSelectedAttractionIds(new Set(attractions.map(a => a.id)))}
-                className="text-indigo-600 hover:text-indigo-800 font-medium transition"
+                className="font-medium transition"
+                style={{ color: 'var(--primary)' }}
               >
                 Все
               </button>
               <button
                 onClick={() => setSelectedAttractionIds(new Set())}
-                className="text-gray-400 hover:text-gray-600 font-medium transition"
+                className="font-medium transition"
+                style={{ color: 'var(--text-subtle)' }}
               >
                 Сбросить
               </button>
             </div>
           </div>
           
-          <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-xl">
+          <div 
+            className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-2 rounded-xl"
+            style={{ backgroundColor: 'var(--bg-tertiary)' }}
+          >
             {attractions.map(attr => {
               const isSelected = selectedAttractionIds.has(attr.id);
               return (
@@ -803,11 +762,17 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
                       return next;
                     });
                   }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isSelected
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md scale-105'
-                      : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-indigo-300 hover:shadow-sm'
-                  }`}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                    isSelected && 'scale-105 shadow-md'
+                  )}
+                  style={{
+                    background: isSelected 
+                      ? 'linear-gradient(135deg, var(--primary) 0%, #9333ea 100%)'
+                      : 'var(--surface)',
+                    color: isSelected ? 'white' : 'var(--text)',
+                    border: isSelected ? 'none' : '2px solid var(--border)'
+                  }}
                 >
                   {isSelected ? (
                     <CheckSquare className="h-4 w-4" />
@@ -822,87 +787,111 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
         </div>
 
         {/* Кнопка генерации */}
-        <button
+        <Button
           onClick={generateSchedule}
           disabled={generating || selectedAttractionIds.size === 0}
-          className="w-full flex justify-center items-center gap-3 py-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 text-white rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:transform-none"
+          loading={generating}
+          icon={<Wand2 className="h-6 w-6" />}
+          className="w-full py-4 text-lg font-bold shadow-lg"
+          style={{
+            background: 'linear-gradient(135deg, var(--primary) 0%, #9333ea 50%, #ec4899 100%)',
+            color: 'white'
+          }}
         >
-          {generating ? (
-            <>
-              <Loader2 className="h-6 w-6 animate-spin" />
-              Генерация графика...
-            </>
-          ) : (
-            <>
-              <Wand2 className="h-6 w-6" />
-              Сгенерировать график
-            </>
-          )}
-        </button>
-      </div>
+          Сгенерировать график
+        </Button>
+      </Card>
 
-      {/* Результат генерации */}
+      {/* Результат */}
       {isGenerated && (
         <div className="space-y-6">
           
-          {/* Сообщение об успешном сохранении */}
+          {/* Успешное сохранение */}
           {saveSuccess && (
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-2xl px-6 py-4 flex items-center gap-3 shadow-md animate-pulse">
-              <CheckSquare className="h-6 w-6 text-green-600" />
-              <span className="text-green-800 font-semibold text-lg">
+            <Card 
+              className="px-6 py-4 flex items-center gap-3 shadow-md animate-pulse"
+              style={{ 
+                background: 'linear-gradient(135deg, var(--success-light) 0%, var(--success-light) 100%)',
+                border: '2px solid var(--success)'
+              }}
+            >
+              <CheckSquare className="h-6 w-6" style={{ color: 'var(--success)' }} />
+              <span className="font-semibold text-lg" style={{ color: 'var(--success)' }}>
                 График успешно сохранён в базе данных!
               </span>
-            </div>
+            </Card>
           )}
 
           {/* График по дням */}
-          {schedule.map((day, idx) => (
-            <div key={day.date} className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+          {schedule.map((day) => (
+            <Card key={day.date} padding="none" className="overflow-hidden">
               
               {/* Заголовок дня */}
-              <div className="bg-gradient-to-r from-gray-900 to-gray-700 text-white px-8 py-5 flex items-center justify-between">
+              <div 
+                className="px-8 py-5 flex items-center justify-between text-white"
+                style={{ background: 'linear-gradient(135deg, #1f2937 0%, #374151 100%)' }}
+              >
                 <div className="flex items-center gap-3">
                   <Calendar className="h-6 w-6" />
                   <div>
                     <div className="font-bold text-xl">
                       {format(parseISO(day.date), 'dd MMMM yyyy', { locale: ru })}
                     </div>
-                    <div className="text-sm text-gray-300">
+                    <div className="text-sm opacity-75">
                       {format(parseISO(day.date), 'EEEE', { locale: ru })}
                     </div>
                   </div>
                 </div>
-                <div className="bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-medium">
+                <Badge 
+                  variant="neutral" 
+                  className="bg-white/20 backdrop-blur-sm text-white border-none"
+                >
                   {algorithm === 'combined' ? '🎯 Комбинированный' : '⏰ Временные слоты'}
-                </div>
+                </Badge>
               </div>
 
-              {/* Таблица аттракционов */}
+              {/* Таблица */}
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <table className="min-w-full divide-y" style={{ borderColor: 'var(--border)' }}>
+                  <thead style={{ backgroundColor: 'var(--bg-tertiary)' }}>
                     <tr>
-                      <th className="px-8 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                      <th className="px-8 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                         Аттракцион
                       </th>
-                      <th className="px-8 py-4 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">
+                      <th className="px-8 py-4 text-left text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text)' }}>
                         Сотрудники
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
                     {day.rows.map(row => {
                       const hasDeficit = row.employees.length < row.minStaffRequired;
                       
                       return (
-                        <tr key={row.attractionId} className="hover:bg-indigo-50/30 transition-colors">
+                        <tr 
+                          key={row.attractionId} 
+                          className="transition-colors"
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                        >
                           <td className="px-8 py-5 whitespace-nowrap">
                             <div className="flex flex-col gap-2">
-                              <div className="text-base font-bold text-gray-900">
+                              <div className="text-base font-bold" style={{ color: 'var(--text)' }}>
                                 {row.attractionName}
                               </div>
                               {hasDeficit && (
-                                <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-1.5 border border-red-200 w-fit">
+                                <div 
+                                  className="flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 border w-fit"
+                                  style={{ 
+                                    backgroundColor: 'var(--error-light)',
+                                    color: 'var(--error)',
+                                    borderColor: 'var(--error)'
+                                  }}
+                                >
                                   <AlertCircle className="h-4 w-4" />
                                   Нужно минимум {row.minStaffRequired} чел.
                                 </div>
@@ -914,13 +903,16 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
                               {row.employees.map(emp => (
                                 <div
                                   key={emp.employeeId}
-                                  className={`group flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-md ${
-                                    emp.isManuallyAdded
-                                      ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 text-blue-900'
-                                      : 'bg-gradient-to-r from-gray-50 to-gray-100 border-2 border-gray-200 text-gray-800'
-                                  }`}
+                                  className="group flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-md border-2"
+                                  style={{
+                                    background: emp.isManuallyAdded
+                                      ? 'linear-gradient(135deg, var(--info-light) 0%, var(--info-light) 100%)'
+                                      : 'linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-tertiary) 100%)',
+                                    borderColor: emp.isManuallyAdded ? 'var(--info)' : 'var(--border)',
+                                    color: emp.isManuallyAdded ? 'var(--info)' : 'var(--text)'
+                                  }}
                                 >
-                                  <GripVertical className="h-4 w-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  <GripVertical className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--text-subtle)' }} />
                                   <span className="font-semibold">{emp.employeeName}</span>
                                   {!emp.isFullDay && emp.startTime && emp.endTime && (
                                     <span className="text-xs bg-white/50 rounded-full px-2 py-0.5">
@@ -929,7 +921,8 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
                                   )}
                                   <button
                                     onClick={() => moveToUnassigned(day.date, row.attractionId, emp.employeeId)}
-                                    className="ml-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"
+                                    className="ml-1 opacity-0 group-hover:opacity-100 transition-all"
+                                    style={{ color: 'var(--text-subtle)' }}
                                     title="Убрать из графика"
                                   >
                                     <X className="h-4 w-4" />
@@ -940,7 +933,12 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
                               {/* Кнопка добавления */}
                               <div className="relative inline-block">
                                 <button
-                                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 text-green-700 hover:from-green-100 hover:to-emerald-100 hover:shadow-md transition-all"
+                                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all"
+                                  style={{
+                                    background: 'linear-gradient(135deg, var(--success-light) 0%, var(--success-light) 100%)',
+                                    borderColor: 'var(--success)',
+                                    color: 'var(--success)'
+                                  }}
                                   onMouseEnter={e => {
                                     const picker = e.currentTarget.nextElementSibling;
                                     if (picker) (picker as HTMLElement).style.display = 'block';
@@ -955,13 +953,17 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
                                 </button>
                                 
                                 <div
-                                  className="absolute z-20 left-0 top-full mt-2 bg-white border-2 border-gray-200 rounded-2xl shadow-2xl p-3 min-w-64 hidden"
-                                  style={{ display: 'none' }}
+                                  className="absolute z-20 left-0 top-full mt-2 rounded-2xl shadow-2xl p-3 min-w-64 hidden"
+                                  style={{ 
+                                    display: 'none',
+                                    backgroundColor: 'var(--surface)',
+                                    border: '2px solid var(--border)'
+                                  }}
                                   onMouseEnter={e => (e.currentTarget.style.display = 'block')}
                                   onMouseLeave={e => (e.currentTarget.style.display = 'none')}
                                 >
                                   {unassigned.length === 0 ? (
-                                    <p className="text-sm text-gray-400 px-3 py-2 italic">
+                                    <p className="text-sm px-3 py-2 italic" style={{ color: 'var(--text-subtle)' }}>
                                       Нет доступных сотрудников
                                     </p>
                                   ) : (
@@ -970,15 +972,22 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
                                         <li key={emp.employeeId}>
                                           <button
                                             onClick={() => moveFromUnassigned(emp.employeeId, day.date, row.attractionId)}
-                                            className="w-full text-left px-4 py-2.5 rounded-xl text-sm hover:bg-indigo-50 transition-colors flex items-center gap-3 group"
+                                            className="w-full text-left px-4 py-2.5 rounded-xl text-sm transition-colors flex items-center gap-3 group"
+                                            style={{ color: 'var(--text)' }}
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'transparent';
+                                            }}
                                           >
-                                            <Plus className="h-4 w-4 text-green-500 group-hover:scale-110 transition-transform" />
+                                            <Plus className="h-4 w-4 group-hover:scale-110 transition-transform" style={{ color: 'var(--success)' }} />
                                             <div className="flex-1">
-                                              <div className="font-medium text-gray-900">
+                                              <div className="font-medium">
                                                 {emp.employeeName}
                                               </div>
                                               {!emp.isFullDay && emp.startTime && (
-                                                <div className="text-xs text-gray-500">
+                                                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                                                   {emp.startTime.slice(0, 5)}–{emp.endTime?.slice(0, 5)}
                                                 </div>
                                               )}
@@ -998,23 +1007,27 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
                   </tbody>
                 </table>
               </div>
-            </div>
+            </Card>
           ))}
 
-          {/* Незадействованные сотрудники */}
-          <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-3xl border-2 border-dashed border-orange-300 p-8 shadow-lg">
+          {/* Незадействованные */}
+          <Card 
+            className="p-8"
+            style={{ 
+              background: 'linear-gradient(135deg, var(--warning-light) 0%, var(--warning-light) 100%)',
+              border: '2px dashed var(--warning)'
+            }}
+          >
             <div className="flex items-center gap-3 mb-6">
-              <Users className="h-6 w-6 text-orange-600" />
-              <h5 className="font-bold text-xl text-gray-800">
+              <Users className="h-6 w-6" style={{ color: 'var(--warning)' }} />
+              <h5 className="font-bold text-xl" style={{ color: 'var(--text)' }}>
                 Незадействованные сотрудники
               </h5>
-              <span className="bg-orange-200 text-orange-800 text-sm font-bold rounded-full px-3 py-1">
-                {unassigned.length}
-              </span>
+              <Badge variant="warning">{unassigned.length}</Badge>
             </div>
             
             {unassigned.length === 0 ? (
-              <p className="text-gray-500 italic text-center py-4">
+              <p className="italic text-center py-4" style={{ color: 'var(--text-muted)' }}>
                 ✨ Все доступные сотрудники распределены по графику
               </p>
             ) : (
@@ -1022,19 +1035,23 @@ export function ScheduleGenerator({ profile, isSuperAdmin = false }: { profile: 
                 {unassigned.map(emp => (
                   <div
                     key={emp.employeeId}
-                    className="flex items-center gap-3 bg-white border-2 border-orange-200 rounded-2xl px-5 py-3 shadow-md hover:shadow-lg transition-shadow"
+                    className="flex items-center gap-3 border-2 rounded-2xl px-5 py-3 shadow-md hover:shadow-lg transition-shadow"
+                    style={{ 
+                      backgroundColor: 'var(--surface)',
+                      borderColor: 'var(--warning)'
+                    }}
                   >
-                    <span className="text-base font-semibold text-gray-900">
+                    <span className="text-base font-semibold" style={{ color: 'var(--text)' }}>
                       {emp.employeeName}
                     </span>
-                    <span className="text-xs font-medium bg-orange-100 text-orange-700 rounded-full px-3 py-1">
+                    <Badge variant="warning" className="text-xs">
                       {emp.isFullDay ? '📅 Полный день' : `⏰ ${emp.startTime?.slice(0, 5)}–${emp.endTime?.slice(0, 5)}`}
-                    </span>
+                    </Badge>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       )}
     </div>
