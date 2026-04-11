@@ -1,8 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, subMonths, addMonths, isSameDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Save, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Save, Loader2, Calendar } from 'lucide-react';
 import { ScheduleAssignment, Attraction, Employee } from '../types';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Badge } from './ui/Badge';
+import { cn } from '../utils/cn';
 
 interface ScheduleViewBlockProps {
   scheduleAssignments: ScheduleAssignment[];
@@ -29,10 +33,10 @@ export function ScheduleViewBlock({
   
   // Состояние для хранения отфильтрованных назначений
   const [filteredAssignments, setFilteredAssignments] = useState<ScheduleAssignment[]>([]);
-  // Индикатор загрузки (можно добавить, если понадобится отдельная загрузка)
+  // Индикатор загрузки
   const [loading, setLoading] = useState(false);
   
-  // Ссылка на контейнер для экспорта (используется для скриншота через canvas + SVG)
+  // Ссылка на контейнер для экспорта
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Эффект: при изменении параметров фильтрации пересчитываем отображаемые назначения
@@ -54,14 +58,14 @@ export function ScheduleViewBlock({
     const endStr = format(end, 'yyyy-MM-dd');
     
     const filtered = scheduleAssignments.filter(sa => {
-      const date = sa.work_date; // строка 'yyyy-MM-dd'
+      const date = sa.work_date;
       return date >= startStr && date <= endStr;
     });
     
     setFilteredAssignments(filtered);
   }, [viewMode, startDate, daysCount, selectedWeekStart, scheduleAssignments]);
 
-  // Вспомогательные функции для навигации по неделям в пределах выбранного месяца
+  // Вспомогательные функции для навигации по неделям
   const weeksInSelectedMonth = useMemo(() => {
     const start = startOfMonth(scheduleViewMonth);
     const end = endOfMonth(scheduleViewMonth);
@@ -88,7 +92,6 @@ export function ScheduleViewBlock({
     if (currentWeekIndex > 0) {
       setSelectedWeekStart(weeksInSelectedMonth[currentWeekIndex - 1][0]);
     } else {
-      // Переход на предыдущий месяц
       const prevMonth = subMonths(scheduleViewMonth, 1);
       setScheduleViewMonth(prevMonth);
       const weeksPrev = getWeeksInMonth(prevMonth);
@@ -102,7 +105,6 @@ export function ScheduleViewBlock({
     if (currentWeekIndex < weeksInSelectedMonth.length - 1) {
       setSelectedWeekStart(weeksInSelectedMonth[currentWeekIndex + 1][0]);
     } else {
-      // Переход на следующий месяц
       const nextMonth = addMonths(scheduleViewMonth, 1);
       setScheduleViewMonth(nextMonth);
       const weeksNext = getWeeksInMonth(nextMonth);
@@ -112,7 +114,6 @@ export function ScheduleViewBlock({
     }
   };
 
-  // Вспомогательная функция получения недель месяца (используется выше)
   function getWeeksInMonth(monthDate: Date): Date[][] {
     const start = startOfMonth(monthDate);
     const end = endOfMonth(monthDate);
@@ -129,17 +130,15 @@ export function ScheduleViewBlock({
     return weeks;
   }
 
-  // Функция экспорта в PNG (через SVG и canvas)
+  // Функция экспорта в PNG
   const exportToPNG = useCallback(() => {
     if (!containerRef.current) return;
     
-    // Получаем данные для отрисовки
     const dates = getDateRange();
     const attrIds = [...new Set(filteredAssignments.map(a => a.attraction_id))];
     const attrMap = new Map(attractions.map(a => [a.id, a]));
     const empMap = new Map(employees.map(e => [e.id, e]));
     
-    // Строим SVG вручную
     const cellWidth = 120;
     const cellHeight = 40;
     const headerHeight = 50;
@@ -163,7 +162,7 @@ export function ScheduleViewBlock({
       svgContent += `<text x="${x + cellWidth/2}" y="${y + 38}" text-anchor="middle" font-size="12" fill="#6b7280">${format(date, 'EEEE', { locale: ru })}</text>`;
     });
     
-    // Левая колонка с названиями аттракционов
+    // Левая колонка с аттракционами
     attrIds.forEach((attrId, rowIdx) => {
       const attr = attrMap.get(attrId);
       const y = headerHeight + rowIdx * rowHeight;
@@ -186,7 +185,7 @@ export function ScheduleViewBlock({
           svgContent += `<text x="${x + cellWidth/2}" y="${y + rowHeight/2 + 5}" text-anchor="middle" font-size="12" fill="#9ca3af">—</text>`;
         } else {
           let yOffset = y + 18;
-          assignments.slice(0, 3).forEach((ass, i) => {
+          assignments.slice(0, 3).forEach((ass) => {
             const emp = empMap.get(ass.employee_id);
             const timeStr = `${ass.start_time?.substring(0,5)}-${ass.end_time?.substring(0,5)}`;
             svgContent += `<text x="${x + 5}" y="${yOffset}" font-size="11" fill="#1f2937">${emp?.full_name || '?'}</text>`;
@@ -202,7 +201,6 @@ export function ScheduleViewBlock({
     
     svgContent += `</svg>`;
     
-    // Создаём изображение из SVG
     const img = new Image();
     const svgBlob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);
@@ -217,7 +215,6 @@ export function ScheduleViewBlock({
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0);
         
-        // Генерируем имя файла
         const startStr = format(getDateRange()[0], 'yyyy-MM-dd');
         const endStr = format(getDateRange()[getDateRange().length - 1], 'yyyy-MM-dd');
         const fileName = `schedule_${startStr}_${endStr}.png`;
@@ -233,126 +230,146 @@ export function ScheduleViewBlock({
     img.src = url;
   }, [filteredAssignments, attractions, employees, viewMode, startDate, daysCount, selectedWeekStart]);
 
-  // Вспомогательная функция получения массива дат для текущего режима
   const getDateRange = (): Date[] => {
     if (viewMode === 'day') return [startDate];
     if (viewMode === 'days') {
       return Array.from({ length: daysCount }, (_, i) => addDays(startDate, i));
     }
-    // week
     return Array.from({ length: 7 }, (_, i) => addDays(selectedWeekStart, i));
   };
 
-  // Рендер основного содержимого вкладки
   return (
     <div className="p-6 space-y-6">
+      {/* Заголовок */}
       <div className="flex items-center justify-between">
-        <h3 className="text-xl font-semibold">График смен</h3>
-        <button
+        <h3 className="text-xl font-semibold" style={{ color: 'var(--text)' }}>
+          График смен
+        </h3>
+        <Button
+          variant="success"
           onClick={exportToPNG}
-          className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-green-700"
+          icon={<Save className="h-4 w-4" />}
         >
-          <Save className="h-4 w-4" />
           Сохранить как PNG
-        </button>
+        </Button>
       </div>
 
-      {/* Панель управления периодом */}
-      <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 rounded-xl">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700">Режим:</span>
-          <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-            <button
-              onClick={() => setViewMode('day')}
-              className={`px-3 py-1.5 text-sm ${viewMode === 'day' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
-            >
-              1 день
-            </button>
-            <button
-              onClick={() => setViewMode('days')}
-              className={`px-3 py-1.5 text-sm ${viewMode === 'days' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
-            >
-              Несколько дней
-            </button>
-            <button
-              onClick={() => setViewMode('week')}
-              className={`px-3 py-1.5 text-sm ${viewMode === 'week' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
-            >
-              Неделя
-            </button>
-          </div>
-        </div>
-
-        {/* Выбор начальной даты и кол-ва дней (для режимов day/days) */}
-        {(viewMode === 'day' || viewMode === 'days') && (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Дата:</span>
-              <input
-                type="date"
-                value={format(startDate, 'yyyy-MM-dd')}
-                onChange={(e) => setStartDate(new Date(e.target.value))}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-              />
-            </div>
-            {viewMode === 'days' && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">Дней:</span>
-                <select
-                  value={daysCount}
-                  onChange={(e) => setDaysCount(Number(e.target.value))}
-                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+      {/* Панель управления */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Переключатель режимов */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+              Режим:
+            </span>
+            <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+              {[
+                { mode: 'day' as const, label: '1 день' },
+                { mode: 'days' as const, label: 'Несколько дней' },
+                { mode: 'week' as const, label: 'Неделя' },
+              ].map(({ mode, label }) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={cn(
+                    'px-3 py-1.5 text-sm transition',
+                    viewMode === mode
+                      ? 'text-white'
+                      : 'hover:bg-tertiary'
+                  )}
+                  style={{
+                    backgroundColor: viewMode === mode ? 'var(--primary)' : 'var(--surface)',
+                    color: viewMode === mode ? 'white' : 'var(--text)',
+                  }}
                 >
-                  {[1,2,3,4,5,6,7].map(n => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Выбор даты для режимов day/days */}
+          {(viewMode === 'day' || viewMode === 'days') && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  Дата:
+                </span>
+                <input
+                  type="date"
+                  value={format(startDate, 'yyyy-MM-dd')}
+                  onChange={(e) => setStartDate(new Date(e.target.value))}
+                  className="input"
+                />
               </div>
-            )}
-          </>
-        )}
+              {viewMode === 'days' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    Дней:
+                  </span>
+                  <select
+                    value={daysCount}
+                    onChange={(e) => setDaysCount(Number(e.target.value))}
+                    className="input"
+                  >
+                    {[1,2,3,4,5,6,7].map(n => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
 
-        {/* Выбор недели (режим week) */}
-        {viewMode === 'week' && (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Месяц:</span>
-              <input
-                type="month"
-                value={format(scheduleViewMonth, 'yyyy-MM')}
-                onChange={(e) => {
-                  const [year, month] = e.target.value.split('-').map(Number);
-                  setScheduleViewMonth(new Date(year, month - 1, 1));
-                  // При смене месяца автоматически выбираем первую неделю
-                  const newMonth = new Date(year, month - 1, 1);
-                  const weeks = getWeeksInMonth(newMonth);
-                  if (weeks.length > 0) {
-                    setSelectedWeekStart(weeks[0][0]);
-                  }
-                }}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={handlePrevWeek} className="p-1 hover:bg-gray-200 rounded">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="text-sm font-medium min-w-[180px] text-center">
-                {format(selectedWeekStart, 'd MMM')} – {format(addDays(selectedWeekStart, 6), 'd MMM yyyy')}
-              </span>
-              <button onClick={handleNextWeek} className="p-1 hover:bg-gray-200 rounded">
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+          {/* Выбор недели */}
+          {viewMode === 'week' && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  Месяц:
+                </span>
+                <input
+                  type="month"
+                  value={format(scheduleViewMonth, 'yyyy-MM')}
+                  onChange={(e) => {
+                    const [year, month] = e.target.value.split('-').map(Number);
+                    setScheduleViewMonth(new Date(year, month - 1, 1));
+                    const newMonth = new Date(year, month - 1, 1);
+                    const weeks = getWeeksInMonth(newMonth);
+                    if (weeks.length > 0) {
+                      setSelectedWeekStart(weeks[0][0]);
+                    }
+                  }}
+                  className="input"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePrevWeek}
+                  icon={<ChevronLeft className="h-4 w-4" />}
+                />
+                <span className="text-sm font-medium min-w-[180px] text-center" style={{ color: 'var(--text)' }}>
+                  {format(selectedWeekStart, 'd MMM', { locale: ru })} – {format(addDays(selectedWeekStart, 6), 'd MMM yyyy', { locale: ru })}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleNextWeek}
+                  icon={<ChevronRight className="h-4 w-4" />}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </Card>
 
-      {/* Отображение графика */}
-      <div ref={containerRef} className="border rounded-xl overflow-hidden shadow-sm bg-white">
+      {/* Таблица графика */}
+      <Card padding="none" ref={containerRef}>
         {loading ? (
           <div className="p-8 flex justify-center">
-            <Loader2 className="animate-spin text-blue-600 h-8 w-8" />
+            <Loader2 className="animate-spin h-8 w-8" style={{ color: 'var(--primary)' }} />
           </div>
         ) : (
           <ScheduleTable
@@ -362,12 +379,12 @@ export function ScheduleViewBlock({
             dateRange={getDateRange()}
           />
         )}
-      </div>
+      </Card>
     </div>
   );
 }
 
-// Вспомогательный компонент для отрисовки таблицы (компактный)
+// Вспомогательный компонент таблицы
 function ScheduleTable({
   assignments,
   attractions,
@@ -379,21 +396,17 @@ function ScheduleTable({
   employees: Employee[];
   dateRange: Date[];
 }) {
-  // Группируем назначения по дате и аттракциону
   const attrMap = new Map(attractions.map(a => [a.id, a]));
   const empMap = new Map(employees.map(e => [e.id, e]));
   
-  // Определяем аттракционы, которые есть в назначениях за период (или все)
   const relevantAttrIds = useMemo(() => {
     const ids = new Set(assignments.map(a => a.attraction_id));
-    // Если назначений нет, показываем все аттракционы, чтобы таблица не была пустой
     if (ids.size === 0) {
       return attractions.map(a => a.id);
     }
     return Array.from(ids);
   }, [assignments, attractions]);
 
-  // Сортируем аттракционы по имени
   const sortedAttrIds = relevantAttrIds.sort((a, b) => {
     const nameA = attrMap.get(a)?.name || '';
     const nameB = attrMap.get(b)?.name || '';
@@ -404,36 +417,62 @@ function ScheduleTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="sticky left-0 bg-gray-50 px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-r border-gray-200">
+      <table className="min-w-full divide-y text-sm" style={{ borderColor: 'var(--border)' }}>
+        <thead>
+          <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+            <th 
+              className="sticky left-0 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider border-r"
+              style={{ 
+                backgroundColor: 'var(--bg-tertiary)',
+                color: 'var(--text)',
+                borderColor: 'var(--border)'
+              }}
+            >
               Аттракцион
             </th>
             {dateRange.map(date => (
-              <th key={date.toISOString()} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider border-r border-gray-200 last:border-r-0">
+              <th 
+                key={date.toISOString()} 
+                className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider border-r last:border-r-0"
+                style={{ color: 'var(--text)', borderColor: 'var(--border)' }}
+              >
                 <div>{format(date, 'dd.MM')}</div>
-                <div className="font-normal text-gray-500">{format(date, 'EEEEEE', { locale: ru })}</div>
+                <div className="font-normal" style={{ color: 'var(--text-muted)' }}>
+                  {format(date, 'EEEEEE', { locale: ru })}
+                </div>
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
           {sortedAttrIds.map(attrId => {
             const attr = attrMap.get(attrId);
             return (
               <tr key={attrId}>
-                <td className="sticky left-0 bg-white px-3 py-2 font-medium text-gray-900 border-r border-gray-200">
+                <td 
+                  className="sticky left-0 px-3 py-2 font-medium border-r"
+                  style={{ 
+                    backgroundColor: 'var(--surface)',
+                    color: 'var(--text)',
+                    borderColor: 'var(--border)'
+                  }}
+                >
                   <div>{attr?.name}</div>
-                  <div className="text-xs text-gray-500">коэф. {attr?.coefficient || 1.0}</div>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    коэф. {attr?.coefficient || 1.0}
+                  </div>
                 </td>
                 {dateRange.map(date => {
                   const dateStr = format(date, 'yyyy-MM-dd');
                   const dayAssignments = assignments.filter(a => a.work_date === dateStr && a.attraction_id === attrId);
                   return (
-                    <td key={dateStr} className="px-2 py-2 align-top border-r border-gray-100 last:border-r-0">
+                    <td 
+                      key={dateStr} 
+                      className="px-2 py-2 align-top border-r last:border-r-0"
+                      style={{ borderColor: 'var(--border)' }}
+                    >
                       {dayAssignments.length === 0 ? (
-                        <span className="text-gray-300 text-xs">—</span>
+                        <span className="text-xs" style={{ color: 'var(--text-subtle)' }}>—</span>
                       ) : (
                         <div className="space-y-1">
                           {dayAssignments.map((ass, idx) => {
@@ -441,10 +480,16 @@ function ScheduleTable({
                             const timeStr = `${ass.start_time?.substring(0,5)}-${ass.end_time?.substring(0,5)}`;
                             return (
                               <div key={idx} className="text-xs">
-                                <div className="font-medium truncate max-w-[120px]" title={emp?.full_name}>
+                                <div 
+                                  className="font-medium truncate max-w-[120px]" 
+                                  title={emp?.full_name}
+                                  style={{ color: 'var(--text)' }}
+                                >
                                   {emp?.full_name || '?'}
                                 </div>
-                                <div className="text-gray-500">{timeStr}</div>
+                                <div style={{ color: 'var(--text-muted)' }}>
+                                  {timeStr}
+                                </div>
                               </div>
                             );
                           })}
@@ -459,7 +504,10 @@ function ScheduleTable({
         </tbody>
       </table>
       {assignments.length === 0 && (
-        <div className="p-6 text-center text-gray-500">Нет данных за выбранный период</div>
+        <div className="p-6 text-center" style={{ color: 'var(--text-muted)' }}>
+          <Calendar className="h-12 w-12 mx-auto mb-3" style={{ color: 'var(--text-subtle)' }} />
+          <p>Нет данных за выбранный период</p>
+        </div>
       )}
     </div>
   );
