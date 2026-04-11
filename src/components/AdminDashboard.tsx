@@ -32,6 +32,7 @@ import { ScheduleGenerator } from './ScheduleGenerator';
 import { AttractionsList } from './AttractionsList';
 import { EmployeesList } from './EmployeesList';
 import { ManualScheduleComposer } from './ManualScheduleComposer';
+import { ScheduleView } from './ScheduleView';
 // ============================================================
 // БЛОК 2: Типы
 // ============================================================
@@ -1128,165 +1129,12 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
           {/* ВКЛАДКА: График смен */}
           {/* ========================================== */}
           {activeTab === 'scheduleView' && (
-            <div className="p-4 sm:p-6 space-y-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  {scheduleViewMode === 'month' && (
-                    <>
-                      <button onClick={() => setScheduleViewMonth(subMonths(scheduleViewMonth, 1))} className="p-2 rounded-lg hover:bg-gray-100">
-                        <ChevronLeft className="h-5 w-5 text-gray-700" />
-                      </button>
-                      <h3 className="text-xl font-semibold capitalize text-gray-900">{format(scheduleViewMonth, 'LLLL yyyy', { locale: ru })}</h3>
-                      <button onClick={() => setScheduleViewMonth(addMonths(scheduleViewMonth, 1))} className="p-2 rounded-lg hover:bg-gray-100">
-                        <ChevronRight className="h-5 w-5 text-gray-700" />
-                      </button>
-                    </>
-                  )}
-
-                  {scheduleViewMode === 'week' && (
-                    <>
-                      <button onClick={() => setScheduleViewWeekStart(addDays(scheduleViewWeekStart, -7))} className="p-2 rounded-lg hover:bg-gray-100">
-                        <ChevronLeft className="h-5 w-5 text-gray-700" />
-                      </button>
-                      <h3 className="text-xl font-semibold text-gray-900">
-                        {format(scheduleViewWeekStart, 'd MMM', { locale: ru })} – {format(addDays(scheduleViewWeekStart, 6), 'd MMM yyyy', { locale: ru })}
-                      </h3>
-                      <button onClick={() => setScheduleViewWeekStart(addDays(scheduleViewWeekStart, 7))} className="p-2 rounded-lg hover:bg-gray-100">
-                        <ChevronRight className="h-5 w-5 text-gray-700" />
-                      </button>
-                    </>
-                  )}
-
-                  {scheduleViewMode === 'day' && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Дата:</span>
-                      <input
-                        type="date"
-                        value={format(scheduleViewDate, 'yyyy-MM-dd')}
-                        onChange={(e) => setScheduleViewDate(new Date(e.target.value))}
-                        className="border border-gray-300 bg-white text-gray-900 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setScheduleViewMode('day');
-                      setScheduleViewDate(new Date());
-                    }}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
-                      scheduleViewMode === 'day'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    День
-                  </button>
-                  <button
-                    onClick={() => {
-                      setScheduleViewMode('week');
-                      setScheduleViewWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
-                    }}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
-                      scheduleViewMode === 'week'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Неделя
-                  </button>
-                  <button
-                    onClick={() => {
-                      setScheduleViewMode('month');
-                      setScheduleViewMonth(new Date());
-                    }}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
-                      scheduleViewMode === 'month'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Месяц
-                  </button>
-                </div>
-              </div>
-
-              <div ref={scheduleViewRef} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-gray-50 sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200">
-                          Аттракцион
-                        </th>
-                        {scheduleViewDays.map((day) => (
-                          <th
-                            key={day.toISOString()}
-                            className={`px-2 py-3 text-center text-xs font-semibold uppercase border-r border-gray-200 ${
-                              isWeekend(day) ? 'bg-red-50 text-red-700' : 'text-gray-600'
-                            }`}
-                          >
-                            <div>{format(day, 'd')}</div>
-                            <div className="text-[10px] font-normal">{format(day, 'EEE', { locale: ru })}</div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {attractions.map((attraction) => {
-                        const attractionSchedule = scheduleByAttractionAndDate.get(attraction.id);
-                        
-                        return (
-                          <tr key={attraction.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900 border-r border-gray-200 whitespace-nowrap">
-                              {attraction.name}
-                            </td>
-                            {scheduleViewDays.map((day) => {
-                              const dateStr = format(day, 'yyyy-MM-dd');
-                              const assignments = attractionSchedule?.get(dateStr) || [];
-
-                              return (
-                                <td
-                                  key={day.toISOString()}
-                                  className={`px-2 py-2 text-xs border-r border-gray-200 align-top ${
-                                    isWeekend(day) ? 'bg-red-50/50' : ''
-                                  }`}
-                                  style={{ minHeight: assignments.length > 0 ? `${assignments.length * 2}rem` : 'auto' }}
-                                >
-                                  {assignments.length > 0 ? (
-                                    <div className="space-y-1">
-                                      {assignments.map((assignment) => {
-                                        const employee = employees.find(e => e.id === assignment.employee_id);
-                                        const shortName = employee ? getShortName(employee.full_name) : '—';
-                                        const isPartialShift = assignment.start_time !== '10:00' || assignment.end_time !== '22:00';
-
-                                        return (
-                                          <div key={assignment.id} className="bg-blue-100 text-blue-700 px-1.5 py-1 rounded text-[11px] leading-tight">
-                                            <div>{shortName}</div>
-                                            {isPartialShift && (
-                                              <div className="text-[9px] opacity-75 mt-0.5">
-                                                {assignment.start_time?.slice(0, 5)}-{assignment.end_time?.slice(0, 5)}
-                                              </div>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <span className="text-gray-300 block text-center">—</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div className="p-4 sm:p-6">
+              <ScheduleView
+                employees={employees}
+                attractions={attractions}
+                scheduleAssignments={scheduleAssignments}
+              />
             </div>
           )}
 
