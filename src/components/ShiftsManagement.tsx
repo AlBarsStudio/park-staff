@@ -48,6 +48,12 @@ import {
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { dbService, Employee, EmployeeAvailability } from '../lib/DatabaseService';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Badge } from './ui/Badge';
+import { Modal } from './ui/Modal';
+import { Input } from './ui/Input';
+import { cn } from '../utils/cn';
 
 // ============================================================
 // Типы
@@ -365,195 +371,162 @@ export function ShiftsManagement({
       {/* ========================================== */}
       {/* Шапка с навигацией и статистикой */}
       {/* ========================================== */}
-      <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
+      <Card 
+        className="p-6" 
+        style={{ 
+          background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
+          color: 'white',
+          border: 'none'
+        }}
+      >
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
           {/* Навигация по месяцам */}
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handlePrevMonth}
-              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition"
+              icon={<ChevronLeft className="h-5 w-5" />}
+              className="bg-white/10 hover:bg-white/20 text-white border-none"
               title="Предыдущий месяц"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
+            />
 
             <div className="flex flex-col items-center min-w-[200px]">
               <h2 className="text-2xl font-bold capitalize">{monthLabel}</h2>
               <button
                 onClick={handleToday}
-                className="text-sm text-indigo-100 hover:text-white transition mt-1"
+                className="text-sm hover:underline mt-1 opacity-90"
               >
                 Текущий месяц
               </button>
             </div>
 
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleNextMonth}
-              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition"
+              icon={<ChevronRight className="h-5 w-5" />}
+              className="bg-white/10 hover:bg-white/20 text-white border-none"
               title="Следующий месяц"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            />
           </div>
 
           {/* Кнопки режимов просмотра */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setViewMode('day');
-                setSelectedDate(new Date(currentYear, currentMonth, 1));
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                viewMode === 'day'
-                  ? 'bg-white text-indigo-600 shadow-md'
-                  : 'bg-white/10 hover:bg-white/20'
-              }`}
-            >
-              День
-            </button>
-            <button
-              onClick={() => {
-                setViewMode('week');
-                setSelectedWeekStart(
-                  startOfWeek(new Date(currentYear, currentMonth, 1), { weekStartsOn: 1 })
-                );
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                viewMode === 'week'
-                  ? 'bg-white text-indigo-600 shadow-md'
-                  : 'bg-white/10 hover:bg-white/20'
-              }`}
-            >
-              Неделя
-            </button>
-            <button
-              onClick={() => setViewMode('month')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                viewMode === 'month'
-                  ? 'bg-white text-indigo-600 shadow-md'
-                  : 'bg-white/10 hover:bg-white/20'
-              }`}
-            >
-              Месяц
-            </button>
+          <div className="flex items-center gap-2 p-1 rounded-lg" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+            {(['day', 'week', 'month'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => {
+                  setViewMode(mode);
+                  if (mode === 'day') setSelectedDate(new Date(currentYear, currentMonth, 1));
+                  if (mode === 'week') setSelectedWeekStart(startOfWeek(new Date(currentYear, currentMonth, 1), { weekStartsOn: 1 }));
+                }}
+                className={cn(
+                  'px-4 py-2 rounded-lg text-sm font-medium transition',
+                  viewMode === mode
+                    ? 'bg-white text-primary shadow-md'
+                    : 'text-white hover:bg-white/10'
+                )}
+                style={viewMode === mode ? { color: 'var(--primary)' } : {}}
+              >
+                {mode === 'day' ? 'День' : mode === 'week' ? 'Неделя' : 'Месяц'}
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Статистика */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
-                <Calendar className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-indigo-100">Всего смен</p>
-                <p className="text-2xl font-bold">{statistics.total}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
-                <CheckCircle className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-indigo-100">Полный день</p>
-                <p className="text-2xl font-bold">{statistics.fullDay}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
-                <Clock className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-indigo-100">Частичный</p>
-                <p className="text-2xl font-bold">{statistics.partial}</p>
+          {[
+            { icon: Calendar, label: 'Всего смен', value: statistics.total },
+            { icon: CheckCircle, label: 'Полный день', value: statistics.fullDay },
+            { icon: Clock, label: 'Частичный', value: statistics.partial },
+            { icon: Users, label: 'Сотрудников', value: statistics.uniqueEmployees },
+          ].map((stat, index) => (
+            <div
+              key={index}
+              className="rounded-lg p-4 backdrop-blur-sm"
+              style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <stat.icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm opacity-90">{stat.label}</p>
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="bg-white/10 rounded-lg p-4 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/20 rounded-lg">
-                <Users className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-indigo-100">Сотрудников</p>
-                <p className="text-2xl font-bold">{statistics.uniqueEmployees}</p>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
-      </div>
+      </Card>
 
       {/* ========================================== */}
       {/* Выбор даты для режима "День" */}
       {/* ========================================== */}
       {viewMode === 'day' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <Card>
           <div className="flex items-center gap-3">
-            <Calendar className="h-5 w-5 text-gray-400" />
-            <label className="text-sm font-medium text-gray-700">Выберите дату:</label>
+            <Calendar className="h-5 w-5" style={{ color: 'var(--text-subtle)' }} />
+            <label className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+              Выберите дату:
+            </label>
             <input
               type="date"
               value={format(selectedDate, 'yyyy-MM-dd')}
               onChange={(e) => setSelectedDate(new Date(e.target.value))}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="input"
             />
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ========================================== */}
       {/* Выбор недели для режима "Неделя" */}
       {/* ========================================== */}
       {viewMode === 'week' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <Card>
           <div className="flex items-center gap-4">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setSelectedWeekStart((prev) => addDays(prev, -7))}
-              className="p-2 rounded-lg hover:bg-gray-100 transition"
-            >
-              <ChevronLeft className="h-4 w-4 text-gray-700" />
-            </button>
-            <span className="text-sm font-medium text-gray-900">
+              icon={<ChevronLeft className="h-4 w-4" />}
+            />
+            <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
               {format(selectedWeekStart, 'd MMM', { locale: ru })} –{' '}
               {format(addDays(selectedWeekStart, 6), 'd MMM yyyy', { locale: ru })}
             </span>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setSelectedWeekStart((prev) => addDays(prev, 7))}
-              className="p-2 rounded-lg hover:bg-gray-100 transition"
-            >
-              <ChevronRight className="h-4 w-4 text-gray-700" />
-            </button>
+              icon={<ChevronRight className="h-4 w-4" />}
+            />
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ========================================== */}
       {/* Панель инструментов */}
       {/* ========================================== */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <Card>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           {/* Поиск */}
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
+            <Input
               type="text"
               placeholder="Поиск сотрудника или даты..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              icon={<Search className="h-4 w-4" style={{ color: 'var(--text-subtle)' }} />}
             />
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 transition"
+                style={{ color: 'var(--text-subtle)' }}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -562,150 +535,122 @@ export function ShiftsManagement({
 
           {/* Кнопки действий */}
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              variant={filterType !== 'all' ? 'primary' : 'secondary'}
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                filterType !== 'all'
-                  ? 'bg-indigo-100 text-indigo-700 border-2 border-indigo-300'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent'
-              }`}
+              icon={<Filter className="h-4 w-4" />}
             >
-              <Filter className="h-4 w-4" />
               Фильтры
               {filterType !== 'all' && (
-                <span className="ml-1 px-2 py-0.5 bg-indigo-600 text-white rounded-full text-xs">
-                  1
-                </span>
+                <Badge variant="error" className="ml-1">1</Badge>
               )}
-            </button>
+            </Button>
 
-            <button
+            <Button
               onClick={() => {
                 resetShiftForm();
                 setWorkDate(format(new Date(), 'yyyy-MM-dd'));
                 setShowAddShiftModal(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-sm hover:shadow-md"
+              icon={<Plus className="h-4 w-4" />}
             >
-              <Plus className="h-4 w-4" />
               Добавить смену
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Панель фильтров */}
         {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
             <div className="flex items-center justify-between mb-3">
-              <h4 className="font-medium text-gray-900">Тип смены</h4>
+              <h4 className="font-medium" style={{ color: 'var(--text)' }}>Тип смены</h4>
               {filterType !== 'all' && (
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setFilterType('all')}
-                  className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
                 >
                   Сбросить
-                </button>
+                </Button>
               )}
             </div>
 
             <div className="flex gap-2">
-              <button
-                onClick={() => setFilterType('all')}
-                className={`flex-1 px-4 py-3 rounded-lg border-2 transition ${
-                  filterType === 'all'
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  <span className="font-medium">Все смены</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setFilterType('full')}
-                className={`flex-1 px-4 py-3 rounded-lg border-2 transition ${
-                  filterType === 'full'
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <CheckCircle className="h-4 w-4" />
-                  <span className="font-medium">Полный день</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setFilterType('partial')}
-                className={`flex-1 px-4 py-3 rounded-lg border-2 transition ${
-                  filterType === 'partial'
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  <span className="font-medium">Частичный день</span>
-                </div>
-              </button>
+              {[
+                { type: 'all' as const, icon: Calendar, label: 'Все смены' },
+                { type: 'full' as const, icon: CheckCircle, label: 'Полный день' },
+                { type: 'partial' as const, icon: Clock, label: 'Частичный день' },
+              ].map(({ type, icon: Icon, label }) => (
+                <button
+                  key={type}
+                  onClick={() => setFilterType(type)}
+                  className={cn(
+                    'flex-1 px-4 py-3 rounded-lg border-2 transition',
+                    filterType === type
+                      ? 'bg-primary-light'
+                      : 'hover:bg-tertiary'
+                  )}
+                  style={{
+                    borderColor: filterType === type ? 'var(--primary)' : 'var(--border)',
+                    color: filterType === type ? 'var(--primary)' : 'var(--text)',
+                  }}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Icon className="h-4 w-4" />
+                    <span className="font-medium">{label}</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         )}
-      </div>
+      </Card>
 
       {/* ========================================== */}
       {/* Таблица смен */}
       {/* ========================================== */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <Card padding="none">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y" style={{ borderColor: 'var(--border)' }}>
             {/* Заголовок */}
-            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Дата
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Сотрудник
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Тип смены
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Время
-                </th>
-                <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Действия
-                </th>
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                {['Дата', 'Сотрудник', 'Тип смены', 'Время', 'Действия'].map((header) => (
+                  <th
+                    key={header}
+                    className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    {header}
+                  </th>
+                ))}
               </tr>
             </thead>
 
             {/* Тело таблицы */}
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
               {filteredShifts.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-3">
-                      <Calendar className="h-12 w-12 text-gray-300" />
-                      <p className="text-gray-500 font-medium">
+                      <Calendar className="h-12 w-12" style={{ color: 'var(--text-subtle)' }} />
+                      <p className="font-medium" style={{ color: 'var(--text-muted)' }}>
                         {search || filterType !== 'all'
                           ? 'Нет смен, соответствующих фильтрам'
                           : 'Нет смен на выбранный период'}
                       </p>
                       {!search && filterType === 'all' && (
-                        <button
+                        <Button
                           onClick={() => {
                             resetShiftForm();
                             setWorkDate(format(new Date(), 'yyyy-MM-dd'));
                             setShowAddShiftModal(true);
                           }}
-                          className="mt-2 flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+                          icon={<Plus className="h-4 w-4" />}
+                          className="mt-2"
                         >
-                          <Plus className="h-4 w-4" />
                           Добавить первую смену
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </td>
@@ -719,23 +664,26 @@ export function ShiftsManagement({
                   return (
                     <tr
                       key={shift.id}
-                      className={`hover:bg-gray-50 transition ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
-                      }`}
+                      className="transition"
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
                     >
                       {/* Дата */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div
-                            className={`w-1 h-12 rounded-full ${
-                              isWeekendDay ? 'bg-red-400' : 'bg-indigo-400'
-                            }`}
+                            className="w-1 h-12 rounded-full"
+                            style={{ backgroundColor: isWeekendDay ? 'var(--error)' : 'var(--primary)' }}
                           />
                           <div>
-                            <p className="text-sm font-semibold text-gray-900">
+                            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
                               {format(shiftDate, 'dd.MM.yyyy')}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                               {format(shiftDate, 'EEEE', { locale: ru })}
                             </p>
                           </div>
@@ -745,10 +693,13 @@ export function ShiftsManagement({
                       {/* Сотрудник */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-indigo-400 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                          <div 
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm"
+                            style={{ background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)' }}
+                          >
                             {shift.employees?.full_name?.charAt(0) || '?'}
                           </div>
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
                             {shift.employees?.full_name || '—'}
                           </span>
                         </div>
@@ -757,24 +708,20 @@ export function ShiftsManagement({
                       {/* Тип смены */}
                       <td className="px-6 py-4">
                         {shift.is_full_day ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-semibold">
-                            <CheckCircle className="h-3.5 w-3.5" />
-                            Полный день
-                          </span>
+                          <Badge variant="success" dot>Полный день</Badge>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-xs font-semibold">
-                            <Clock className="h-3.5 w-3.5" />
-                            Частичный день
-                          </span>
+                          <Badge variant="warning" dot>Частичный день</Badge>
                         )}
                       </td>
 
                       {/* Время */}
                       <td className="px-6 py-4">
                         {shift.is_full_day ? (
-                          <span className="text-sm text-gray-500">10:00 – 22:00</span>
+                          <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                            10:00 – 22:00
+                          </span>
                         ) : (
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
                             {formatTime(shift.start_time)} – {formatTime(shift.end_time)}
                           </span>
                         )}
@@ -784,38 +731,30 @@ export function ShiftsManagement({
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
                           {shift.comment && (
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => setViewingComment(shift.comment)}
-                              className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition"
+                              icon={<MessageSquare className="h-4 w-4" style={{ color: 'var(--info)' }} />}
                               title="Просмотреть комментарий"
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                            </button>
+                            />
                           )}
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleEditShift(shift)}
                             disabled={!editable}
-                            className={`p-2 rounded-lg transition ${
-                              editable
-                                ? 'text-indigo-600 hover:bg-indigo-50'
-                                : 'text-gray-300 cursor-not-allowed'
-                            }`}
+                            icon={<Edit2 className="h-4 w-4" style={{ color: editable ? 'var(--primary)' : 'var(--text-subtle)' }} />}
                             title={editable ? 'Редактировать' : 'Редактирование запрещено'}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleDeleteShift(shift)}
                             disabled={!editable}
-                            className={`p-2 rounded-lg transition ${
-                              editable
-                                ? 'text-red-600 hover:bg-red-50'
-                                : 'text-gray-300 cursor-not-allowed'
-                            }`}
+                            icon={<Trash2 className="h-4 w-4" style={{ color: editable ? 'var(--error)' : 'var(--text-subtle)' }} />}
                             title={editable ? 'Удалить' : 'Удаление запрещено'}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          />
                         </div>
                       </td>
                     </tr>
@@ -825,228 +764,201 @@ export function ShiftsManagement({
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
 
       {/* ========================================== */}
       {/* Модальное окно просмотра комментария */}
       {/* ========================================== */}
-      {viewingComment && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          onClick={() => setViewingComment(null)}
-        >
-          <div
-            className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-scale-in"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-indigo-600" />
-                Комментарий к смене
-              </h3>
-              <button
-                onClick={() => setViewingComment(null)}
-                className="text-gray-400 hover:text-gray-600 transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-4 mb-4">
-              <p className="text-gray-700 whitespace-pre-wrap">{viewingComment}</p>
-            </div>
-            <button
-              onClick={() => setViewingComment(null)}
-              className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
-            >
-              Закрыть
-            </button>
+      <Modal
+        isOpen={!!viewingComment}
+        onClose={() => setViewingComment(null)}
+        title="Комментарий к смене"
+        size="sm"
+      >
+        <div className="p-6">
+          <div className="rounded-lg p-4 mb-4" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+            <p style={{ color: 'var(--text)' }} className="whitespace-pre-wrap">
+              {viewingComment}
+            </p>
           </div>
+          <Button
+            variant="secondary"
+            onClick={() => setViewingComment(null)}
+            className="w-full"
+          >
+            Закрыть
+          </Button>
         </div>
-      )}
+      </Modal>
 
       {/* ========================================== */}
       {/* Модальное окно добавления/редактирования смены */}
       {/* ========================================== */}
-      {showAddShiftModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full animate-scale-in">
-            <form onSubmit={handleSaveShift} className="p-6 space-y-4">
-              {/* Заголовок */}
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-indigo-600" />
-                  {editingShiftId ? 'Редактировать смену' : 'Новая смена'}
-                </h3>
-                <button
-                  type="button"
-                  onClick={resetShiftForm}
-                  className="text-gray-400 hover:text-gray-600 transition"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+      <Modal
+        isOpen={showAddShiftModal}
+        onClose={resetShiftForm}
+        title={editingShiftId ? 'Редактировать смену' : 'Новая смена'}
+        size="md"
+      >
+        <form onSubmit={handleSaveShift} className="p-6 space-y-4">
+          {/* Ошибка */}
+          {formError && (
+            <div 
+              className="p-3 rounded-lg text-sm flex items-start gap-2"
+              style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}
+            >
+              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+              <span>{formError}</span>
+            </div>
+          )}
 
-              {/* Ошибка */}
-              {formError && (
-                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-start gap-2">
-                  <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-                  <span>{formError}</span>
-                </div>
-              )}
-
-              {/* Поле: Сотрудник */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Сотрудник <span className="text-red-500">*</span>
-                </label>
-                {editingShiftId ? (
-                  <input
-                    type="text"
-                    value={addEmployeeSearch}
-                    disabled
-                    className="w-full px-3 py-2 border border-gray-300 bg-gray-100 text-gray-700 rounded-lg"
-                  />
-                ) : (
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Начните вводить ФИО..."
-                      value={addEmployeeSearch}
-                      onChange={(e) => setAddEmployeeSearch(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      autoFocus
-                    />
-                    {addEmployeeResults.length > 0 && (
-                      <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-                        {addEmployeeResults.map((emp) => (
-                          <li
-                            key={emp.id}
-                            onClick={() => {
-                              setSelectedEmployeeId(emp.id);
-                              setAddEmployeeSearch(emp.full_name);
-                              setAddEmployeeResults([]);
-                            }}
-                            className="px-4 py-2 hover:bg-indigo-50 cursor-pointer text-sm text-gray-900 transition"
-                          >
-                            {emp.full_name}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+          {/* Поле: Сотрудник */}
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
+              Сотрудник <span style={{ color: 'var(--error)' }}>*</span>
+            </label>
+            {editingShiftId ? (
+              <Input
+                type="text"
+                value={addEmployeeSearch}
+                disabled
+                className="bg-tertiary"
+              />
+            ) : (
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Начните вводить ФИО..."
+                  value={addEmployeeSearch}
+                  onChange={(e) => setAddEmployeeSearch(e.target.value)}
+                  autoFocus
+                />
+                {addEmployeeResults.length > 0 && (
+                  <ul 
+                    className="absolute z-10 mt-1 w-full rounded-lg shadow-lg max-h-60 overflow-auto"
+                    style={{ 
+                      backgroundColor: 'var(--surface)',
+                      border: '1px solid var(--border)'
+                    }}
+                  >
+                    {addEmployeeResults.map((emp) => (
+                      <li
+                        key={emp.id}
+                        onClick={() => {
+                          setSelectedEmployeeId(emp.id);
+                          setAddEmployeeSearch(emp.full_name);
+                          setAddEmployeeResults([]);
+                        }}
+                        className="px-4 py-2 cursor-pointer text-sm transition"
+                        style={{ color: 'var(--text)' }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                      >
+                        {emp.full_name}
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
+            )}
+          </div>
 
-              {/* Поле: Дата */}
+          {/* Поле: Дата */}
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
+              Дата <span style={{ color: 'var(--error)' }}>*</span>
+            </label>
+            <input
+              type="date"
+              value={workDate}
+              onChange={(e) => setWorkDate(e.target.value)}
+              className="input w-full"
+              disabled={!!editingShiftId}
+              required
+            />
+          </div>
+
+          {/* Поле: Полный день */}
+          <div 
+            className="flex items-center gap-3 p-3 rounded-lg"
+            style={{ backgroundColor: 'var(--bg-tertiary)' }}
+          >
+            <input
+              type="checkbox"
+              id="isFullDay"
+              checked={isFullDay}
+              onChange={(e) => setIsFullDay(e.target.checked)}
+              className="rounded w-5 h-5"
+              style={{ accentColor: 'var(--primary)' }}
+            />
+            <label htmlFor="isFullDay" className="text-sm font-medium cursor-pointer" style={{ color: 'var(--text)' }}>
+              Полный день (10:00 – 22:00)
+            </label>
+          </div>
+
+          {/* Поля: Время начала и окончания */}
+          {!isFullDay && (
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Дата <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
+                  Начало <span style={{ color: 'var(--error)' }}>*</span>
                 </label>
                 <input
-                  type="date"
-                  value={workDate}
-                  onChange={(e) => setWorkDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  disabled={!!editingShiftId}
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="input w-full"
                   required
                 />
               </div>
-
-              {/* Поле: Полный день */}
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <input
-                  type="checkbox"
-                  id="isFullDay"
-                  checked={isFullDay}
-                  onChange={(e) => setIsFullDay(e.target.checked)}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-5 h-5"
-                />
-                <label htmlFor="isFullDay" className="text-sm font-medium text-gray-700 cursor-pointer">
-                  Полный день (10:00 – 22:00)
-                </label>
-              </div>
-
-              {/* Поля: Время начала и окончания */}
-              {!isFullDay && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Начало <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="time"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Конец <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="time"
-                      value={endTime}
-                      onChange={(e) => setEndTime(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Поле: Комментарий */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Комментарий
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
+                  Конец <span style={{ color: 'var(--error)' }}>*</span>
                 </label>
-                <textarea
-                  value={shiftComment}
-                  onChange={(e) => setShiftComment(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-                  placeholder="Необязательно"
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="input w-full"
+                  required
                 />
               </div>
+            </div>
+          )}
 
-              {/* Кнопки действий */}
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={resetShiftForm}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition font-medium"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-sm hover:shadow-md"
-                >
-                  {editingShiftId ? 'Сохранить' : 'Добавить'}
-                </button>
-              </div>
-            </form>
+          {/* Поле: Комментарий */}
+          <div>
+            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
+              Комментарий
+            </label>
+            <textarea
+              value={shiftComment}
+              onChange={(e) => setShiftComment(e.target.value)}
+              rows={3}
+              className="input w-full resize-none"
+              placeholder="Необязательно"
+            />
           </div>
-        </div>
-      )}
 
-      {/* CSS для анимаций */}
-      <style>{`
-        @keyframes scale-in {
-          from {
-            opacity: 0;
-            transform: scale(0.9);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        .animate-scale-in {
-          animation: scale-in 0.2s ease-out;
-        }
-      `}</style>
+          {/* Кнопки действий */}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={resetShiftForm}
+            >
+              Отмена
+            </Button>
+            <Button type="submit">
+              {editingShiftId ? 'Сохранить' : 'Добавить'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
