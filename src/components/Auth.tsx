@@ -1,17 +1,58 @@
-// Auth.tsx
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Mail, Loader2, Calendar } from 'lucide-react';
+import { Lock, Mail, Calendar, Sparkles, CheckCircle2, Code } from 'lucide-react';
+import { Button, Card, Input } from './ui';
+import { useTheme } from '../hooks/useTheme';
 
 interface AuthProps {
   onLogin: () => void;
 }
+
+// Новости и обновления системы
+const UPDATES = [
+  {
+    id: 1,
+    title: '🎨 Новый современный дизайн',
+    description: 'Полностью обновленный интерфейс с оранжевым акцентом и темной темой',
+    date: '2024',
+    status: 'completed' as const,
+  },
+  {
+    id: 2,
+    title: '📱 Улучшенная мобильная версия',
+    description: 'Оптимизация для смартфонов с удобной навигацией',
+    date: '2024',
+    status: 'completed' as const,
+  },
+  {
+    id: 3,
+    title: '🌙 Темная тема',
+    description: 'Комфортная работа в любое время суток',
+    date: '2024',
+    status: 'completed' as const,
+  },
+  {
+    id: 4,
+    title: '⚡ Уведомления в реальном времени',
+    description: 'Мгновенные push-уведомления о важных событиях',
+    date: 'В разработке',
+    status: 'in-progress' as const,
+  },
+  {
+    id: 5,
+    title: '📊 Расширенная аналитика',
+    description: 'Детальная статистика работы и производительности',
+    date: 'Планируется',
+    status: 'planned' as const,
+  },
+];
 
 export function Auth({ onLogin }: AuthProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { theme } = useTheme();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,68 +73,273 @@ export function Auth({ onLogin }: AuthProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="bg-blue-600 p-3 rounded-2xl shadow-lg">
-            <Calendar className="h-10 w-10 text-white" />
+    <div 
+      className="min-h-screen flex flex-col lg:flex-row"
+      style={{ backgroundColor: 'var(--bg-primary)' }}
+    >
+      {/* ========================================
+          LEFT SIDE - Login Form
+          ======================================== */}
+      <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-md mx-auto">
+          {/* Logo & Title */}
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <div 
+                className="p-4 rounded-2xl shadow-lg transition-transform hover:scale-105"
+                style={{ backgroundColor: 'var(--primary)' }}
+              >
+                <Calendar className="h-12 w-12 text-white" />
+              </div>
+            </div>
+            
+            <h1 
+              className="text-4xl font-bold mb-2"
+              style={{ color: 'var(--text)' }}
+            >
+              ParkStaff
+            </h1>
+            <p 
+              className="text-base"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Система управления персоналом
+            </p>
           </div>
-        </div>
-        <h1 className="mt-4 text-center text-3xl font-extrabold text-gray-900">ParkStaff</h1>
-        <h2 className="mt-1 text-center text-lg text-gray-600">Система управления персоналом</h2>
-      </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-6 shadow-xl rounded-2xl sm:px-10">
-          <form className="space-y-6" onSubmit={handleLogin}>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <div className="relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
+          {/* Login Card */}
+          <Card padding="lg" className="animate-slide-up">
+            <form className="space-y-6" onSubmit={handleLogin}>
+              {/* Email */}
+              <div>
+                <label 
+                  className="block text-sm font-medium mb-2"
+                  style={{ color: 'var(--text)' }}
+                >
+                  Email
+                </label>
+                <Input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition"
                   placeholder="user@example.com"
+                  icon={<Mail className="h-5 w-5" style={{ color: 'var(--text-subtle)' }} />}
+                  autoComplete="email"
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Пароль</label>
-              <div className="relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
+              {/* Password */}
+              <div>
+                <label 
+                  className="block text-sm font-medium mb-2"
+                  style={{ color: 'var(--text)' }}
+                >
+                  Пароль
+                </label>
+                <Input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition"
                   placeholder="••••••••"
+                  icon={<Lock className="h-5 w-5" style={{ color: 'var(--text-subtle)' }} />}
+                  autoComplete="current-password"
                 />
               </div>
+
+              {/* Error Message */}
+              {error && (
+                <div 
+                  className="rounded-lg px-4 py-3 text-sm border animate-slide-down"
+                  style={{ 
+                    backgroundColor: 'var(--error-light)', 
+                    borderColor: 'var(--error)',
+                    color: 'var(--error)'
+                  }}
+                >
+                  {error}
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                loading={loading}
+                className="w-full"
+              >
+                Войти в систему
+              </Button>
+            </form>
+
+            {/* Footer */}
+            <div className="mt-6 text-center">
+              <p 
+                className="text-xs"
+                style={{ color: 'var(--text-subtle)' }}
+              >
+                Возникли проблемы со входом?{' '}
+                <button 
+                  className="font-medium underline hover:no-underline"
+                  style={{ color: 'var(--primary)' }}
+                  onClick={() => alert('Обратитесь к администратору')}
+                >
+                  Обратитесь к администратору
+                </button>
+              </p>
             </div>
+          </Card>
+        </div>
+      </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
-                {error}
+      {/* ========================================
+          RIGHT SIDE - Updates & News
+          ======================================== */}
+      <div 
+        className="flex-1 lg:flex lg:items-center lg:justify-center p-4 sm:p-6 lg:p-8"
+        style={{ 
+          backgroundColor: theme === 'dark' ? 'var(--bg-secondary)' : 'var(--bg-tertiary)'
+        }}
+      >
+        <div className="w-full max-w-lg">
+          {/* Header */}
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div 
+                className="p-2 rounded-lg"
+                style={{ backgroundColor: 'var(--primary-light)' }}
+              >
+                <Sparkles 
+                  className="h-6 w-6"
+                  style={{ color: 'var(--primary)' }}
+                />
               </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition"
+              <h2 
+                className="text-2xl font-bold"
+                style={{ color: 'var(--text)' }}
+              >
+                Что нового?
+              </h2>
+            </div>
+            <p 
+              className="text-sm"
+              style={{ color: 'var(--text-muted)' }}
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Войти в систему'}
-            </button>
-          </form>
+              Последние обновления и улучшения системы
+            </p>
+          </div>
+
+          {/* Updates List */}
+          <div className="space-y-3">
+            {UPDATES.map((update, index) => (
+              <Card
+                key={update.id}
+                variant="hover"
+                padding="md"
+                className="animate-slide-up"
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <div className="flex items-start gap-3">
+                  {/* Icon */}
+                  <div className="flex-shrink-0 mt-0.5">
+                    {update.status === 'completed' && (
+                      <div 
+                        className="p-1.5 rounded-full"
+                        style={{ backgroundColor: 'var(--success-light)' }}
+                      >
+                        <CheckCircle2 
+                          className="h-4 w-4"
+                          style={{ color: 'var(--success)' }}
+                        />
+                      </div>
+                    )}
+                    {update.status === 'in-progress' && (
+                      <div 
+                        className="p-1.5 rounded-full"
+                        style={{ backgroundColor: 'var(--warning-light)' }}
+                      >
+                        <Code 
+                          className="h-4 w-4"
+                          style={{ color: 'var(--warning)' }}
+                        />
+                      </div>
+                    )}
+                    {update.status === 'planned' && (
+                      <div 
+                        className="p-1.5 rounded-full"
+                        style={{ backgroundColor: 'var(--info-light)' }}
+                      >
+                        <Sparkles 
+                          className="h-4 w-4"
+                          style={{ color: 'var(--info)' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <h3 
+                      className="text-sm font-semibold mb-1"
+                      style={{ color: 'var(--text)' }}
+                    >
+                      {update.title}
+                    </h3>
+                    <p 
+                      className="text-xs mb-2"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {update.description}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span 
+                        className="text-xs font-medium"
+                        style={{ color: 'var(--text-subtle)' }}
+                      >
+                        {update.date}
+                      </span>
+                      {update.status === 'completed' && (
+                        <span className="badge-success text-xs">
+                          Готово
+                        </span>
+                      )}
+                      {update.status === 'in-progress' && (
+                        <span className="badge-warning text-xs">
+                          В работе
+                        </span>
+                      )}
+                      {update.status === 'planned' && (
+                        <span className="badge-info text-xs">
+                          Планируется
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Footer Note */}
+          <div className="mt-6 text-center">
+            <p 
+              className="text-xs"
+              style={{ color: 'var(--text-subtle)' }}
+            >
+              Разработано {' '}
+              <a 
+                href="https://vk.com/albars_studio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium underline hover:no-underline"
+                style={{ color: 'var(--primary)' }}
+              >
+                AlBars Studio
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </div>
