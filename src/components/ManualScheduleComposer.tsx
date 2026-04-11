@@ -23,6 +23,11 @@ import {
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { dbService, Employee, Attraction, ScheduleAssignment } from '../lib/DatabaseService';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Badge } from './ui/Badge';
+import { Modal } from './ui/Modal';
+import { cn } from '../utils/cn';
 
 // ============================================================
 // Типы
@@ -380,35 +385,35 @@ export function ManualScheduleComposer({
         {/* ========================================== */}
         {/* Календарь */}
         {/* ========================================== */}
-        <div className="lg:col-span-1 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-900">
-            <Calendar className="h-5 w-5 text-blue-600" />
+        <Card className="lg:col-span-1">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: 'var(--text)' }}>
+            <Calendar className="h-5 w-5" style={{ color: 'var(--primary)' }} />
             Выбор даты
           </h3>
 
           {/* Навигация по месяцам */}
           <div className="flex items-center justify-between mb-4">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => handleMonthChange('prev')}
-              className="p-2 rounded-lg hover:bg-gray-100 transition"
-            >
-              <ChevronLeft className="h-5 w-5 text-gray-700" />
-            </button>
-            <span className="font-medium text-lg capitalize text-gray-900">
+              icon={<ChevronLeft className="h-5 w-5" />}
+            />
+            <span className="font-medium text-lg capitalize" style={{ color: 'var(--text)' }}>
               {format(month, 'LLLL yyyy', { locale: ru })}
             </span>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => handleMonthChange('next')}
-              className="p-2 rounded-lg hover:bg-gray-100 transition"
-            >
-              <ChevronRight className="h-5 w-5 text-gray-700" />
-            </button>
+              icon={<ChevronRight className="h-5 w-5" />}
+            />
           </div>
 
           {/* Заголовки дней недели */}
           <div className="grid grid-cols-7 gap-1 mb-2 text-center">
             {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => (
-              <div key={day} className="text-xs font-medium text-gray-500">
+              <div key={day} className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                 {day}
               </div>
             ))}
@@ -431,15 +436,35 @@ export function ManualScheduleComposer({
                 <button
                   key={day.toISOString()}
                   onClick={() => handleDaySelect(day)}
-                  className={`h-10 rounded-lg flex items-center justify-center relative transition text-sm font-medium ${
-                    isWeekendDay
-                      ? 'bg-red-50 hover:bg-red-100 text-red-700'
-                      : 'bg-gray-50 hover:bg-gray-100 text-gray-700'
-                  } ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+                  className={cn(
+                    'h-10 rounded-lg flex items-center justify-center relative transition text-sm font-medium',
+                    isSelected && 'ring-2',
+                  )}
+                  style={{
+                    backgroundColor: isWeekendDay ? 'var(--error-light)' : 'var(--bg-tertiary)',
+                    color: isWeekendDay ? 'var(--error)' : 'var(--text)',
+                    borderColor: isSelected ? 'var(--primary)' : 'transparent',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = isWeekendDay ? '#fecaca' : 'var(--border-hover)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = isWeekendDay ? 'var(--error-light)' : 'var(--bg-tertiary)';
+                    }
+                  }}
                 >
                   <span>{format(day, 'd')}</span>
                   {hasSchedule && (
-                    <CheckCircle className="absolute -top-1 -right-1 h-4 w-4 text-green-500 bg-white rounded-full" />
+                    <CheckCircle 
+                      className="absolute -top-1 -right-1 h-4 w-4 rounded-full" 
+                      style={{ 
+                        color: 'var(--success)',
+                        backgroundColor: 'var(--surface)'
+                      }} 
+                    />
                   )}
                 </button>
               );
@@ -447,48 +472,51 @@ export function ManualScheduleComposer({
           </div>
 
           {/* Легенда */}
-          <div className="mt-4 text-sm text-gray-500 flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-green-500" /> — график составлен
+          <div className="mt-4 text-sm flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+            <CheckCircle className="h-4 w-4" style={{ color: 'var(--success)' }} /> 
+            — график составлен
           </div>
-        </div>
+        </Card>
 
         {/* ========================================== */}
         {/* Рабочая область */}
         {/* ========================================== */}
         <div className="lg:col-span-2">
           {!selectedDay ? (
-            <div className="bg-white border border-gray-200 rounded-xl p-8 text-center shadow-sm">
-              <CalendarDays className="h-12 w-12 mx-auto mb-3 opacity-50 text-gray-400" />
-              <p className="text-gray-400">Выберите день для составления графика</p>
-            </div>
+            <Card className="text-center p-8">
+              <CalendarDays className="h-12 w-12 mx-auto mb-3 opacity-50" style={{ color: 'var(--text-subtle)' }} />
+              <p style={{ color: 'var(--text-subtle)' }}>Выберите день для составления графика</p>
+            </Card>
           ) : dayDataLoading ? (
-            <div className="bg-white border border-gray-200 rounded-xl p-8 flex justify-center shadow-sm">
-              <Loader2 className="animate-spin text-blue-600 h-8 w-8" />
-            </div>
+            <Card className="p-8 flex justify-center">
+              <Loader2 className="animate-spin h-8 w-8" style={{ color: 'var(--primary)' }} />
+            </Card>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm space-y-6">
+            <Card className="space-y-6">
               {/* Заголовок и кнопка сохранения */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
                   График на {format(selectedDay, 'd MMMM yyyy', { locale: ru })}
                 </h3>
-                <button
+                <Button
+                  variant="success"
                   onClick={handleSaveSchedule}
-                  disabled={saving}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-green-700 disabled:opacity-50 transition"
+                  loading={saving}
+                  icon={<Save className="h-4 w-4" />}
                 >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
                   Сохранить график
-                </button>
+                </Button>
               </div>
 
               {/* Ошибки */}
               {error && (
-                <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-start gap-2">
+                <div 
+                  className="p-3 rounded-lg text-sm flex items-start gap-2" 
+                  style={{ 
+                    backgroundColor: 'var(--error-light)',
+                    color: 'var(--error)'
+                  }}
+                >
                   <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                   <span>{error}</span>
                 </div>
@@ -496,24 +524,36 @@ export function ManualScheduleComposer({
 
               {/* Работающие аттракционы */}
               <div>
-                <h4 className="font-medium mb-3 flex items-center gap-2 text-gray-900">
-                  <Gamepad2 className="h-4 w-4 text-blue-600" />
+                <h4 className="font-medium mb-3 flex items-center gap-2" style={{ color: 'var(--text)' }}>
+                  <Gamepad2 className="h-4 w-4" style={{ color: 'var(--primary)' }} />
                   Работающие аттракционы
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {attractions.map((attr) => (
                     <label
                       key={attr.id}
-                      className="flex items-center gap-2 p-2 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition"
+                      className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition"
+                      style={{ border: '1px solid var(--border)' }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
                     >
                       <input
                         type="checkbox"
                         checked={workingAttractions.has(attr.id)}
                         onChange={() => toggleAttractionWorking(attr.id)}
-                        className="rounded text-blue-600 focus:ring-blue-500"
+                        className="rounded focus:ring-2"
+                        style={{ 
+                          accentColor: 'var(--primary)',
+                        }}
                       />
-                      <span className="text-sm text-gray-900">{attr.name}</span>
-                      <span className="text-xs text-gray-400 ml-auto">x{attr.coefficient}</span>
+                      <span className="text-sm" style={{ color: 'var(--text)' }}>{attr.name}</span>
+                      <span className="text-xs ml-auto" style={{ color: 'var(--text-subtle)' }}>
+                        x{attr.coefficient}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -521,41 +561,58 @@ export function ManualScheduleComposer({
 
               {/* Доступные сотрудники */}
               <div>
-                <h4 className="font-medium mb-3 flex items-center gap-2 text-gray-900">
-                  <Users className="h-4 w-4 text-blue-600" />
+                <h4 className="font-medium mb-3 flex items-center gap-2" style={{ color: 'var(--text)' }}>
+                  <Users className="h-4 w-4" style={{ color: 'var(--primary)' }} />
                   Доступные сотрудники ({employeesForDay.length})
                 </h4>
                 {employeesForDay.length === 0 ? (
-                  <p className="text-gray-400 text-sm">
+                  <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
                     Нет сотрудников с доступностью на эту дату
                   </p>
                 ) : (
-                  <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-200">
+                  <div 
+                    className="max-h-60 overflow-y-auto rounded-lg divide-y" 
+                    style={{ 
+                      border: '1px solid var(--border)',
+                      borderColor: 'var(--border)'
+                    }}
+                  >
                     {employeesForDay.map((emp) => (
-                      <div key={emp.id} className="p-3 hover:bg-gray-50 transition">
+                      <div 
+                        key={emp.id} 
+                        className="p-3 transition"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                      >
                         <div className="flex items-start justify-between">
                           <div>
-                            <span className="font-medium text-gray-900">{emp.full_name}</span>
+                            <span className="font-medium" style={{ color: 'var(--text)' }}>
+                              {emp.full_name}
+                            </span>
                             {emp.studyGoal && (
-                              <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                              <Badge variant="info" className="ml-2">
                                 Цель: {emp.studyGoal}
-                              </span>
+                              </Badge>
                             )}
                             {!emp.availability.isFullDay && (
-                              <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+                              <Badge variant="warning" className="ml-2">
                                 {emp.availability.startTime?.slice(0, 5)}-
                                 {emp.availability.endTime?.slice(0, 5)}
-                              </span>
+                              </Badge>
                             )}
                           </div>
                           {emp.availability.comment && (
-                            <button
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => alert(emp.availability.comment)}
-                              className="text-gray-400 hover:text-gray-600"
+                              icon={<MessageSquare className="h-4 w-4" />}
                               title="Просмотреть комментарий"
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                            </button>
+                            />
                           )}
                         </div>
                       </div>
@@ -566,9 +623,13 @@ export function ManualScheduleComposer({
 
               {/* Назначения на аттракционы */}
               <div className="space-y-4">
-                <h4 className="font-medium text-gray-900">Назначения на аттракционы</h4>
+                <h4 className="font-medium" style={{ color: 'var(--text)' }}>
+                  Назначения на аттракционы
+                </h4>
                 {Array.from(workingAttractions).length === 0 ? (
-                  <p className="text-gray-400 text-sm">Выберите работающие аттракционы</p>
+                  <p className="text-sm" style={{ color: 'var(--text-subtle)' }}>
+                    Выберите работающие аттракционы
+                  </p>
                 ) : (
                   Array.from(workingAttractions).map((attrId) => {
                     const attr = attractions.find((a) => a.id === attrId);
@@ -580,39 +641,51 @@ export function ManualScheduleComposer({
                     );
 
                     return (
-                      <div key={attrId} className="border border-gray-200 rounded-lg p-3">
+                      <div 
+                        key={attrId} 
+                        className="rounded-lg p-3" 
+                        style={{ border: '1px solid var(--border)' }}
+                      >
                         <div className="flex items-center justify-between mb-2">
-                          <h5 className="font-medium text-gray-900">{attr.name}</h5>
-                          <button
+                          <h5 className="font-medium" style={{ color: 'var(--text)' }}>
+                            {attr.name}
+                          </h5>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() =>
                               setShowAddModal({
                                 attractionId: attrId,
                                 attractionName: attr.name,
                               })
                             }
-                            className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1 transition"
+                            icon={<PlusCircle className="h-4 w-4" />}
                           >
-                            <PlusCircle className="h-4 w-4" />
                             Добавить
-                          </button>
+                          </Button>
                         </div>
 
                         {assignedEmployees.length === 0 ? (
-                          <p className="text-gray-400 text-sm py-2">Нет назначений</p>
+                          <p className="text-sm py-2" style={{ color: 'var(--text-subtle)' }}>
+                            Нет назначений
+                          </p>
                         ) : (
                           <div className="space-y-1">
                             {assignedEmployees.map((emp) => (
                               <div
                                 key={emp.id}
-                                className="flex items-center justify-between bg-gray-50 p-2 rounded"
+                                className="flex items-center justify-between p-2 rounded"
+                                style={{ backgroundColor: 'var(--bg-tertiary)' }}
                               >
-                                <span className="text-sm text-gray-900">{emp.full_name}</span>
-                                <button
+                                <span className="text-sm" style={{ color: 'var(--text)' }}>
+                                  {emp.full_name}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => removeEmployeeFromAttraction(attrId, emp.id)}
-                                  className="text-red-500 hover:text-red-700 transition"
-                                >
-                                  <MinusCircle className="h-4 w-4" />
-                                </button>
+                                  icon={<MinusCircle className="h-4 w-4" style={{ color: 'var(--error)' }} />}
+                                />
                               </div>
                             ))}
                           </div>
@@ -622,7 +695,7 @@ export function ManualScheduleComposer({
                   })
                 )}
               </div>
-            </div>
+            </Card>
           )}
         </div>
       </div>
@@ -630,184 +703,106 @@ export function ManualScheduleComposer({
       {/* ========================================== */}
       {/* Модальное окно добавления сотрудников */}
       {/* ========================================== */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-            {/* Заголовок */}
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="font-semibold text-lg text-gray-900">
-                Добавить сотрудников на «{showAddModal.attractionName}»
-              </h3>
-              <button
-                onClick={() => {
-                  setShowAddModal(null);
-                  setEmployeeSelection(new Set());
-                }}
-                className="text-gray-400 hover:text-gray-600 transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      <Modal
+        isOpen={!!showAddModal}
+        onClose={() => {
+          setShowAddModal(null);
+          setEmployeeSelection(new Set());
+        }}
+        title={showAddModal ? `Добавить сотрудников на «${showAddModal.attractionName}»` : ''}
+        size="lg"
+      >
+        <div className="p-4 overflow-y-auto max-h-[60vh]">
+          {showAddModal && (() => {
+            const available = getAvailableEmployeesForAttraction(showAddModal.attractionId);
+            const allEmpty =
+              !available.priority1.length &&
+              !available.priority2.length &&
+              !available.priority3.length &&
+              !available.goals.length;
 
-            {/* Список сотрудников */}
-            <div className="p-4 overflow-y-auto flex-1">
-              {(() => {
-                const available = getAvailableEmployeesForAttraction(showAddModal.attractionId);
-                const allEmpty =
-                  !available.priority1.length &&
-                  !available.priority2.length &&
-                  !available.priority3.length &&
-                  !available.goals.length;
+            if (allEmpty) {
+              return (
+                <p className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
+                  Нет доступных сотрудников для назначения
+                </p>
+              );
+            }
 
-                if (allEmpty) {
-                  return (
-                    <p className="text-gray-500 text-center py-8">
-                      Нет доступных сотрудников для назначения
-                    </p>
-                  );
-                }
+            const renderEmployeeList = (title: string, employees: EnrichedEmployee[], variant: 'success' | 'info' | 'neutral' | 'warning') => {
+              if (employees.length === 0) return null;
 
-                return (
-                  <div className="space-y-4">
-                    {/* Приоритет 1 */}
-                    {available.priority1.length > 0 && (
-                      <div>
-                        <h4 className="font-medium text-green-700 mb-2">Приоритет 1</h4>
-                        <div className="space-y-1">
-                          {available.priority1.map((emp) => (
-                            <label
-                              key={emp.id}
-                              className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer transition"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={employeeSelection.has(emp.id)}
-                                onChange={(e) => {
-                                  const newSet = new Set(employeeSelection);
-                                  e.target.checked ? newSet.add(emp.id) : newSet.delete(emp.id);
-                                  setEmployeeSelection(newSet);
-                                }}
-                                className="rounded text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-gray-900">{emp.full_name}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Приоритет 2 */}
-                    {available.priority2.length > 0 && (
-                      <div>
-                        <h4 className="font-medium text-blue-700 mb-2">Приоритет 2</h4>
-                        <div className="space-y-1">
-                          {available.priority2.map((emp) => (
-                            <label
-                              key={emp.id}
-                              className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer transition"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={employeeSelection.has(emp.id)}
-                                onChange={(e) => {
-                                  const newSet = new Set(employeeSelection);
-                                  e.target.checked ? newSet.add(emp.id) : newSet.delete(emp.id);
-                                  setEmployeeSelection(newSet);
-                                }}
-                                className="rounded text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-gray-900">{emp.full_name}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Приоритет 3 */}
-                    {available.priority3.length > 0 && (
-                      <div>
-                        <h4 className="font-medium text-gray-700 mb-2">Приоритет 3</h4>
-                        <div className="space-y-1">
-                          {available.priority3.map((emp) => (
-                            <label
-                              key={emp.id}
-                              className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer transition"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={employeeSelection.has(emp.id)}
-                                onChange={(e) => {
-                                  const newSet = new Set(employeeSelection);
-                                  e.target.checked ? newSet.add(emp.id) : newSet.delete(emp.id);
-                                  setEmployeeSelection(newSet);
-                                }}
-                                className="rounded text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-gray-900">{emp.full_name}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Цели обучения */}
-                    {available.goals.length > 0 && (
-                      <div>
-                        <h4 className="font-medium text-purple-700 mb-2">Цель обучения</h4>
-                        <div className="space-y-1">
-                          {available.goals.map((emp) => (
-                            <label
-                              key={emp.id}
-                              className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer transition"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={employeeSelection.has(emp.id)}
-                                onChange={(e) => {
-                                  const newSet = new Set(employeeSelection);
-                                  e.target.checked ? newSet.add(emp.id) : newSet.delete(emp.id);
-                                  setEmployeeSelection(newSet);
-                                }}
-                                className="rounded text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-gray-900">{emp.full_name}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+              return (
+                <div className="mb-4">
+                  <Badge variant={variant} className="mb-2">{title}</Badge>
+                  <div className="space-y-1">
+                    {employees.map((emp) => (
+                      <label
+                        key={emp.id}
+                        className="flex items-center gap-2 p-2 rounded cursor-pointer transition"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={employeeSelection.has(emp.id)}
+                          onChange={(e) => {
+                            const newSet = new Set(employeeSelection);
+                            e.target.checked ? newSet.add(emp.id) : newSet.delete(emp.id);
+                            setEmployeeSelection(newSet);
+                          }}
+                          className="rounded focus:ring-2"
+                          style={{ accentColor: 'var(--primary)' }}
+                        />
+                        <span style={{ color: 'var(--text)' }}>{emp.full_name}</span>
+                      </label>
+                    ))}
                   </div>
-                );
-              })()}
-            </div>
+                </div>
+              );
+            };
 
-            {/* Кнопки действий */}
-            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowAddModal(null);
-                  setEmployeeSelection(new Set());
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={() => {
-                  const selectedIds = Array.from(employeeSelection);
-                  if (selectedIds.length > 0) {
-                    handleAddEmployeesToAttraction(showAddModal.attractionId, selectedIds);
-                  }
-                }}
-                disabled={employeeSelection.size === 0}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
-              >
-                Добавить ({employeeSelection.size})
-              </button>
-            </div>
-          </div>
+            return (
+              <div className="space-y-4">
+                {renderEmployeeList('Приоритет 1', available.priority1, 'success')}
+                {renderEmployeeList('Приоритет 2', available.priority2, 'info')}
+                {renderEmployeeList('Приоритет 3', available.priority3, 'neutral')}
+                {renderEmployeeList('Цель обучения', available.goals, 'warning')}
+              </div>
+            );
+          })()}
         </div>
-      )}
+
+        <div className="p-4 border-t flex justify-end gap-3" style={{ 
+          backgroundColor: 'var(--bg-tertiary)',
+          borderColor: 'var(--border)'
+        }}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setShowAddModal(null);
+              setEmployeeSelection(new Set());
+            }}
+          >
+            Отмена
+          </Button>
+          <Button
+            onClick={() => {
+              const selectedIds = Array.from(employeeSelection);
+              if (selectedIds.length > 0 && showAddModal) {
+                handleAddEmployeesToAttraction(showAddModal.attractionId, selectedIds);
+              }
+            }}
+            disabled={employeeSelection.size === 0}
+          >
+            Добавить ({employeeSelection.size})
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
