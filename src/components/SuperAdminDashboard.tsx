@@ -6,12 +6,12 @@ import {
   Loader2,
   ShieldAlert,
   Activity,
-  Users,
+  Star,
   Settings,
-  Star, // иконка для вкладки "Приоритеты"
+  BarChart3,
 } from 'lucide-react';
 import { AdminDashboard } from './AdminDashboard';
-import { EmployeePriorities } from './EmployeePriorities'; // новый компонент
+import { EmployeePriorities } from './EmployeePriorities';
 
 interface SuperAdminDashboardProps {
   profile: UserProfile;
@@ -50,8 +50,8 @@ export function SuperAdminDashboard({ profile }: SuperAdminDashboardProps) {
   // Состояние для журнала действий
   const [logs, setLogs] = useState<Log[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
-  // Активная вкладка: теперь включает 'priorities'
-  const [activeTab, setActiveTab] = useState<'shifts' | 'priorities' | 'users' | 'logs'>('shifts');
+  // Активная вкладка
+  const [activeTab, setActiveTab] = useState<'admin' | 'priorities' | 'statistics' | 'logs'>('admin');
   const [logFilter, setLogFilter] = useState<string>('all');
   const [logSearch, setLogSearch] = useState('');
 
@@ -86,164 +86,211 @@ export function SuperAdminDashboard({ profile }: SuperAdminDashboardProps) {
 
   // Описание вкладок
   const tabs = [
-    { id: 'shifts' as const, label: 'Управление сменами', Icon: Settings },
-    { id: 'priorities' as const, label: 'Приоритеты', Icon: Star }, // новая вкладка
-    { id: 'users' as const, label: 'Пользователи', Icon: Users },
+    { id: 'admin' as const, label: 'Администратор', Icon: Settings },
+    { id: 'priorities' as const, label: 'Приоритеты', Icon: Star },
+    { id: 'statistics' as const, label: 'Статистика', Icon: BarChart3 },
     { id: 'logs' as const, label: 'Журнал действий', Icon: Activity },
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Баннер супер-админа */}
-      <div className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-4 rounded-xl shadow-sm flex items-center gap-3">
-        <ShieldAlert className="h-6 w-6 flex-shrink-0" />
-        <div>
-          <h2 className="text-lg font-bold">Панель Супер Администратора</h2>
-          <p className="text-sm text-red-100">Полный доступ ко всем функциям системы</p>
-        </div>
-      </div>
-
-      {/* Вкладки */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex border-b border-gray-200 overflow-x-auto">
-          {tabs.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id)}
-              className={`flex-shrink-0 px-6 py-4 text-sm font-medium flex items-center gap-2 border-b-2 transition ${
-                activeTab === id
-                  ? 'border-blue-600 text-blue-600 bg-blue-50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {/* Баннер супер-админа */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white rounded-2xl shadow-xl">
+          <div className="absolute inset-0 bg-black opacity-10"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0"></div>
+          <div className="relative px-8 py-6 flex items-center gap-4">
+            <div className="flex-shrink-0 bg-white/20 backdrop-blur-sm rounded-xl p-3">
+              <ShieldAlert className="h-8 w-8" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Панель Супер Администратора</h2>
+              <p className="text-sm text-indigo-100 mt-1">Полный доступ ко всем функциям системы</p>
+            </div>
+          </div>
         </div>
 
-        <div className="p-0">
-          {/* Вкладка "Управление сменами" */}
-          {activeTab === 'shifts' && (
-            <div className="p-1">
-              <AdminDashboard profile={profile} isSuperAdmin={true} />
-            </div>
-          )}
-
-          {/* Новая вкладка "Приоритеты" */}
-          {activeTab === 'priorities' && <EmployeePriorities />}
-
-          {/* Вкладка "Пользователи" (пока заглушка) */}
-          {activeTab === 'users' && (
-            <div className="p-6">
-              <div className="text-center py-16">
-                <div className="bg-gray-100 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
-                  <Users className="h-8 w-8 text-gray-400" />
-                </div>
-                <h3 className="text-base font-semibold text-gray-800 mb-2">Управление пользователями</h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">
-                  Здесь можно добавлять, редактировать и удалять сотрудников и администраторов.
-                  Требуется интеграция с Supabase Auth Admin API.
-                </p>
-                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-700 inline-block">
-                  Функция в разработке
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Вкладка "Журнал действий" */}
-          {activeTab === 'logs' && (
-            <div className="p-6 space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    placeholder="Поиск по описанию, пользователю..."
-                    value={logSearch}
-                    onChange={e => setLogSearch(e.target.value)}
-                    className="block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <select
-                  value={logFilter}
-                  onChange={e => setLogFilter(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="all">Все типы</option>
-                  {Object.entries(ACTION_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
+        {/* Вкладки */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+          {/* Навигация вкладок */}
+          <div className="border-b border-gray-200 bg-gradient-to-r from-gray-50 to-slate-50">
+            <div className="flex overflow-x-auto hide-scrollbar">
+              {tabs.map(({ id, label, Icon }) => (
                 <button
-                  onClick={fetchLogs}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`group relative flex-shrink-0 px-8 py-5 text-sm font-semibold flex items-center gap-3 transition-all duration-200 ${
+                    activeTab === id
+                      ? 'text-indigo-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
                 >
-                  Обновить
+                  <Icon className={`h-5 w-5 transition-transform duration-200 ${
+                    activeTab === id ? 'scale-110' : 'group-hover:scale-105'
+                  }`} />
+                  <span>{label}</span>
+                  {activeTab === id && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-t-full"></div>
+                  )}
                 </button>
-              </div>
-
-              {loadingLogs ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="animate-spin text-purple-600 h-8 w-8" />
-                </div>
-              ) : (
-                <div className="overflow-x-auto border border-gray-200 rounded-xl">
-                  <table className="min-w-full divide-y divide-gray-100">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Дата/Время</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Тип польз.</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">ID</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Действие</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Описание</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 bg-white">
-                      {filteredLogs.map(log => (
-                        <tr key={log.id} className="hover:bg-gray-50 transition">
-                          <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                            {new Date(log.created_at).toLocaleString('ru-RU')}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
-                            <span className="font-medium">
-                              {USER_TYPE_LABELS[log.user_type] || log.user_type}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                            #{log.user_id}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              ACTION_BADGE[log.action_type] || 'bg-gray-100 text-gray-700'
-                            }`}>
-                              {ACTION_LABELS[log.action_type] || log.action_type}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-600 max-w-xs">
-                            <span className="line-clamp-2">{log.description}</span>
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredLogs.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-400">
-                            <Activity className="mx-auto h-8 w-8 mb-2 opacity-40" />
-                            Записей не найдено
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              <div className="text-xs text-gray-400 text-right">
-                Показано: {filteredLogs.length} из {logs.length} записей
-              </div>
+              ))}
             </div>
-          )}
+          </div>
+
+          {/* Контент вкладок */}
+          <div className="min-h-[600px]">
+            {/* Вкладка "Администратор" */}
+            {activeTab === 'admin' && (
+              <div className="p-6">
+                <AdminDashboard profile={profile} isSuperAdmin={true} />
+              </div>
+            )}
+
+            {/* Вкладка "Приоритеты" */}
+            {activeTab === 'priorities' && (
+              <div className="p-6">
+                <EmployeePriorities />
+              </div>
+            )}
+
+            {/* Вкладка "Статистика" (в разработке) */}
+            {activeTab === 'statistics' && (
+              <div className="p-6">
+                <div className="flex items-center justify-center py-24">
+                  <div className="text-center max-w-md">
+                    <div className="relative mx-auto mb-6 h-24 w-24">
+                      <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl opacity-10 blur-xl"></div>
+                      <div className="relative bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl h-full w-full flex items-center justify-center border border-indigo-100">
+                        <BarChart3 className="h-12 w-12 text-indigo-600" />
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">Статистика</h3>
+                    <p className="text-gray-600 mb-6">
+                      Этот раздел находится в разработке. Скоро здесь появится подробная аналитика и статистические данные системы.
+                    </p>
+                    <div className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl px-6 py-3">
+                      <div className="flex gap-1">
+                        <div className="h-2 w-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                        <div className="h-2 w-2 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                        <div className="h-2 w-2 bg-pink-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      </div>
+                      <span className="text-sm font-medium text-indigo-700">В разработке</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Вкладка "Журнал действий" */}
+            {activeTab === 'logs' && (
+              <div className="p-6 space-y-6">
+                {/* Фильтры */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="Поиск по описанию, пользователю..."
+                      value={logSearch}
+                      onChange={e => setLogSearch(e.target.value)}
+                      className="block w-full pl-4 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow shadow-sm"
+                    />
+                  </div>
+                  <select
+                    value={logFilter}
+                    onChange={e => setLogFilter(e.target.value)}
+                    className="border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white shadow-sm transition-shadow"
+                  >
+                    <option value="all">Все типы</option>
+                    {Object.entries(ACTION_LABELS).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={fetchLogs}
+                    className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-sm font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all shadow-sm hover:shadow-md"
+                  >
+                    Обновить
+                  </button>
+                </div>
+
+                {loadingLogs ? (
+                  <div className="flex justify-center py-24">
+                    <Loader2 className="animate-spin text-indigo-600 h-10 w-10" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="overflow-hidden border border-gray-200 rounded-xl shadow-sm">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gradient-to-r from-gray-50 to-slate-50">
+                            <tr>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Дата/Время</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Тип польз.</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">ID</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Действие</th>
+                              <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Описание</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white">
+                            {filteredLogs.map(log => (
+                              <tr key={log.id} className="hover:bg-gradient-to-r hover:from-indigo-50/30 hover:to-purple-50/30 transition-colors">
+                                <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                                  {new Date(log.created_at).toLocaleString('ru-RU')}
+                                </td>
+                                <td className="px-6 py-4 text-sm whitespace-nowrap">
+                                  <span className="font-semibold text-gray-700">
+                                    {USER_TYPE_LABELS[log.user_type] || log.user_type}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
+                                  <span className="font-mono">#{log.user_id}</span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                                    ACTION_BADGE[log.action_type] || 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {ACTION_LABELS[log.action_type] || log.action_type}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 text-sm text-gray-600 max-w-md">
+                                  <span className="line-clamp-2">{log.description}</span>
+                                </td>
+                              </tr>
+                            ))}
+                            {filteredLogs.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="px-6 py-16 text-center">
+                                  <Activity className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+                                  <p className="text-sm text-gray-500 font-medium">Записей не найдено</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <p className="text-gray-500">
+                        Показано: <span className="font-semibold text-gray-700">{filteredLogs.length}</span> из <span className="font-semibold text-gray-700">{logs.length}</span> записей
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      <style>{`
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .hide-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
     </div>
   );
 }
