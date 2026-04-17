@@ -22,9 +22,9 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
 
   const getRoleBadgeVariant = (level: number): 'error' | 'warning' | 'info' | 'neutral' => {
     switch (level) {
-      case 1: return 'error';    // Красный для супер-админа
-      case 2: return 'warning';  // Оранжевый для админа
-      case 3: return 'info';     // Синий для сотрудника
+      case 1: return 'error';
+      case 2: return 'warning';
+      case 3: return 'info';
       default: return 'neutral';
     }
   };
@@ -52,18 +52,18 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
           borderColor: 'var(--border)'
         }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16">
             {/* Logo & Brand */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <div 
                 className="p-1.5 rounded-lg shadow-sm"
                 style={{ backgroundColor: 'var(--primary)' }}
               >
-                <Calendar className="h-5 w-5 text-white" />
+                <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <span 
-                className="text-xl font-bold hidden sm:inline"
+                className="text-base sm:text-xl font-bold"
                 style={{ color: 'var(--text)' }}
               >
                 ParkStaff
@@ -72,11 +72,6 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
 
             {/* Right Section */}
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* Theme Toggle */}
-              <div className="hidden sm:block">
-                <ThemeToggle />
-              </div>
-
               {/* User Info - Desktop */}
               <div className="hidden md:flex items-center gap-3">
                 <div className="text-right">
@@ -96,21 +91,32 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
                 </div>
               </div>
 
-              {/* User Avatar - Mobile */}
-              <div className="md:hidden">
-                <div 
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                  style={{ backgroundColor: 'var(--primary)' }}
-                  title={profile.full_name}
-                >
-                  {profile.full_name.charAt(0).toUpperCase()}
+              {/* User Info - Mobile */}
+              <div className="md:hidden flex items-center gap-2">
+                <div className="text-right">
+                  <div 
+                    className="text-xs font-semibold leading-tight"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    {profile.full_name}
+                  </div>
+                  <Badge 
+                    variant={getRoleBadgeVariant(profile.access_level)}
+                    dot
+                  >
+                    <RoleIcon className="h-2.5 w-2.5" />
+                    <span className="text-[10px]">{getRoleName(profile.access_level)}</span>
+                  </Badge>
                 </div>
               </div>
+
+              {/* Theme Toggle */}
+              <ThemeToggle />
 
               {/* Logout Button */}
               <button
                 onClick={onLogout}
-                className="p-2 rounded-lg transition-all hover:scale-105"
+                className="p-1.5 sm:p-2 rounded-lg transition-all hover:scale-105"
                 style={{ 
                   color: 'var(--text-muted)',
                   backgroundColor: 'transparent'
@@ -125,29 +131,9 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
                 }}
                 title="Выйти"
               >
-                <LogOut className="h-5 w-5" />
+                <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
             </div>
-          </div>
-
-          {/* Mobile User Info */}
-          <div className="md:hidden pb-3 pt-1 flex items-center justify-between">
-            <div>
-              <div 
-                className="text-sm font-semibold"
-                style={{ color: 'var(--text)' }}
-              >
-                {profile.full_name}
-              </div>
-              <Badge 
-                variant={getRoleBadgeVariant(profile.access_level)}
-                dot
-              >
-                <RoleIcon className="h-3 w-3" />
-                <span className="text-xs">{getRoleName(profile.access_level)}</span>
-              </Badge>
-            </div>
-            <ThemeToggle />
           </div>
         </div>
       </nav>
@@ -156,27 +142,9 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
           MAIN CONTENT
           ======================================== */}
       <main className="flex-1 w-full">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          {/* Welcome Message */}
-          <div className="mb-6 animate-slide-up">
-            <h1 
-              className="text-2xl sm:text-3xl font-bold mb-1"
-              style={{ color: 'var(--text)' }}
-            >
-              Добро пожаловать, {profile.full_name.split(' ')[0]}! 👋
-            </h1>
-            <p 
-              className="text-sm sm:text-base"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              {profile.access_level === 1 && 'Панель супер-администратора'}
-              {profile.access_level === 2 && 'Панель администратора'}
-              {profile.access_level === 3 && 'Личный кабинет сотрудника'}
-            </p>
-          </div>
-
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
           {/* Dashboard Content */}
-          <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <div className="animate-slide-up">
             {profile.access_level === 1 && <SuperAdminDashboard profile={profile} />}
             {profile.access_level === 2 && <AdminDashboard profile={profile} />}
             {profile.access_level === 3 && <EmployeeDashboard profile={profile} />}
@@ -185,10 +153,10 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
       </main>
 
       {/* ========================================
-          FOOTER
+          FOOTER (Hidden on Mobile)
           ======================================== */}
       <footer 
-        className="border-t mt-auto"
+        className="hidden sm:block border-t mt-auto"
         style={{ 
           backgroundColor: 'var(--surface)',
           borderColor: 'var(--border)'
@@ -196,12 +164,23 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+            {/* Copyright */}
             <p 
               className="text-xs"
               style={{ color: 'var(--text-subtle)' }}
             >
-              © 2024 ParkStaff. Все права защищены.
+              © 2026 ParkStaff. Все права защищены.
             </p>
+
+            {/* Center - Developer Credit */}
+            <p 
+              className="text-xs font-medium"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Разработано командой <span style={{ color: 'var(--primary)' }}>AlBars</span>
+            </p>
+
+            {/* Right - Version & Support */}
             <div className="flex items-center gap-4 text-xs">
               <a 
                 href="https://vk.com/albars_studio"
@@ -209,12 +188,18 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
                 rel="noopener noreferrer"
                 className="hover:underline transition-colors"
                 style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--primary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                }}
               >
                 Поддержка
               </a>
               <span style={{ color: 'var(--border)' }}>•</span>
               <span style={{ color: 'var(--text-subtle)' }}>
-                v2.0.0
+                v2.3.0
               </span>
             </div>
           </div>
