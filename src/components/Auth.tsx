@@ -1,63 +1,27 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  Lock, Mail, Calendar, Sparkles, CheckCircle2, 
-  Code, Layers, Palette, Smartphone, Bell, TrendingUp
+  Lock, Calendar, Eye, EyeOff, AlertCircle
 } from 'lucide-react';
 import { Button, Card, Input, ThemeToggle } from './ui';
-import { useTheme } from '../hooks/useTheme';
 
 interface AuthProps {
   onLogin: () => void;
 }
 
-// Новости и обновления системы
+// Обновления первой стадии тестирования
 const UPDATES = [
-  {
-    id: 1,
-    title: 'Новый современный дизайн',
-    description: 'Полностью обновленный интерфейс с оранжевым акцентом и поддержкой темной темы',
-    icon: Palette,
-    date: '2024',
-    status: 'completed' as const,
-  },
-  {
-    id: 2,
-    title: 'Улучшенная мобильная версия',
-    description: 'Оптимизация для смартфонов с удобной навигацией и адаптивным дизайном',
-    icon: Smartphone,
-    date: '2024',
-    status: 'completed' as const,
-  },
-  {
-    id: 3,
-    title: 'Система управления темами',
-    description: 'Выбор между светлой, темной и автоматической темой',
-    icon: Layers,
-    date: '2024',
-    status: 'completed' as const,
-  },
-  {
-    id: 4,
-    title: 'Уведомления в реальном времени',
-    description: 'Мгновенные push-уведомления о важных событиях и изменениях в графике',
-    icon: Bell,
-    date: 'В разработке',
-    status: 'in-progress' as const,
-  },
-  {
-    id: 5,
-    title: 'Расширенная аналитика',
-    description: 'Детальная статистика работы, производительности и KPI сотрудников',
-    icon: TrendingUp,
-    date: 'Планируется',
-    status: 'planned' as const,
-  },
+  'Исправление ошибок',
+  'Доработка системы ведения учета и составления графика смен',
+  'Разработка и тестирование алгоритмов генерации смен',
+  'Разработка бота для беседы ВКонтакте и его взаимодействия с базой данных',
+  'Оптимизация количества запросов к базе данных'
 ];
 
 export function Auth({ onLogin }: AuthProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,313 +45,312 @@ export function Auth({ onLogin }: AuthProps) {
 
   return (
     <div 
-      className="min-h-screen flex flex-col lg:flex-row"
+      className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden"
       style={{ backgroundColor: 'var(--bg-primary)' }}
     >
-      {/* ========================================
-          LEFT SIDE - Login Form
-          ======================================== */}
-      <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 relative">
-        {/* Theme Toggle - Top Right */}
-        <div className="absolute top-4 right-4 lg:top-8 lg:right-8">
+      {/* Декоративные элементы фона */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div 
+          className="absolute -top-40 -right-40 w-80 h-80 rounded-full opacity-10 blur-3xl"
+          style={{ backgroundColor: 'var(--primary)' }}
+        />
+        <div 
+          className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full opacity-10 blur-3xl"
+          style={{ backgroundColor: 'var(--primary)' }}
+        />
+      </div>
+
+      {/* Theme Toggle - Fixed Position */}
+      <div className="fixed top-6 right-6 z-50 animate-slide-down">
+        <div 
+          className="p-2 rounded-xl shadow-lg backdrop-blur-sm transition-all hover:scale-105"
+          style={{ backgroundColor: 'var(--bg-secondary)' }}
+        >
           <ThemeToggle />
         </div>
+      </div>
 
-        <div className="w-full max-w-md mx-auto">
-          {/* Logo & Title */}
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <div 
-                className="p-4 rounded-2xl shadow-lg transition-all hover:scale-105 hover:rotate-3"
-                style={{ backgroundColor: 'var(--primary)' }}
-              >
-                <Calendar className="h-12 w-12 text-white" />
-              </div>
-            </div>
-            
-            <h1 
-              className="text-4xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r"
+      {/* Main Content */}
+      <div className="w-full max-w-md relative z-10">
+        {/* Logo & Title */}
+        <div className="text-center mb-8 animate-slide-down">
+          <div className="flex justify-center mb-6">
+            <div 
+              className="p-4 rounded-2xl shadow-xl transition-all hover:scale-110 hover:rotate-6 duration-300"
               style={{ 
-                backgroundImage: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
+                backgroundColor: 'var(--primary)',
+                boxShadow: '0 20px 40px -12px var(--primary-shadow)'
               }}
             >
-              ParkStaff
-            </h1>
-            <p 
-              className="text-base"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              Система управления персоналом
-            </p>
+              <Calendar className="h-16 w-16 text-white" />
+            </div>
           </div>
+          
+          <h1 
+            className="text-5xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r"
+            style={{ 
+              backgroundImage: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}
+          >
+            ParkStaff
+          </h1>
+          <p 
+            className="text-lg font-medium"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Система управления персоналом
+          </p>
+        </div>
 
-          {/* Login Card */}
-          <Card padding="lg" className="animate-slide-up">
-            <form className="space-y-6" onSubmit={handleLogin}>
-              {/* Email */}
-              <div>
-                <label 
-                  className="block text-sm font-medium mb-2"
-                  style={{ color: 'var(--text)' }}
-                >
-                  Email
-                </label>
-                <Input
+        {/* Login Card */}
+        <Card padding="lg" className="animate-slide-up mb-8" style={{ animationDelay: '100ms' }}>
+          <form className="space-y-5" onSubmit={handleLogin}>
+            {/* Email */}
+            <div>
+              <label 
+                className="block text-sm font-semibold mb-2"
+                style={{ color: 'var(--text)' }}
+              >
+                Email
+              </label>
+              <div className="relative">
+                <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="user@example.com"
-                  icon={<Mail className="h-5 w-5" style={{ color: 'var(--text-subtle)' }} />}
                   autoComplete="email"
+                  className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-200 focus:outline-none focus:ring-2 text-base"
+                  style={{
+                    backgroundColor: 'var(--bg-primary)',
+                    borderColor: 'var(--border)',
+                    color: 'var(--text)',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = 'var(--primary)';
+                    e.target.style.boxShadow = '0 0 0 3px var(--primary-light)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'var(--border)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
               </div>
+            </div>
 
-              {/* Password */}
-              <div>
-                <label 
-                  className="block text-sm font-medium mb-2"
-                  style={{ color: 'var(--text)' }}
-                >
-                  Пароль
-                </label>
-                <Input
-                  type="password"
+            {/* Password */}
+            <div>
+              <label 
+                className="block text-sm font-semibold mb-2"
+                style={{ color: 'var(--text)' }}
+              >
+                Пароль
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  icon={<Lock className="h-5 w-5" style={{ color: 'var(--text-subtle)' }} />}
                   autoComplete="current-password"
+                  className="w-full px-4 py-3 pr-12 rounded-xl border-2 transition-all duration-200 focus:outline-none focus:ring-2 text-base"
+                  style={{
+                    backgroundColor: 'var(--bg-primary)',
+                    borderColor: 'var(--border)',
+                    color: 'var(--text)',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = 'var(--primary)';
+                    e.target.style.boxShadow = '0 0 0 3px var(--primary-light)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'var(--border)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
-              </div>
-
-              {/* Error Message */}
-              {error && (
-                <div 
-                  className="rounded-lg px-4 py-3 text-sm border animate-slide-down"
-                  style={{ 
-                    backgroundColor: 'var(--error-light)', 
-                    borderColor: 'var(--error)',
-                    color: 'var(--error)'
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all hover:scale-110 active:scale-95"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                    e.currentTarget.style.color = 'var(--primary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = 'var(--text-muted)';
                   }}
                 >
-                  {error}
-                </div>
-              )}
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+            </div>
 
-              {/* Submit Button */}
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                loading={loading}
-                className="w-full"
+            {/* Error Message */}
+            {error && (
+              <div 
+                className="rounded-xl px-4 py-3 text-sm border-2 animate-shake flex items-center gap-2"
+                style={{ 
+                  backgroundColor: 'var(--error-light)', 
+                  borderColor: 'var(--error)',
+                  color: 'var(--error)'
+                }}
               >
-                Войти в систему
-              </Button>
-            </form>
+                <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
-            {/* Footer */}
-            <div className="mt-6 text-center space-y-2">
-              <p 
-                className="text-xs"
-                style={{ color: 'var(--text-subtle)' }}
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              loading={loading}
+              className="w-full text-base font-semibold"
+            >
+              Войти в систему
+            </Button>
+          </form>
+
+          {/* Footer */}
+          <div className="mt-6 text-center">
+            <p 
+              className="text-sm"
+              style={{ color: 'var(--text-subtle)' }}
+            >
+              Возникли проблемы со входом?{' '}
+              <a 
+                href="https://vk.com/albars_studio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold underline hover:no-underline transition-all"
+                style={{ color: 'var(--primary)' }}
               >
-                Возникли проблемы со входом?{' '}
-                <a 
-                  href="https://vk.com/albars_studio"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium underline hover:no-underline transition-colors"
-                  style={{ color: 'var(--primary)' }}
+                Обратитесь к администратору
+              </a>
+            </p>
+          </div>
+        </Card>
+
+        {/* What's New Section */}
+        <div className="space-y-4 animate-slide-up" style={{ animationDelay: '200ms' }}>
+          {/* Warning Card */}
+          <Card 
+            padding="md" 
+            className="border-2 transform transition-all duration-300 hover:scale-102"
+            style={{ 
+              borderColor: 'var(--warning)',
+              backgroundColor: 'var(--warning-light)'
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle 
+                className="h-6 w-6 flex-shrink-0 mt-0.5" 
+                style={{ color: 'var(--warning)' }}
+              />
+              <div>
+                <h3 
+                  className="text-sm font-bold mb-1"
+                  style={{ color: 'var(--warning)' }}
                 >
-                  Обратитесь к администратору
-                </a>
-              </p>
+                  Приложение в разработке
+                </h3>
+                <p 
+                  className="text-xs leading-relaxed"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Некоторые функции могут быть временно недоступны
+                </p>
+              </div>
             </div>
           </Card>
 
-          {/* Additional Info */}
-          <div className="mt-8 text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                Все системы работают
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================
-          RIGHT SIDE - Updates & News
-          ======================================== */}
-      <div 
-        className="flex-1 lg:flex lg:items-center lg:justify-center p-4 sm:p-6 lg:p-8"
-        style={{ 
-          backgroundColor: 'var(--bg-secondary)'
-        }}
-      >
-        <div className="w-full max-w-lg">
-          {/* Header */}
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div 
-                className="p-2 rounded-lg"
-                style={{ backgroundColor: 'var(--primary-light)' }}
-              >
-                <Sparkles 
-                  className="h-6 w-6"
-                  style={{ color: 'var(--primary)' }}
-                />
-              </div>
-              <h2 
-                className="text-2xl font-bold"
+          {/* Updates Card */}
+          <Card padding="md" className="transform transition-all duration-300 hover:scale-102">
+            <div className="mb-4">
+              <h3 
+                className="text-lg font-bold mb-1"
                 style={{ color: 'var(--text)' }}
               >
                 Что нового?
-              </h2>
-            </div>
-            <p 
-              className="text-sm"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              Последние обновления и улучшения системы
-            </p>
-          </div>
-
-          {/* Updates List */}
-          <div className="space-y-3">
-            {UPDATES.map((update, index) => {
-              const Icon = update.icon;
-              
-              return (
-                <Card
-                  key={update.id}
-                  variant="hover"
-                  padding="md"
-                  className="animate-slide-up"
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <div className="flex items-start gap-3">
-                    {/* Icon */}
-                    <div className="flex-shrink-0 mt-0.5">
-                      {update.status === 'completed' && (
-                        <div 
-                          className="p-2 rounded-lg"
-                          style={{ backgroundColor: 'var(--success-light)' }}
-                        >
-                          <Icon 
-                            className="h-5 w-5"
-                            style={{ color: 'var(--success)' }}
-                          />
-                        </div>
-                      )}
-                      {update.status === 'in-progress' && (
-                        <div 
-                          className="p-2 rounded-lg"
-                          style={{ backgroundColor: 'var(--warning-light)' }}
-                        >
-                          <Icon 
-                            className="h-5 w-5"
-                            style={{ color: 'var(--warning)' }}
-                          />
-                        </div>
-                      )}
-                      {update.status === 'planned' && (
-                        <div 
-                          className="p-2 rounded-lg"
-                          style={{ backgroundColor: 'var(--info-light)' }}
-                        >
-                          <Icon 
-                            className="h-5 w-5"
-                            style={{ color: 'var(--info)' }}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <h3 
-                          className="text-sm font-semibold"
-                          style={{ color: 'var(--text)' }}
-                        >
-                          {update.title}
-                        </h3>
-                        {update.status === 'completed' && (
-                          <CheckCircle2 
-                            className="h-4 w-4 flex-shrink-0 mt-0.5"
-                            style={{ color: 'var(--success)' }}
-                          />
-                        )}
-                      </div>
-                      
-                      <p 
-                        className="text-xs mb-2 leading-relaxed"
-                        style={{ color: 'var(--text-muted)' }}
-                      >
-                        {update.description}
-                      </p>
-                      
-                      <div className="flex items-center gap-2">
-                        <span 
-                          className="text-xs font-medium"
-                          style={{ color: 'var(--text-subtle)' }}
-                        >
-                          {update.date}
-                        </span>
-                        
-                        {update.status === 'completed' && (
-                          <span className="badge-success text-xs">
-                            Готово
-                          </span>
-                        )}
-                        {update.status === 'in-progress' && (
-                          <span className="badge-warning text-xs">
-                            В работе
-                          </span>
-                        )}
-                        {update.status === 'planned' && (
-                          <span className="badge-info text-xs">
-                            Планируется
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* Footer Note */}
-          <div className="mt-8 text-center">
-            <div 
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg"
-              style={{ backgroundColor: 'var(--bg-tertiary)' }}
-            >
-              <Code className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />
+              </h3>
+              <p 
+                className="text-sm font-semibold"
+                style={{ color: 'var(--primary)' }}
+              >
+                1 стадия тестирования
+              </p>
               <p 
                 className="text-xs"
                 style={{ color: 'var(--text-muted)' }}
               >
-                Разработано{' '}
-                <a 
-                  href="https://vk.com/albars_studio"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold underline hover:no-underline transition-colors"
-                  style={{ color: 'var(--primary)' }}
-                >
-                  AlBars Studio
-                </a>
+                13.04 — 30.04
               </p>
             </div>
+
+            <div className="space-y-2">
+              {UPDATES.map((update, index) => (
+                <div 
+                  key={index}
+                  className="flex items-start gap-3 p-2 rounded-lg transition-all duration-200 hover:translate-x-1"
+                  style={{ 
+                    animationDelay: `${300 + index * 50}ms`,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <div 
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-2"
+                    style={{ backgroundColor: 'var(--primary)' }}
+                  />
+                  <p 
+                    className="text-sm leading-relaxed"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    {update}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-8 text-center animate-slide-up" style={{ animationDelay: '400ms' }}>
+          <div 
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl shadow-lg transition-all hover:scale-105"
+            style={{ backgroundColor: 'var(--bg-secondary)' }}
+          >
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <p 
+              className="text-sm font-medium"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Разработано командой{' '}
+              <a 
+                href="https://vk.com/albars_studio"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold underline hover:no-underline transition-all"
+                style={{ color: 'var(--primary)' }}
+              >
+                AlBars Studio
+              </a>
+            </p>
           </div>
         </div>
       </div>
