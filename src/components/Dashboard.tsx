@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LogOut, Calendar, User, Shield, Crown, Menu } from 'lucide-react';
+import { LogOut, Calendar, User, Shield, Crown } from 'lucide-react';
 import { UserProfile } from '../types';
 import { EmployeeDashboard } from './EmployeeDashboard';
 import { AdminDashboard } from './AdminDashboard';
@@ -7,7 +7,6 @@ import { SuperAdminDashboard } from './SuperAdminDashboard';
 import { Badge, ThemeToggle } from './ui';
 import { useIsMobile, useIsTablet } from '../hooks/useMediaQuery';
 import MobileSidebar from './MobileSidebar';
-import MobileBottomNav from './MobileBottomNav';
 import MobileHeader from './MobileHeader';
 
 interface DashboardProps {
@@ -19,7 +18,6 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('home');
 
   const getRoleName = (level: number) => {
     switch (level) {
@@ -51,9 +49,12 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
   const RoleIcon = getRoleIcon(profile.access_level);
 
   return (
-    <div className="min-h-screen flex flex-col has-mobile-bottom-nav" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div
+      className="min-h-screen flex flex-col"
+      style={{ backgroundColor: 'var(--bg-primary)' }}
+    >
       {/* ========================================
-          MOBILE HEADER (Only on Mobile)
+          MOBILE HEADER
           ======================================== */}
       {isMobile ? (
         <MobileHeader
@@ -66,24 +67,25 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
         /* ========================================
             DESKTOP NAVIGATION BAR
             ======================================== */
-        <nav 
+        <nav
           className="sticky top-0 z-50 border-b backdrop-blur-md"
-          style={{ 
+          style={{
             backgroundColor: 'color-mix(in srgb, var(--surface) 95%, transparent)',
-            borderColor: 'var(--border)'
+            borderColor: 'var(--border)',
           }}
         >
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-14 sm:h-16">
+
               {/* Logo & Brand */}
               <div className="flex items-center gap-2 sm:gap-3">
-                <div 
+                <div
                   className="p-1.5 rounded-lg shadow-sm"
                   style={{ backgroundColor: 'var(--primary)' }}
                 >
                   <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
-                <span 
+                <span
                   className="text-base sm:text-xl font-bold"
                   style={{ color: 'var(--text)' }}
                 >
@@ -93,36 +95,27 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
 
               {/* Right Section */}
               <div className="flex items-center gap-2 sm:gap-3">
-                {/* User Info - Desktop/Tablet */}
                 <div className={`${isTablet ? 'flex' : 'hidden md:flex'} items-center gap-3`}>
                   <div className="text-right">
-                    <div 
+                    <div
                       className="text-sm font-semibold leading-tight"
                       style={{ color: 'var(--text)' }}
                     >
                       {profile.full_name}
                     </div>
-                    <Badge 
-                      variant={getRoleBadgeVariant(profile.access_level)}
-                      dot
-                    >
+                    <Badge variant={getRoleBadgeVariant(profile.access_level)} dot>
                       <RoleIcon className="h-3 w-3" />
                       <span className="text-xs">{getRoleName(profile.access_level)}</span>
                     </Badge>
                   </div>
                 </div>
 
-                {/* Theme Toggle */}
                 <ThemeToggle />
 
-                {/* Logout Button */}
                 <button
                   onClick={onLogout}
                   className="p-1.5 sm:p-2 rounded-lg transition-all active:scale-95"
-                  style={{ 
-                    color: 'var(--text-muted)',
-                    backgroundColor: 'transparent'
-                  }}
+                  style={{ color: 'var(--text-muted)', backgroundColor: 'transparent' }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = 'var(--error-light)';
                     e.currentTarget.style.color = 'var(--error)';
@@ -136,6 +129,7 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
                   <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
                 </button>
               </div>
+
             </div>
           </div>
         </nav>
@@ -151,29 +145,30 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
           title="Меню"
         >
           <div className="p-4 space-y-4">
+
             {/* User Profile Card */}
-            <div 
+            <div
               className="p-4 rounded-lg border"
-              style={{ 
+              style={{
                 backgroundColor: 'var(--bg-tertiary)',
-                borderColor: 'var(--border)'
+                borderColor: 'var(--border)',
               }}
             >
               <div className="flex items-center gap-3 mb-3">
-                <div 
+                <div
                   className="w-12 h-12 rounded-full flex items-center justify-center"
                   style={{ backgroundColor: 'var(--primary)' }}
                 >
                   <RoleIcon className="h-6 w-6 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p 
+                  <p
                     className="font-semibold text-sm truncate"
                     style={{ color: 'var(--text)' }}
                   >
                     {profile.full_name}
                   </p>
-                  <Badge 
+                  <Badge
                     variant={getRoleBadgeVariant(profile.access_level)}
                     className="mt-1"
                   >
@@ -182,7 +177,6 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
                 </div>
               </div>
 
-              {/* Logout Button */}
               <button
                 onClick={() => {
                   setIsSidebarOpen(false);
@@ -195,25 +189,24 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
               </button>
             </div>
 
-            {/* Divider */}
             <div className="divider-mobile" />
 
-            {/* Additional Menu Items */}
+            {/* Info */}
             <div className="space-y-2">
-              <p 
+              <p
                 className="text-xs font-semibold uppercase tracking-wider px-2"
                 style={{ color: 'var(--text-subtle)' }}
               >
                 Информация
               </p>
-              <div 
+              <div
                 className="p-3 rounded-lg"
                 style={{ backgroundColor: 'var(--bg-tertiary)' }}
               >
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   Версия: <span className="font-semibold">v2.3.0</span>
                 </p>
-                <a 
+                <a
                   href="https://vk.com/albars_studio"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -224,6 +217,7 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
                 </a>
               </div>
             </div>
+
           </div>
         </MobileSidebar>
       )}
@@ -232,74 +226,43 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
           MAIN CONTENT
           ======================================== */}
       <main className="flex-1 w-full">
-        <div className={`max-w-7xl mx-auto ${isMobile ? 'px-4 py-4' : 'px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8'}`}>
-          {/* Dashboard Content */}
+        <div
+          className={`max-w-7xl mx-auto ${
+            isMobile
+              ? 'px-4 py-4'
+              : 'px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8'
+          }`}
+        >
           <div className={isMobile ? 'animate-fade-in' : 'animate-slide-up'}>
             {profile.access_level === 1 && <SuperAdminDashboard profile={profile} />}
             {profile.access_level === 2 && <AdminDashboard profile={profile} />}
             {profile.access_level === 3 && <EmployeeDashboard profile={profile} />}
           </div>
         </div>
-
-        {/* Mobile Bottom Spacing */}
-        {isMobile && <div className="h-20" />}
       </main>
-
-      {/* ========================================
-          MOBILE BOTTOM NAVIGATION
-          ======================================== */}
-      {isMobile && (
-        <MobileBottomNav
-          activeTab={activeTab}
-          items={[
-            {
-              id: 'home',
-              label: 'Главная',
-              icon: <Calendar className="w-6 h-6" />,
-              onClick: () => setActiveTab('home')
-            },
-            {
-              id: 'profile',
-              label: 'Профиль',
-              icon: <User className="w-6 h-6" />,
-              onClick: () => setActiveTab('profile')
-            },
-          ]}
-        />
-      )}
 
       {/* ========================================
           DESKTOP FOOTER
           ======================================== */}
       {!isMobile && (
-        <footer 
+        <footer
           className="border-t mt-auto"
-          style={{ 
+          style={{
             backgroundColor: 'var(--surface)',
-            borderColor: 'var(--border)'
+            borderColor: 'var(--border)',
           }}
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-              {/* Copyright */}
-              <p 
-                className="text-xs"
-                style={{ color: 'var(--text-subtle)' }}
-              >
+              <p className="text-xs" style={{ color: 'var(--text-subtle)' }}>
                 © 2026 ParkStaff. Все права защищены.
               </p>
-
-              {/* Center - Developer Credit */}
-              <p 
-                className="text-xs font-medium"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Разработано командой <span style={{ color: 'var(--primary)' }}>AlBars</span>
+              <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                Разработано командой{' '}
+                <span style={{ color: 'var(--primary)' }}>AlBars</span>
               </p>
-
-              {/* Right - Version & Support */}
               <div className="flex items-center gap-4 text-xs">
-                <a 
+                <a
                   href="https://vk.com/albars_studio"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -315,9 +278,7 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
                   Поддержка
                 </a>
                 <span style={{ color: 'var(--border)' }}>•</span>
-                <span style={{ color: 'var(--text-subtle)' }}>
-                  v2.3.0
-                </span>
+                <span style={{ color: 'var(--text-subtle)' }}>v2.3.0</span>
               </div>
             </div>
           </div>
