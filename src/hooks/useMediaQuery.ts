@@ -2,30 +2,27 @@ import { useState, useEffect } from 'react';
 
 /**
  * Hook для отслеживания медиа-запросов
- * @param query - CSS медиа-запрос (например, '(max-width: 768px)')
- * @returns boolean - соответствует ли текущий экран запросу
  */
 export const useMediaQuery = (query: string): boolean => {
-  const [matches, setMatches] = useState(false);
+  const [matches, setMatches] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.matchMedia(query).matches;
+    }
+    return false;
+  });
 
   useEffect(() => {
     const media = window.matchMedia(query);
-    
-    // Установить начальное значение
-    if (media.matches !== matches) {
-      setMatches(media.matches);
-    }
 
-    // Создать listener для изменений
+    setMatches(media.matches);
+
     const listener = (e: MediaQueryListEvent) => {
       setMatches(e.matches);
     };
 
-    // Поддержка старых и новых браузеров
     if (media.addEventListener) {
       media.addEventListener('change', listener);
     } else {
-      // Fallback для старых браузеров
       media.addListener(listener);
     }
 
@@ -36,52 +33,30 @@ export const useMediaQuery = (query: string): boolean => {
         media.removeListener(listener);
       }
     };
-  }, [matches, query]);
+  }, [query]);
 
   return matches;
 };
 
 /**
- * Предопределенные breakpoints
+ * Breakpoints — все завязаны на 768px как в CSS
  */
 export const BREAKPOINTS = {
-  mobile: '(max-width: 640px)',
-  tablet: '(min-width: 641px) and (max-width: 1024px)',
+  mobile: '(max-width: 768px)',
+  tablet: '(min-width: 769px) and (max-width: 1024px)',
   desktop: '(min-width: 1025px)',
   touch: '(hover: none) and (pointer: coarse)',
   landscape: '(orientation: landscape)',
   portrait: '(orientation: portrait)',
 } as const;
 
-/**
- * Hook для определения мобильного устройства
- */
 export const useIsMobile = () => useMediaQuery(BREAKPOINTS.mobile);
-
-/**
- * Hook для определения планшета
- */
 export const useIsTablet = () => useMediaQuery(BREAKPOINTS.tablet);
-
-/**
- * Hook для определения десктопа
- */
 export const useIsDesktop = () => useMediaQuery(BREAKPOINTS.desktop);
-
-/**
- * Hook для определения touch-устройства
- */
 export const useIsTouchDevice = () => useMediaQuery(BREAKPOINTS.touch);
-
-/**
- * Hook для определения ориентации
- */
 export const useIsLandscape = () => useMediaQuery(BREAKPOINTS.landscape);
 export const useIsPortrait = () => useMediaQuery(BREAKPOINTS.portrait);
 
-/**
- * Hook для определения размера экрана с детальной информацией
- */
 export const useScreenSize = () => {
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
@@ -97,7 +72,6 @@ export const useScreenSize = () => {
     isTouchDevice,
     isLandscape,
     isPortrait,
-    // Удобные комбинации
     isMobileOrTablet: isMobile || isTablet,
     isSmallScreen: isMobile,
     isMediumScreen: isTablet,
@@ -105,11 +79,10 @@ export const useScreenSize = () => {
   };
 };
 
-/**
- * Hook для определения высоты viewport (полезно для iOS)
- */
 export const useViewportHeight = () => {
-  const [height, setHeight] = useState(window.innerHeight);
+  const [height, setHeight] = useState(
+    typeof window !== 'undefined' ? window.innerHeight : 0
+  );
 
   useEffect(() => {
     const handleResize = () => {
@@ -117,8 +90,6 @@ export const useViewportHeight = () => {
     };
 
     window.addEventListener('resize', handleResize);
-    
-    // Для iOS Safari - обновить при изменении orientation
     window.addEventListener('orientationchange', () => {
       setTimeout(handleResize, 100);
     });
