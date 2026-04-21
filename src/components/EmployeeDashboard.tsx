@@ -17,6 +17,8 @@ import {
   Briefcase, Award, Activity
 } from 'lucide-react';
 import { Card, Badge, Button, Modal } from './ui';
+import { useIsMobile } from '../hooks/useMediaQuery';
+import MobileBottomNav from './MobileBottomNav';
 
 interface EmployeeDashboardProps {
   profile: Employee;
@@ -42,15 +44,20 @@ function formatDateStr(dateStr: string): string {
 }
 
 export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
+  const isMobile = useIsMobile();
+  
+  // Data management
   const [dataManager, setDataManager] = useState<EmployeeDataManager | null>(null);
   const [loading, setLoading] = useState(true);
   const [updateTrigger, setUpdateTrigger] = useState(0);
   
+  // UI state
   const [now, setNow] = useState(new Date());
   const [greeting, setGreeting] = useState('');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [activeTab, setActiveTab] = useState<TabType>('home');
   
+  // Add shift modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [modalDate, setModalDate] = useState('');
   const [isFullDayModal, setIsFullDayModal] = useState(true);
@@ -60,9 +67,11 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [modalError, setModalError] = useState('');
   const [savingShift, setSavingShift] = useState(false);
   
+  // View shift modal
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewShift, setViewShift] = useState<EmployeeAvailability | null>(null);
   
+  // Time log modal
   const [isTimeLogModalOpen, setIsTimeLogModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleAssignment | null>(null);
   const [actualStart, setActualStart] = useState('');
@@ -70,14 +79,17 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [timeLogError, setTimeLogError] = useState('');
   const [savingTimeLog, setSavingTimeLog] = useState(false);
   
+  // Study goal
   const [selectedAttractionId, setSelectedAttractionId] = useState<number | null>(null);
   const [savingGoal, setSavingGoal] = useState(false);
   const [goalError, setGoalError] = useState('');
   
+  // Salary
   const [salaryPeriod, setSalaryPeriod] = useState<'first' | 'second'>('first');
   const [salaryData, setSalaryData] = useState<{ days: SalaryDay[]; total: number } | null>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
 
+  // Time options
   const START_TIMES = useMemo(() => {
     const times: string[] = [];
     for (let h = 10; h <= 20; h++) {
@@ -100,6 +112,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     return times;
   }, []);
 
+  // Initialize data
   useEffect(() => {
     async function init() {
       try {
@@ -122,17 +135,20 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     return () => destroyEmployeeData();
   }, [profile.id]);
 
+  // Clock timer
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Greeting
   useEffect(() => {
     if (profile.full_name) {
       setGreeting(getRandomGreeting(profile.full_name, new Date()));
     }
   }, [profile.full_name]);
 
+  // Auto-update trigger
   useEffect(() => {
     if (!dataManager) return;
     const interval = setInterval(() => {
@@ -141,6 +157,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     return () => clearInterval(interval);
   }, [dataManager]);
 
+  // Memoized data
   const attractions = useMemo(() => 
     dataManager?.getAttractions() || [], 
     [dataManager, updateTrigger]
@@ -213,6 +230,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     [allAvailability]
   );
 
+  // Handlers
   const openAddModal = (dateStr: string) => {
     if (!dataManager) return;
     
@@ -371,12 +389,30 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   }, [activeTab, salaryPeriod, dataManager]);
 
+  const handleSetStudyGoal = async () => {
+    if (!dataManager || !selectedAttractionId) {
+      setGoalError('Выберите аттракцион');
+      return;
+    }
+    setSavingGoal(true);
+    setGoalError('');
+    const result = await dataManager.setStudyGoal(selectedAttractionId);
+    if (result.success) {
+      alert('Цель изучения сохранена!');
+      setUpdateTrigger(prev => prev + 1);
+    } else {
+      setGoalError(result.error || 'Ошибка сохранения');
+    }
+    setSavingGoal(false);
+  };
+
+  // Render functions
   const renderCalendar = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const firstDayOfMonth = new Date(year, month, 1).getDay();
-    const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    const weekdays = isMobile ? ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] : ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const days = [];
 
@@ -401,7 +437,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
             }
           }}
           disabled={!active && !shift}
-          className="aspect-square flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all relative"
+          className={`aspect-square flex flex-col items-center justify-center rounded-lg border-2 transition-all relative ${
+            isMobile ? 'p-1 text-xs' : 'p-2'
+          }`}
           style={{
             backgroundColor: shift 
               ? (shift.is_full_day ? 'var(--success-light)' : 'var(--warning-light)')
@@ -418,18 +456,18 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
           }}
         >
           <span 
-            className="text-base font-bold"
+            className={`font-bold ${isMobile ? 'text-sm' : 'text-base'}`}
             style={{ color: isToday ? 'var(--primary)' : 'var(--text)' }}
           >
             {i}
           </span>
           {shift && (
             <div 
-              className="absolute top-1 right-1 w-2 h-2 rounded-full"
+              className={`absolute rounded-full ${isMobile ? 'top-0.5 right-0.5 w-1.5 h-1.5' : 'top-1 right-1 w-2 h-2'}`}
               style={{ backgroundColor: shift.is_full_day ? 'var(--success)' : 'var(--warning)' }}
             />
           )}
-          {shift?.comment && (
+          {shift?.comment && !isMobile && (
             <MessageCircle 
               className="absolute bottom-1 right-1 h-3 w-3"
               style={{ color: 'var(--text-subtle)' }}
@@ -441,21 +479,21 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-7 gap-2">
+        <div className={`grid grid-cols-7 ${isMobile ? 'gap-1' : 'gap-2'}`}>
           {weekdays.map(day => (
             <div 
               key={day} 
-              className="text-center text-xs font-semibold py-2"
+              className={`text-center font-semibold py-2 ${isMobile ? 'text-xs' : 'text-xs'}`}
               style={{ color: 'var(--text-muted)' }}
             >
               {day}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-2">
+        <div className={`grid grid-cols-7 ${isMobile ? 'gap-1' : 'gap-2'}`}>
           {days}
         </div>
-        <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+        <div className={`flex flex-wrap gap-3 ${isMobile ? 'text-xs' : 'text-xs'}`} style={{ color: 'var(--text-muted)' }}>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--success)' }} />
             <span>Полная</span>
@@ -473,8 +511,58 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     if (shiftsForMonth.length === 0) {
       return (
         <div className="text-center py-12">
-          <Calendar className="mx-auto h-12 w-12 mb-3 opacity-30" style={{ color: 'var(--text-subtle)' }} />
-          <p style={{ color: 'var(--text-muted)' }}>Смен в этом месяце пока нет</p>
+          <Calendar className={`mx-auto mb-3 opacity-30 ${isMobile ? 'h-10 w-10' : 'h-12 w-12'}`} style={{ color: 'var(--text-subtle)' }} />
+          <p className={isMobile ? 'text-sm' : ''} style={{ color: 'var(--text-muted)' }}>
+            Смен в этом месяце пока нет
+          </p>
+        </div>
+      );
+    }
+
+    if (isMobile) {
+      return (
+        <div className="space-y-3">
+          {shiftsForMonth.map(shift => {
+            const canDelete = dataManager?.canDeleteAvailability(shift);
+            
+            return (
+              <Card 
+                key={shift.id}
+                padding="sm"
+                className="active:scale-98"
+                onClick={() => openViewModal(shift)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium" style={{ color: 'var(--text)' }}>
+                    {format(parseISO(shift.work_date), 'dd MMMM', { locale: ru })}
+                  </div>
+                  <Badge variant={shift.is_full_day ? 'success' : 'warning'}>
+                    {shift.is_full_day ? 'Полная' : 'Неполная'}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    {shift.is_full_day 
+                      ? 'Весь день' 
+                      : `${shift.start_time?.slice(0, 5) || '00:00'}–${shift.end_time?.slice(0, 5) || '00:00'}`
+                    }
+                  </span>
+                  {canDelete?.allowed && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteShift(shift);
+                      }}
+                      className="p-2 rounded-lg active:scale-95"
+                      style={{ color: 'var(--error)' }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       );
     }
@@ -498,7 +586,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                 <tr 
                   key={shift.id}
                   onClick={() => openViewModal(shift)}
-                  className="border-b cursor-pointer transition-colors"
+                  className="border-b cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
                   style={{ borderColor: 'var(--border)' }}
                 >
                   <td className="px-4 py-3 text-sm" style={{ color: 'var(--text)' }}>
@@ -519,7 +607,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                     {canDelete?.allowed ? (
                       <button
                         onClick={() => handleDeleteShift(shift)}
-                        className="p-2 rounded-lg transition-colors"
+                        className="p-2 rounded-lg transition-colors hover:bg-red-50 dark:hover:bg-red-900"
                         style={{ color: 'var(--error)' }}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -541,8 +629,52 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     if (scheduleForMonth.length === 0) {
       return (
         <div className="text-center py-12">
-          <Calendar className="mx-auto h-12 w-12 mb-3 opacity-30" style={{ color: 'var(--text-subtle)' }} />
-          <p style={{ color: 'var(--text-muted)' }}>График не найден</p>
+          <Calendar className={`mx-auto mb-3 opacity-30 ${isMobile ? 'h-10 w-10' : 'h-12 w-12'}`} style={{ color: 'var(--text-subtle)' }} />
+          <p className={isMobile ? 'text-sm' : ''} style={{ color: 'var(--text-muted)' }}>
+            График не найден
+          </p>
+        </div>
+      );
+    }
+
+    if (isMobile) {
+      return (
+        <div className="space-y-3">
+          {scheduleForMonth.map(schedule => {
+            const log = dataManager?.getActualWorkLog(schedule.id);
+            const canLog = dataManager?.canLogActualTime(schedule);
+            const attraction = dataManager?.getAttraction(schedule.attraction_id);
+
+            return (
+              <Card key={schedule.id} padding="sm">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <div className="font-medium text-sm mb-1" style={{ color: 'var(--text)' }}>
+                      {format(parseISO(schedule.work_date), 'dd MMMM', { locale: ru })}
+                    </div>
+                    <div className="text-sm font-semibold" style={{ color: 'var(--primary)' }}>
+                      {attraction?.name || '—'}
+                    </div>
+                  </div>
+                  {log ? (
+                    <Badge variant="success" dot>Отмечено</Badge>
+                  ) : canLog?.allowed ? (
+                    <Button 
+                      onClick={() => openTimeLogModal(schedule)} 
+                      variant="secondary" 
+                      size="sm"
+                    >
+                      Отметить
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <Clock className="inline h-3 w-3 mr-1" />
+                  {schedule.start_time?.slice(0, 5) || '00:00'} – {schedule.end_time?.slice(0, 5) || '00:00'}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       );
     }
@@ -601,10 +733,20 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     return (
       <div className="space-y-4">
         <div className="flex gap-2">
-          <Button onClick={() => setSalaryPeriod('first')} variant={salaryPeriod === 'first' ? 'primary' : 'secondary'} size="sm">
+          <Button 
+            onClick={() => setSalaryPeriod('first')} 
+            variant={salaryPeriod === 'first' ? 'primary' : 'secondary'} 
+            size="sm"
+            className={isMobile ? 'flex-1' : ''}
+          >
             7–21
           </Button>
-          <Button onClick={() => setSalaryPeriod('second')} variant={salaryPeriod === 'second' ? 'primary' : 'secondary'} size="sm">
+          <Button 
+            onClick={() => setSalaryPeriod('second')} 
+            variant={salaryPeriod === 'second' ? 'primary' : 'secondary'} 
+            size="sm"
+            className={isMobile ? 'flex-1' : ''}
+          >
             22–6
           </Button>
         </div>
@@ -618,15 +760,17 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         {!loadingSalary && salaryData && (
           <div>
             {salaryData.days.length === 0 ? (
-              <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>Нет данных</div>
+              <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
+                Нет данных
+              </div>
             ) : (
               <div className="space-y-3">
                 {salaryData.days.map(day => (
-                  <Card key={day.date} padding="md">
-                    <div className="font-semibold mb-2" style={{ color: 'var(--text)' }}>
+                  <Card key={day.date} padding={isMobile ? 'sm' : 'md'}>
+                    <div className={`font-semibold mb-2 ${isMobile ? 'text-sm' : ''}`} style={{ color: 'var(--text)' }}>
                       {format(parseISO(day.date), 'dd.MM.yyyy (EEEE)', { locale: ru })}
                     </div>
-                    <div className="space-y-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    <div className={`space-y-1 ${isMobile ? 'text-xs' : 'text-sm'}`} style={{ color: 'var(--text-muted)' }}>
                       {day.attractions.map((a, idx) => (
                         <div key={idx} className="flex justify-between">
                           <span>{a.name}</span>
@@ -634,16 +778,21 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                         </div>
                       ))}
                     </div>
-                    <div className="mt-2 pt-2 border-t flex justify-between font-bold" style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}>
+                    <div 
+                      className={`mt-2 pt-2 border-t flex justify-between font-bold ${isMobile ? 'text-sm' : ''}`}
+                      style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}
+                    >
                       <span>Итого:</span>
                       <span>{Math.round(day.total)} ₽</span>
                     </div>
                   </Card>
                 ))}
-                <Card padding="lg">
+                <Card padding={isMobile ? 'md' : 'lg'}>
                   <div className="flex justify-between items-center">
-                    <span className="text-xl font-bold" style={{ color: 'var(--text)' }}>Всего:</span>
-                    <span className="text-3xl font-bold" style={{ color: 'var(--success)' }}>
+                    <span className={`font-bold ${isMobile ? 'text-lg' : 'text-xl'}`} style={{ color: 'var(--text)' }}>
+                      Всего:
+                    </span>
+                    <span className={`font-bold ${isMobile ? 'text-2xl' : 'text-3xl'}`} style={{ color: 'var(--success)' }}>
                       {Math.round(salaryData.total)} ₽
                     </span>
                   </div>
@@ -658,14 +807,16 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
   const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
 
+  // Loading state
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
-        <Loader2 className="animate-spin h-12 w-12" style={{ color: 'var(--primary)' }} />
+        <Loader2 className={`animate-spin ${isMobile ? 'h-10 w-10' : 'h-12 w-12'}`} style={{ color: 'var(--primary)' }} />
       </div>
     );
   }
 
+  // Error state
   if (!dataManager) {
     return (
       <Card padding="lg" className="text-center max-w-md mx-auto">
@@ -680,7 +831,11 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
   return (
     <>
+      {/* ========================================
+          DESKTOP VERSION
+          ======================================== */}
       <div className="hidden md:block space-y-6">
+        {/* Header cards */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card padding="lg" className="lg:col-span-2">
             <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
@@ -706,35 +861,43 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
           </Card>
         </div>
 
+        {/* Main content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
+            {/* Month navigation */}
             <div className="flex items-center justify-between">
               <Button onClick={() => setCurrentDate(prev => subMonths(prev, 1))} variant="ghost" icon={<ChevronLeft className="h-5 w-5" />} />
               <h3 className="text-xl font-semibold capitalize" style={{ color: 'var(--text)' }}>{currentMonthLabel}</h3>
               <Button onClick={() => setCurrentDate(prev => addMonths(prev, 1))} variant="ghost" icon={<ChevronRight className="h-5 w-5" />} />
             </div>
 
+            {/* Calendar */}
             <Card padding="md">
               {renderCalendar()}
             </Card>
 
+            {/* My shifts */}
             <Card padding="md">
               <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>Мои смены</h3>
               {renderShiftsTable()}
             </Card>
 
+            {/* Admin schedule */}
             <Card padding="md">
               <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>График от администратора</h3>
               {renderScheduleTable()}
             </Card>
 
+            {/* Salary */}
             <Card padding="md">
               <h3 className="font-semibold mb-4" style={{ color: 'var(--text)' }}>Зарплата</h3>
               {renderSalary()}
             </Card>
           </div>
 
+          {/* Sidebar */}
           <div className="space-y-6">
+            {/* Priorities */}
             <Card padding="md">
               <div className="flex items-center gap-2 mb-4">
                 <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
@@ -766,35 +929,29 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               </div>
             </Card>
 
+            {/* Study goal */}
             <Card padding="md">
               <div className="flex items-center gap-2 mb-4">
                 <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
                 <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Цель изучения</h3>
               </div>
-              {goalError && <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>{goalError}</div>}
-              <select value={selectedAttractionId || ''} onChange={e => setSelectedAttractionId(Number(e.target.value))} className="input mb-3">
+              {goalError && (
+                <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+                  {goalError}
+                </div>
+              )}
+              <select 
+                value={selectedAttractionId || ''} 
+                onChange={e => setSelectedAttractionId(Number(e.target.value))} 
+                className="input mb-3"
+              >
                 <option value="">-- Выберите --</option>
                 {availableAttractionsForGoal.map(a => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
               <Button
-                onClick={async () => {
-                  if (!dataManager || !selectedAttractionId) {
-                    setGoalError('Выберите аттракцион');
-                    return;
-                  }
-                  setSavingGoal(true);
-                  setGoalError('');
-                  const result = await dataManager.setStudyGoal(selectedAttractionId);
-                  if (result.success) {
-                    alert('Сохранено');
-                    setUpdateTrigger(prev => prev + 1);
-                  } else {
-                    setGoalError(result.error || 'Ошибка');
-                  }
-                  setSavingGoal(false);
-                }}
+                onClick={handleSetStudyGoal}
                 disabled={savingGoal || !selectedAttractionId}
                 variant="primary"
                 size="sm"
@@ -812,6 +969,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               )}
             </Card>
 
+            {/* Survey */}
             <Card padding="md">
               <div className="flex items-center gap-2 mb-4">
                 <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
@@ -830,100 +988,260 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         </div>
       </div>
 
-      <div className="md:hidden pb-20">
-        {activeTab === 'home' && (
-          <div className="space-y-4">
-            <Card padding="lg">
-              <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>
-                {greeting || `Здравствуйте!`}
-              </h2>
-              <div className="text-center mt-4">
-                <div className="text-4xl font-bold" style={{ color: 'var(--primary)' }}>
-                  {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+      {/* ========================================
+          MOBILE VERSION
+          ======================================== */}
+      <div className="md:hidden">
+        <div className="has-mobile-bottom-nav">
+          {activeTab === 'home' && (
+            <div className="space-y-4 p-4">
+              <Card padding="md">
+                <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+                  {greeting || 'Здравствуйте!'}
+                </h2>
+                <div className="text-center mt-4">
+                  <div className="text-4xl font-bold" style={{ color: 'var(--primary)' }}>
+                    {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                    {format(now, 'dd MMMM yyyy, EEEE', { locale: ru })}
+                  </div>
                 </div>
-              </div>
-            </Card>
-            <Card padding="md">
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
-                  <span className="font-bold" style={{ color: 'var(--text)' }}>{shiftsForMonth.length}</span>
+              </Card>
+              
+              <Card padding="md">
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
+                    <span className="font-bold" style={{ color: 'var(--text)' }}>{shiftsForMonth.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
+                    <span className="font-bold" style={{ color: 'var(--text)' }}>{scheduleForMonth.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Ставка</span>
+                    <span className="font-bold" style={{ color: 'var(--text)' }}>{profile.base_hourly_rate || 250}₽/ч</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-sm" style={{ color: 'var(--text-muted)' }}>По графику</span>
-                  <span className="font-bold" style={{ color: 'var(--text)' }}>{scheduleForMonth.length}</span>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
+              </Card>
 
-        {activeTab === 'calendar' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Button onClick={() => setCurrentDate(prev => subMonths(prev, 1))} variant="ghost" size="sm" icon={<ChevronLeft className="h-4 w-4" />} />
-              <h3 className="text-lg font-semibold capitalize" style={{ color: 'var(--text)' }}>{currentMonthLabel}</h3>
-              <Button onClick={() => setCurrentDate(prev => addMonths(prev, 1))} variant="ghost" size="sm" icon={<ChevronRight className="h-4 w-4" />} />
+              {/* Priorities mobile */}
+              <Card padding="md">
+                <div className="flex items-center gap-2 mb-3">
+                  <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Приоритеты</h3>
+                </div>
+                <div className="space-y-2">
+                  {[1, 2, 3].map(level => {
+                    const priority = priorities.find(p => p.priority_level === level);
+                    const attractionIds = Array.isArray(priority?.attraction_ids) 
+                      ? priority.attraction_ids 
+                      : (priority?.attraction_ids ? [priority.attraction_ids] : []);
+                    
+                    const attractionNames = attractionIds
+                      .map(id => {
+                        const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+                        return attractions.find(a => a.id === numId)?.name || 'Неизвестный';
+                      })
+                      .join(', ') || 'Не задан';
+
+                    return (
+                      <div key={level} className="flex justify-between items-center py-1.5">
+                        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{level}-й</span>
+                        <Badge variant={level === 1 ? 'success' : level === 2 ? 'warning' : 'info'} size="sm">
+                          {attractionNames.length > 20 ? attractionNames.slice(0, 20) + '...' : attractionNames}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              {/* Study goal mobile */}
+              <Card padding="md">
+                <div className="flex items-center gap-2 mb-3">
+                  <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Цель изучения</h3>
+                </div>
+                {goalError && (
+                  <div className="mb-3 p-2 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+                    {goalError}
+                  </div>
+                )}
+                <select 
+                  value={selectedAttractionId || ''} 
+                  onChange={e => setSelectedAttractionId(Number(e.target.value))} 
+                  className="input mb-3"
+                >
+                  <option value="">-- Выберите --</option>
+                  {availableAttractionsForGoal.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <Button
+                  onClick={handleSetStudyGoal}
+                  disabled={savingGoal || !selectedAttractionId}
+                  variant="primary"
+                  size="sm"
+                  loading={savingGoal}
+                  className="w-full"
+                >
+                  Сохранить
+                </Button>
+                {studyGoal && studyGoal.attraction && (
+                  <div className="mt-3 p-2 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                    <p className="text-xs" style={{ color: 'var(--primary)' }}>
+                      <strong>Текущая:</strong> {studyGoal.attraction.name}
+                    </p>
+                  </div>
+                )}
+              </Card>
             </div>
-            <Card padding="md">{renderCalendar()}</Card>
-            <Card padding="md">{renderShiftsTable()}</Card>
-          </div>
-        )}
+          )}
 
-        {activeTab === 'schedule' && (
-          <Card padding="md">{renderScheduleTable()}</Card>
-        )}
-
-        {activeTab === 'salary' && (
-          <Card padding="md">{renderSalary()}</Card>
-        )}
-
-        {activeTab === 'form' && (
-          <Card padding="md">
-            <div className="relative h-[calc(100vh-250px)] rounded-lg border" style={{ borderColor: 'var(--border)' }}>
-              <iframe
-                src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
-                className="absolute inset-0 w-full h-full"
-                frameBorder="0"
-                title="Form"
-              />
+          {activeTab === 'calendar' && (
+            <div className="space-y-4 p-4">
+              <div className="flex items-center justify-between mb-4">
+                <Button 
+                  onClick={() => setCurrentDate(prev => subMonths(prev, 1))} 
+                  variant="ghost" 
+                  size="sm" 
+                  icon={<ChevronLeft className="h-4 w-4" />} 
+                />
+                <h3 className="text-lg font-semibold capitalize" style={{ color: 'var(--text)' }}>
+                  {currentMonthLabel}
+                </h3>
+                <Button 
+                  onClick={() => setCurrentDate(prev => addMonths(prev, 1))} 
+                  variant="ghost" 
+                  size="sm" 
+                  icon={<ChevronRight className="h-4 w-4" />} 
+                />
+              </div>
+              
+              <Card padding="sm">
+                {renderCalendar()}
+              </Card>
+              
+              <Card padding="sm">
+                <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text)' }}>Мои смены</h3>
+                {renderShiftsTable()}
+              </Card>
             </div>
-          </Card>
-        )}
+          )}
 
-        <nav className="fixed bottom-0 left-0 right-0 z-50 border-t" style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}>
-          <div className="grid grid-cols-5 h-16">
-            {[
-              { id: 'home' as const, icon: Home, label: 'Главная' },
-              { id: 'calendar' as const, icon: Calendar, label: 'Календарь' },
-              { id: 'schedule' as const, icon: Clock, label: 'График' },
-              { id: 'salary' as const, icon: DollarSign, label: 'Зарплата' },
-              { id: 'form' as const, icon: FileText, label: 'Опрос' },
-            ].map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className="flex flex-col items-center justify-center"
-                style={{
-                  backgroundColor: activeTab === id ? 'var(--primary-light)' : 'transparent',
-                  color: activeTab === id ? 'var(--primary)' : 'var(--text-subtle)',
-                }}
-              >
-                <Icon className="h-5 w-5" />
-                <span className="text-xs mt-1">{label}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
+          {activeTab === 'schedule' && (
+            <div className="p-4">
+              <Card padding="sm">
+                <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text)' }}>График от администратора</h3>
+                {renderScheduleTable()}
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'salary' && (
+            <div className="p-4">
+              <Card padding="sm">
+                <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text)' }}>Зарплата</h3>
+                {renderSalary()}
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'form' && (
+            <div className="p-4">
+              <Card padding="sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Опрос</h3>
+                </div>
+                <div className="relative h-[calc(100vh-200px)] rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                  <iframe
+                    src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
+                    className="absolute inset-0 w-full h-full"
+                    frameBorder="0"
+                    title="Form"
+                  />
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        {/* MOBILE BOTTOM NAVIGATION */}
+        <MobileBottomNav
+          activeTab={activeTab}
+          items={[
+            {
+              id: 'home',
+              label: 'Главная',
+              icon: <Home className="w-6 h-6" />,
+              onClick: () => setActiveTab('home')
+            },
+            {
+              id: 'calendar',
+              label: 'Календарь',
+              icon: <Calendar className="w-6 h-6" />,
+              onClick: () => setActiveTab('calendar')
+            },
+            {
+              id: 'schedule',
+              label: 'График',
+              icon: <Clock className="w-6 h-6" />,
+              onClick: () => setActiveTab('schedule')
+            },
+            {
+              id: 'salary',
+              label: 'Зарплата',
+              icon: <DollarSign className="w-6 h-6" />,
+              onClick: () => setActiveTab('salary')
+            },
+            {
+              id: 'form',
+              label: 'Опрос',
+              icon: <FileText className="w-6 h-6" />,
+              onClick: () => setActiveTab('form')
+            },
+          ]}
+        />
       </div>
 
-      <Modal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title={`Смена на ${formatDateStr(modalDate)}`}>
-        <div className="p-6 space-y-4">
-          {modalError && <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>{modalError}</div>}
+      {/* ========================================
+          MODALS
+          ======================================== */}
+      
+      {/* Add shift modal */}
+      <Modal 
+        isOpen={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        title={`Смена на ${formatDateStr(modalDate)}`}
+        size="md"
+      >
+        <div className={`space-y-4 ${isMobile ? 'p-4' : 'p-6'}`}>
+          {modalError && (
+            <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+              {modalError}
+            </div>
+          )}
+          
           <div className="flex gap-2">
-            <Button onClick={() => setIsFullDayModal(true)} variant={isFullDayModal ? 'primary' : 'secondary'} className="flex-1">Полная</Button>
-            <Button onClick={() => setIsFullDayModal(false)} variant={!isFullDayModal ? 'primary' : 'secondary'} className="flex-1">Неполная</Button>
+            <Button 
+              onClick={() => setIsFullDayModal(true)} 
+              variant={isFullDayModal ? 'primary' : 'secondary'} 
+              className="flex-1"
+            >
+              Полная
+            </Button>
+            <Button 
+              onClick={() => setIsFullDayModal(false)} 
+              variant={!isFullDayModal ? 'primary' : 'secondary'} 
+              className="flex-1"
+            >
+              Неполная
+            </Button>
           </div>
+          
           {!isFullDayModal && (
             <div className="grid grid-cols-2 gap-3">
               <select value={modalStartTime} onChange={e => setModalStartTime(e.target.value)} className="input">
@@ -934,42 +1252,140 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               </select>
             </div>
           )}
-          <textarea value={modalComment} onChange={e => setModalComment(e.target.value)} rows={3} className="input resize-none" placeholder="Комментарий..." maxLength={4096} />
-          <Button onClick={handleAddShift} disabled={savingShift} variant="primary" size="lg" loading={savingShift} className="w-full">Добавить</Button>
+          
+          <textarea 
+            value={modalComment} 
+            onChange={e => setModalComment(e.target.value)} 
+            rows={3} 
+            className="input resize-none" 
+            placeholder="Комментарий..." 
+            maxLength={4096} 
+          />
+          
+          <Button 
+            onClick={handleAddShift} 
+            disabled={savingShift} 
+            variant="primary" 
+            size="lg" 
+            loading={savingShift} 
+            className="w-full"
+          >
+            Добавить
+          </Button>
         </div>
       </Modal>
 
-      <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Детали смены">
+      {/* View shift modal */}
+      <Modal 
+        isOpen={isViewModalOpen} 
+        onClose={() => setIsViewModalOpen(false)} 
+        title="Детали смены"
+        size="sm"
+      >
         {viewShift && (
-          <div className="p-6 space-y-4">
+          <div className={`space-y-4 ${isMobile ? 'p-4' : 'p-6'}`}>
             <div>
               <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Дата:</span>
-              <p className="font-medium" style={{ color: 'var(--text)' }}>{format(parseISO(viewShift.work_date), 'dd MMMM yyyy', { locale: ru })}</p>
+              <p className="font-medium" style={{ color: 'var(--text)' }}>
+                {format(parseISO(viewShift.work_date), 'dd MMMM yyyy', { locale: ru })}
+              </p>
             </div>
+            
             <div>
               <Badge variant={viewShift.is_full_day ? 'success' : 'warning'}>
-                {viewShift.is_full_day ? 'Полная' : 'Неполная'}
+                {viewShift.is_full_day ? 'Полная смена' : 'Неполная смена'}
               </Badge>
             </div>
-            <div className="flex gap-3 pt-4">
-              <Button onClick={() => setIsViewModalOpen(false)} variant="secondary" className="flex-1">Закрыть</Button>
+            
+            {!viewShift.is_full_day && (
+              <div>
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Время:</span>
+                <p className="font-medium" style={{ color: 'var(--text)' }}>
+                  {viewShift.start_time?.slice(0, 5)} – {viewShift.end_time?.slice(0, 5)}
+                </p>
+              </div>
+            )}
+            
+            {viewShift.comment && (
+              <div>
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Комментарий:</span>
+                <p className="text-sm mt-1" style={{ color: 'var(--text)' }}>{viewShift.comment}</p>
+              </div>
+            )}
+            
+            <div className={`flex gap-3 pt-4 ${isMobile ? 'flex-col' : ''}`}>
+              <Button 
+                onClick={() => setIsViewModalOpen(false)} 
+                variant="secondary" 
+                className={isMobile ? 'w-full' : 'flex-1'}
+              >
+                Закрыть
+              </Button>
               {dataManager?.canDeleteAvailability(viewShift).allowed && (
-                <Button onClick={() => handleDeleteShift(viewShift)} variant="danger" className="flex-1">Удалить</Button>
+                <Button 
+                  onClick={() => handleDeleteShift(viewShift)} 
+                  variant="danger" 
+                  className={isMobile ? 'w-full' : 'flex-1'}
+                >
+                  Удалить
+                </Button>
               )}
             </div>
           </div>
         )}
       </Modal>
 
-      <Modal isOpen={isTimeLogModalOpen} onClose={() => setIsTimeLogModalOpen(false)} title="Отметка времени">
+      {/* Time log modal */}
+      <Modal 
+        isOpen={isTimeLogModalOpen} 
+        onClose={() => setIsTimeLogModalOpen(false)} 
+        title="Отметка времени"
+        size="sm"
+      >
         {selectedSchedule && (
-          <div className="p-6 space-y-4">
-            {timeLogError && <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>{timeLogError}</div>}
-            <div className="grid grid-cols-2 gap-3">
-              <input type="time" value={actualStart} onChange={e => setActualStart(e.target.value)} className="input" />
-              <input type="time" value={actualEnd} onChange={e => setActualEnd(e.target.value)} className="input" />
+          <div className={`space-y-4 ${isMobile ? 'p-4' : 'p-6'}`}>
+            {timeLogError && (
+              <div className="p-3 rounded-lg text-sm" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+                {timeLogError}
+              </div>
+            )}
+            
+            <div>
+              <p className="text-sm mb-2" style={{ color: 'var(--text-muted)' }}>
+                Укажите фактическое время работы:
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="input-label-mobile">Начало</label>
+                  <input 
+                    type="time" 
+                    value={actualStart} 
+                    onChange={e => setActualStart(e.target.value)} 
+                    className="input" 
+                  />
+                </div>
+                <div>
+                  <label className="input-label-mobile">Окончание</label>
+                  <input 
+                    type="time" 
+                    value={actualEnd} 
+                    onChange={e => setActualEnd(e.target.value)} 
+                    className="input" 
+                  />
+                </div>
+              </div>
             </div>
-            <Button onClick={handleSaveTimeLog} disabled={savingTimeLog} variant="primary" size="lg" loading={savingTimeLog} className="w-full">Сохранить</Button>
+            
+            <Button 
+              onClick={handleSaveTimeLog} 
+              disabled={savingTimeLog} 
+              variant="primary" 
+              size="lg" 
+              loading={savingTimeLog} 
+              className="w-full"
+            >
+              Сохранить
+            </Button>
           </div>
         )}
       </Modal>
