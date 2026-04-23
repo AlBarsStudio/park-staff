@@ -16,7 +16,7 @@ import {
   DollarSign, Home, Target, Award, TrendingUp,
   Users, Zap, BarChart3
 } from 'lucide-react';
-import { Card, Badge, Button, Modal } from './ui';
+import { Card, Badge, Button, Modal, BottomSheet, IOSSelect } from './ui'; // ← ДОБАВИТЬ
 import { useIsMobile } from '../hooks/useMediaQuery';
 import MobileBottomNav from './MobileBottomNav';
 
@@ -409,113 +409,134 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   /* ============================================================
      📅 RENDER: CALENDAR
      ============================================================ */
-  const renderCalendar = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDayOfMonth = new Date(year, month, 1).getDay();
-    const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const days = [];
+const renderCalendar = () => {
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const days = [];
 
-    // Empty cells before first day
-    for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) {
-      days.push(<div key={`empty-${i}`} className="aspect-square" />);
-    }
+  // Empty cells before first day
+  for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) {
+    days.push(<div key={`empty-${i}`} />);
+  }
 
-    // Calendar days
-    for (let i = 1; i <= daysInMonth; i++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-      const isToday = dateStr === todayStr;
-      const shift = allAvailability.find(s => s.work_date === dateStr);
-      const active = dataManager?.isDateActive(dateStr) && !occupiedDates.has(dateStr);
+  // Calendar days
+  for (let i = 1; i <= daysInMonth; i++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+    const isToday = dateStr === todayStr;
+    const shift = allAvailability.find(s => s.work_date === dateStr);
+    const active = dataManager?.isDateActive(dateStr) && !occupiedDates.has(dateStr);
 
-      days.push(
-        <button
-          key={dateStr}
-          onClick={() => {
-            if (shift) {
-              openViewModal(shift);
-            } else if (active) {
-              openAddModal(dateStr);
-            }
-          }}
-          disabled={!active && !shift}
-          className="aspect-square flex flex-col items-center justify-center rounded-xl border-2 transition-all relative active:scale-95"
-          style={{
-            backgroundColor: shift 
-              ? (shift.is_full_day ? 'var(--success-light)' : 'var(--warning-light)')
-              : active 
-                ? 'var(--surface)' 
-                : 'var(--bg-tertiary)',
-            borderColor: isToday 
-              ? 'var(--primary)' 
-              : shift 
-                ? (shift.is_full_day ? 'var(--success)' : 'var(--warning)')
-                : 'var(--border)',
-            opacity: (!active && !shift) ? 0.4 : 1,
-            cursor: (active || shift) ? 'pointer' : 'not-allowed',
-            fontSize: isMobile ? 'clamp(0.75rem, 3vw, 0.875rem)' : '0.875rem',
-            padding: isMobile ? 'clamp(0.25rem, 1vw, 0.5rem)' : '0.5rem',
-          }}
+    days.push(
+      <button
+        key={dateStr}
+        onClick={() => {
+          if (shift) {
+            openViewModal(shift);
+          } else if (active) {
+            openAddModal(dateStr);
+          }
+        }}
+        disabled={!active && !shift}
+        className="relative flex flex-col items-center justify-center rounded-lg border-2 transition-all active:scale-95"
+        style={{
+          aspectRatio: '1',
+          backgroundColor: shift 
+            ? (shift.is_full_day ? 'var(--success-light)' : 'var(--warning-light)')
+            : active 
+              ? 'var(--surface)' 
+              : 'var(--bg-tertiary)',
+          borderColor: isToday 
+            ? 'var(--primary)' 
+            : shift 
+              ? (shift.is_full_day ? 'var(--success)' : 'var(--warning)')
+              : 'var(--border)',
+          opacity: (!active && !shift) ? 0.4 : 1,
+          cursor: (active || shift) ? 'pointer' : 'not-allowed',
+          fontSize: 'clamp(0.625rem, 2.5vw, 0.875rem)',
+          padding: 'clamp(0.25rem, 1vw, 0.5rem)',
+          minWidth: 0,
+          width: '100%',
+        }}
+      >
+        <span 
+          className="font-bold leading-none"
+          style={{ color: isToday ? 'var(--primary)' : 'var(--text)' }}
         >
-          <span 
-            className="font-bold leading-none"
-            style={{ color: isToday ? 'var(--primary)' : 'var(--text)' }}
-          >
-            {i}
-          </span>
-          {shift && (
-            <div 
-              className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
-              style={{ backgroundColor: shift.is_full_day ? 'var(--success)' : 'var(--warning)' }}
-            />
-          )}
-          {shift?.comment && !isMobile && (
-            <MessageCircle 
-              className="absolute bottom-1 right-1 h-3 w-3"
-              style={{ color: 'var(--text-subtle)' }}
-            />
-          )}
-        </button>
-      );
-    }
+          {i}
+        </span>
+        {shift && (
+          <div 
+            className="absolute w-1.5 h-1.5 rounded-full"
+            style={{ 
+              backgroundColor: shift.is_full_day ? 'var(--success)' : 'var(--warning)',
+              top: '4px',
+              right: '4px',
+            }}
+          />
+        )}
+        {shift?.comment && !isMobile && (
+          <MessageCircle 
+            className="absolute h-3 w-3"
+            style={{ 
+              color: 'var(--text-subtle)',
+              bottom: '4px',
+              right: '4px',
+            }}
+          />
+        )}
+      </button>
+    );
+  }
 
-    return (
-      <div className="space-y-3">
-        {/* Weekday headers */}
-        <div className="grid grid-cols-7 gap-1">
-          {weekdays.map(day => (
-            <div 
-              key={day} 
-              className="text-center font-semibold py-2 text-xs"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              {day}
-            </div>
-          ))}
-        </div>
-        
-        {/* Calendar grid - FIXED GAPS */}
-        <div className="grid grid-cols-7 gap-1">
-          {days}
-        </div>
-        
-        {/* Legend */}
-        <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--success)' }} />
-            <span>Полная</span>
+  return (
+    <div className="space-y-3 w-full">
+      {/* Weekday headers */}
+      <div className="grid grid-cols-7 gap-1">
+        {weekdays.map(day => (
+          <div 
+            key={day} 
+            className="text-center font-semibold py-2"
+            style={{ 
+              color: 'var(--text-muted)',
+              fontSize: 'clamp(0.625rem, 2.5vw, 0.75rem)',
+            }}
+          >
+            {day}
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--warning)' }} />
-            <span>Неполная</span>
-          </div>
+        ))}
+      </div>
+      
+      {/* Calendar grid - ФИКСИРОВАННЫЙ */}
+      <div 
+        className="grid grid-cols-7 w-full"
+        style={{
+          gap: 'clamp(2px, 0.5vw, 4px)',
+        }}
+      >
+        {days}
+      </div>
+      
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3" style={{ 
+        color: 'var(--text-muted)',
+        fontSize: 'clamp(0.625rem, 2.5vw, 0.75rem)',
+      }}>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--success)' }} />
+          <span>Полная</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--warning)' }} />
+          <span>Неполная</span>
         </div>
       </div>
-    );
-  };
-
+    </div>
+  );
+};
   /* ============================================================
      📋 RENDER: SHIFTS TABLE (МОИ СМЕНЫ)
      ============================================================ */
