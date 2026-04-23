@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* ============================================================
+   📦 IMPORTS - Модульная структура стилей
+   ============================================================ */
+
+/* Base */
+@import './base/variables.css';
+@import './base/reset.css';
+@import './base/typography.css';
+
+/* Components */
+@import './components/buttons.css';
+@import './components/cards.css';
+@import './components/forms.css';
+@import './components/badges.css';
+
+/* Animations */
+@import './animations/keyframes.css';
+
+/* Mobile */
+@import './mobile/navigation.css';
+@import './mobile/responsive.css';
+@import './mobile/touch.css';
+
+/* Utilities */
+@import './utilities/helpers.css';
