@@ -1,0 +1,77 @@
+/* ============================================================
+   🎨 CSS VARIABLES - Design System
+   ============================================================ */
+
+@layer base {
+  :root {
+    /* LIGHT THEME - Colors */
+    --bg-primary: #fafafa;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f5f5f5;
+    
+    --surface: #ffffff;
+    --surface-rgb: 255, 255, 255;
+    --border: #e5e5e5;
+    --border-hover: #d4d4d4;
+
+    --text: #171717;
+    --text-muted: #525252;
+    --text-subtle: #a3a3a3;
+
+    --primary: #f97316;
+    --primary-hover: #ea580c;
+    --primary-light: #fff7ed;
+    --primary-shadow: rgba(249, 115, 22, 0.3);
+
+    --success: #10b981;
+    --success-light: #d1fae5;
+    --warning: #f59e0b;
+    --warning-light: #fef3c7;
+    --error: #ef4444;
+    --error-light: #fee2e2;
+    --info: #3b82f6;
+    --info-light: #dbeafe;
+
+    /* Spacing & Border Radius */
+    --spacing-mobile: 1rem;
+    --spacing-desktop: 1.5rem;
+    --border-radius-mobile: 1rem;
+    --border-radius-desktop: 0.75rem;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  }
+
+  .dark {
+    /* DARK THEME - Colors */
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #171717;
+    --bg-tertiary: #262626;
+    
+    --surface: #171717;
+    --surface-rgb: 23, 23, 23;
+    --border: #404040;
+    --border-hover: #525252;
+
+    --text: #fafafa;
+    --text-muted: #a3a3a3;
+    --text-subtle: #737373;
+
+    --primary: #f97316;
+    --primary-hover: #fb923c;
+    --primary-light: #7c2d12;
+    --primary-shadow: rgba(249, 115, 22, 0.4);
+
+    --success: #10b981;
+    --success-light: #064e3b;
+    --warning: #f59e0b;
+    --warning-light: #78350f;
+    --error: #ef4444;
+    --error-light: #7f1d1d;
+    --info: #3b82f6;
+    --info-light: #1e3a8a;
+  }
+}
