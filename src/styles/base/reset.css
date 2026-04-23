@@ -1,0 +1,92 @@
+/* ============================================================
+   🔧 RESET & BASE STYLES
+   ============================================================ */
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text);
+    transition: background-color 200ms, color 200ms;
+    overscroll-behavior-y: contain;
+    position: relative;
+    min-height: 100vh;
+  }
+
+  /* Safe area insets (iOS notch support) */
+  @supports (padding: max(0px)) {
+    body {
+      padding-left: max(0px, env(safe-area-inset-left));
+      padding-right: max(0px, env(safe-area-inset-right));
+    }
+  }
+
+  /* SCROLLBAR STYLES */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #d4d4d4 transparent;
+  }
+
+  .dark * {
+    scrollbar-color: #404040 transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  @media (max-width: 768px) {
+    *::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: #d4d4d4;
+    border-radius: 9999px;
+  }
+
+  .dark *::-webkit-scrollbar-thumb {
+    background: #404040;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: #a3a3a3;
+  }
+
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background: #525252;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* iOS smooth scrolling */
+  @supports (-webkit-overflow-scrolling: touch) {
+    .overflow-auto,
+    .overflow-y-auto,
+    .overflow-x-auto {
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+}
