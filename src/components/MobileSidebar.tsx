@@ -1,8 +1,7 @@
 import React, { useEffect } from 'react';
-import { X, User, LogOut, Settings, Bell, HelpCircle } from 'lucide-react';
+import { X, LogOut } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { ThemeToggle } from './ui/ThemeToggle';
-import { useIsMobile } from '../hooks/useMediaQuery';
 
 interface MobileSidebarProps {
   isOpen: boolean;
@@ -19,8 +18,6 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({
   userRole = 'Сотрудник',
   onLogout,
 }) => {
-  const isMobile = useIsMobile();
-
   // Prevent body scroll when sidebar is open
   useEffect(() => {
     if (isOpen) {
@@ -53,42 +50,6 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
-
-  const menuItems = [
-    {
-      icon: User,
-      label: 'Профиль',
-      onClick: () => {
-        console.log('Открыть профиль');
-        onClose();
-      },
-    },
-    {
-      icon: Bell,
-      label: 'Уведомления',
-      badge: '3',
-      onClick: () => {
-        console.log('Открыть уведомления');
-        onClose();
-      },
-    },
-    {
-      icon: Settings,
-      label: 'Настройки',
-      onClick: () => {
-        console.log('Открыть настройки');
-        onClose();
-      },
-    },
-    {
-      icon: HelpCircle,
-      label: 'Помощь',
-      onClick: () => {
-        console.log('Открыть помощь');
-        onClose();
-      },
-    },
-  ];
 
   const sidebar = (
     <>
@@ -154,40 +115,6 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto hide-scrollbar" style={{ height: 'calc(100vh - 240px)' }}>
-          <nav className="p-4 space-y-1">
-            {menuItems.map((item, index) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={index}
-                  onClick={item.onClick}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg transition-all active:scale-98"
-                  style={{ color: 'var(--text)' }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  <Icon className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
-                  <span className="flex-1 text-left font-medium">{item.label}</span>
-                  {item.badge && (
-                    <span 
-                      className="px-2 py-0.5 text-xs font-bold rounded-full"
-                      style={{
-                        backgroundColor: 'var(--error)',
-                        color: 'white',
-                      }}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-
           {/* Theme Toggle Section */}
           <div className="p-4 mt-4">
             <div 
@@ -231,28 +158,5 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({
 
   return createPortal(sidebar, document.body);
 };
-
-// Animation styles (добавить в index.css если их нет)
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes slideRight {
-    from {
-      transform: translateX(-100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-  
-  .animate-slide-right {
-    animation: slideRight 300ms cubic-bezier(0.4, 0, 0.2, 1);
-  }
-`;
-if (!document.head.querySelector('style[data-sidebar-animations]')) {
-  style.setAttribute('data-sidebar-animations', 'true');
-  document.head.appendChild(style);
-}
 
 export default MobileSidebar;
