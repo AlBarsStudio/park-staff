@@ -12,3 +12,6 @@ export { default as SwipeableList } from './SwipeableList';
 export { default as PullToRefresh } from './PullToRefresh';
 export { default as Toast, ToastContainer, useToast } from './Toast';
 export type { ToastType } from './Toast';
+
+export { IOSSelect } from './IOSSelect';
+export { BottomSheet } from './BottomSheet';
