@@ -1,0 +1,161 @@
+/* ============================================================
+   📱 RESPONSIVE DESIGN
+   ============================================================ */
+
+@media (max-width: 640px) {
+  .container-mobile {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .min-h-screen {
+    padding: var(--spacing-mobile) !important;
+  }
+
+  .gap-6 {
+    gap: 1rem !important;
+  }
+
+  .gap-8 {
+    gap: 1.5rem !important;
+  }
+
+  .space-y-6 > * + * {
+    margin-top: 1rem !important;
+  }
+
+  .space-y-8 > * + * {
+    margin-top: 1.5rem !important;
+  }
+
+  .grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .grid-cols-3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .flex-row {
+    flex-direction: column !important;
+  }
+
+  .justify-between {
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .p-6 {
+    padding: 1rem !important;
+  }
+
+  .p-8 {
+    padding: 1.25rem !important;
+  }
+
+  .px-6 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .py-6 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .fixed.top-6.right-6 {
+    top: 1rem !important;
+    right: 1rem !important;
+  }
+
+  .fixed.top-4.right-4 {
+    top: 0.75rem !important;
+    right: 0.75rem !important;
+  }
+
+  .h-16.w-16 {
+    height: 3rem !important;
+    width: 3rem !important;
+  }
+
+  .h-12.w-12 {
+    height: 2.5rem !important;
+    width: 2.5rem !important;
+  }
+
+  .h-8.w-8 {
+    height: 2rem !important;
+    width: 2rem !important;
+  }
+
+  .max-w-md,
+  .max-w-lg,
+  .max-w-xl {
+    max-width: calc(100vw - 2rem) !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+
+  .grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .grid-cols-3 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .py-6,
+  .py-8,
+  .py-12 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .space-y-6 > * + * {
+    margin-top: 0.75rem !important;
+  }
+
+  h1, .text-5xl {
+    font-size: 1.5rem !important;
+  }
+
+  h2, .text-4xl {
+    font-size: 1.25rem !important;
+  }
+}
+
+/* Modal responsive */
+@media (max-width: 640px) {
+  .modal-mobile {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 90vh;
+    border-radius: 1.5rem 1.5rem 0 0;
+    animation: slideInFromBottom 300ms ease-out;
+    background: var(--surface);
+  }
+
+  .modal-mobile::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0.75rem auto;
+  }
+}
