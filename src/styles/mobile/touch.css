@@ -1,0 +1,105 @@
+/* ============================================================
+   👆 TOUCH DEVICE OPTIMIZATIONS
+   ============================================================ */
+
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  .btn,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  .btn {
+    padding: 0.875rem 1.75rem;
+  }
+
+  .card-hover:hover,
+  .btn:hover,
+  .hover\:scale-102:hover,
+  .hover\:scale-105:hover,
+  .hover\:scale-110:hover {
+    transform: none;
+  }
+
+  .card-hover:active,
+  .card-interactive:active {
+    transform: scale(0.98);
+    transition: transform 100ms;
+  }
+
+  .btn:active {
+    transform: scale(0.95);
+    transition: transform 100ms;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 24px;
+    height: 24px;
+  }
+
+  .space-y-2 > * + * {
+    margin-top: 0.75rem !important;
+  }
+
+  .space-y-4 > * + * {
+    margin-top: 1.25rem !important;
+  }
+}
+
+/* Swipeable components */
+@media (max-width: 768px) {
+  .swipeable-card {
+    touch-action: pan-y;
+    user-select: none;
+  }
+
+  .swipeable-list {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    margin: -1rem;
+  }
+
+  .swipeable-list > * {
+    scroll-snap-align: start;
+    flex: 0 0 85%;
+  }
+
+  .pull-to-refresh {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .pull-to-refresh-indicator {
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: top 200ms;
+  }
+
+  .pull-to-refresh.pulling .pull-to-refresh-indicator {
+    top: 10px;
+  }
+
+  /* Haptic feedback visual */
+  .haptic-light:active {
+    animation: pulse 100ms;
+  }
+
+  .haptic-medium:active {
+    animation: shake 200ms;
+  }
+}
