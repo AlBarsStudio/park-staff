@@ -61,7 +61,7 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
           title="ParkStaff"
           onMenuClick={() => setIsSidebarOpen(true)}
           showMenu={true}
-          showThemeToggle={true}
+          showLogo={true}
         />
       ) : (
         /* ========================================
@@ -142,84 +142,10 @@ export function Dashboard({ profile, onLogout }: DashboardProps) {
         <MobileSidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
-          title="Меню"
-        >
-          <div className="p-4 space-y-4">
-
-            {/* User Profile Card */}
-            <div
-              className="p-4 rounded-lg border"
-              style={{
-                backgroundColor: 'var(--bg-tertiary)',
-                borderColor: 'var(--border)',
-              }}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: 'var(--primary)' }}
-                >
-                  <RoleIcon className="h-6 w-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p
-                    className="font-semibold text-sm truncate"
-                    style={{ color: 'var(--text)' }}
-                  >
-                    {profile.full_name}
-                  </p>
-                  <Badge
-                    variant={getRoleBadgeVariant(profile.access_level)}
-                    className="mt-1"
-                  >
-                    {getRoleName(profile.access_level)}
-                  </Badge>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  setIsSidebarOpen(false);
-                  onLogout();
-                }}
-                className="w-full btn btn-danger btn-sm mt-2"
-              >
-                <LogOut className="h-4 w-4" />
-                Выйти
-              </button>
-            </div>
-
-            <div className="divider-mobile" />
-
-            {/* Info */}
-            <div className="space-y-2">
-              <p
-                className="text-xs font-semibold uppercase tracking-wider px-2"
-                style={{ color: 'var(--text-subtle)' }}
-              >
-                Информация
-              </p>
-              <div
-                className="p-3 rounded-lg"
-                style={{ backgroundColor: 'var(--bg-tertiary)' }}
-              >
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Версия: <span className="font-semibold">v2.3.0</span>
-                </p>
-                <a
-                  href="https://vk.com/albars_studio"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs mt-1 inline-block"
-                  style={{ color: 'var(--primary)' }}
-                >
-                  Поддержка →
-                </a>
-              </div>
-            </div>
-
-          </div>
-        </MobileSidebar>
+          userName={profile.full_name || 'Пользователь'}
+          userRole={getRoleName(profile.access_level)}
+          onLogout={onLogout}
+        />
       )}
 
       {/* ========================================
