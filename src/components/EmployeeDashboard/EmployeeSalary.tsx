@@ -4,15 +4,17 @@ import { DollarSign, Loader2 } from 'lucide-react';
 import { Card, Button } from '../ui';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 
+interface SalaryAttraction {
+  name: string;
+  hours: number;
+  rate: number;
+  coefficient: number;
+  earn: number;
+}
+
 interface SalaryDay {
   date: string;
-  attractions: Array<{
-    name: string;
-    hours: number;
-    rate: number;
-    coefficient: number;
-    earn: number;
-  }>;
+  attractions: SalaryAttraction[];
   total: number;
 }
 
@@ -38,14 +40,17 @@ export function EmployeeSalary({
 
   return (
     <Card padding={isMobile ? 'sm' : 'md'} className="w-full">
-      {!isMobile && (
+      {isMobile ? (
+        <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text)' }}>
+          Зарплата
+        </h3>
+      ) : (
         <div className="flex items-center gap-2 mb-4">
           <DollarSign className="h-5 w-5" style={{ color: 'var(--success)' }} />
-          <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Зарплата</h3>
+          <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+            Зарплата
+          </h3>
         </div>
-      )}
-      {isMobile && (
-        <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text)' }}>Зарплата</h3>
       )}
 
       <div className="space-y-4">
@@ -72,13 +77,16 @@ export function EmployeeSalary({
         {/* Loading */}
         {loadingSalary && (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin" style={{ color: 'var(--primary)' }} />
+            <Loader2
+              className="h-8 w-8 animate-spin"
+              style={{ color: 'var(--primary)' }}
+            />
           </div>
         )}
 
-        {/* Salary data */}
+        {/* Data */}
         {!loadingSalary && salaryData && (
-          <div>
+          <>
             {salaryData.days.length === 0 ? (
               <div
                 className="text-center py-12"
@@ -119,7 +127,10 @@ export function EmployeeSalary({
                     </div>
                     <div
                       className="mt-2 pt-2 border-t flex justify-between font-bold text-sm"
-                      style={{ borderColor: 'var(--border)', color: 'var(--primary)' }}
+                      style={{
+                        borderColor: 'var(--border)',
+                        color: 'var(--primary)',
+                      }}
                     >
                       <span>Итого:</span>
                       <span>{Math.round(day.total)} ₽</span>
@@ -127,11 +138,12 @@ export function EmployeeSalary({
                   </Card>
                 ))}
 
-                {/* Total card */}
+                {/* Total */}
                 <Card
                   padding="md"
                   style={{
-                    background: 'linear-gradient(135deg, var(--success-light), var(--success))',
+                    background:
+                      'linear-gradient(135deg, var(--success-light), var(--success))',
                     border: 'none',
                   }}
                 >
@@ -152,7 +164,7 @@ export function EmployeeSalary({
                 </Card>
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </Card>
