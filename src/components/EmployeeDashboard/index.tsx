@@ -8,12 +8,20 @@ import {
   type ScheduleAssignment,
 } from '../../lib/employeeDatabase';
 import { getRandomGreeting } from '../../utils/greetings';
-import { addMonths, subMonths } from 'date-fns';
+import { format } from 'date-fns';
+import { ru } from 'date-fns/locale';
 import { useIsMobile } from '../../hooks/useMediaQuery';
-import { EmployeeDashboardDesktop } from './EmployeeDashboardDesktop';
-import { EmployeeDashboardMobile } from './EmployeeDashboardMobile';
 import { EmployeeDashboardModals } from './EmployeeDashboardModals';
-import { Loader2, X, Save, AlertTriangle } from 'lucide-react';
+import { SaveChangesButton } from './SaveChangesButton';
+import { EmployeeCalendar } from './EmployeeCalendar';
+import { EmployeeShiftsTable } from './EmployeeShiftsTable';
+import { EmployeeScheduleTable } from './EmployeeScheduleTable';
+import { EmployeeSalary } from './EmployeeSalary';
+import { EmployeePriorities } from './EmployeePriorities';
+import { EmployeeStudyGoal } from './EmployeeStudyGoal';
+import { EmployeeStats } from './EmployeeStats';
+import MobileBottomNav from '../MobileBottomNav';
+import { Loader2, X, Home, Calendar, Clock, DollarSign, FileText } from 'lucide-react';
 import { Card, Button } from '../ui';
 
 interface EmployeeDashboardProps {
@@ -520,56 +528,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingGoal(false);
   };
 
-  const renderSaveButton = () => {
-    if (!hasUnsavedChanges) return null;
-
-    const changesText = `${pendingChanges.additions.length > 0 ? `+${pendingChanges.additions.length}` : ''}${pendingChanges.deletions.length > 0 ? ` -${pendingChanges.deletions.length}` : ''}`;
-
-    return (
-      <div 
-        className="fixed z-50 shadow-2xl rounded-2xl p-4"
-        style={{
-          bottom: isMobile ? '80px' : '24px',
-          right: '24px',
-          background: 'linear-gradient(135deg, var(--warning), var(--warning-hover))',
-          border: '2px solid var(--warning)',
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5 text-white animate-pulse" />
-          <div className="text-white">
-            <p className="font-bold text-sm">Несохраненные изменения</p>
-            <p className="text-xs opacity-90">{changesText} операций</p>
-          </div>
-        </div>
-        <div className="flex gap-2 mt-3">
-          <Button
-            onClick={handleCancelChanges}
-            variant="secondary"
-            size="sm"
-            className="flex-1"
-          >
-            Отменить
-          </Button>
-          <Button
-            onClick={handleSaveAllChanges}
-            variant="primary"
-            size="sm"
-            loading={isSaving}
-            icon={<Save className="h-4 w-4" />}
-            className="flex-1"
-            style={{
-              backgroundColor: 'white',
-              color: 'var(--warning)',
-            }}
-          >
-            Сохранить
-          </Button>
-        </div>
-      </div>
-    );
-  };
-
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center min-h-[60vh] gap-4">
@@ -594,47 +552,222 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     );
   }
 
-  const sharedProps = {
-    profile,
-    dataManager,
-    now,
-    greeting,
-    currentDate,
-    setCurrentDate,
-    activeTab,
-    setActiveTab,
-    shiftsForMonth,
-    scheduleForMonth,
-    occupiedDates,
-    mergedAvailability,
-    pendingChanges,
-    attractions,
-    priorities,
-    studyGoal,
-    availableAttractionsForGoal,
-    selectedAttractionId,
-    setSelectedAttractionId,
-    handleSetStudyGoal,
-    savingGoal,
-    goalError,
-    salaryPeriod,
-    setSalaryPeriod,
-    salaryData,
-    loadingSalary,
-    openAddModal,
-    openViewModal,
-    openTimeLogModal,
-  };
-
   return (
     <>
-      {renderSaveButton()}
-      
-      {isMobile ? (
-        <EmployeeDashboardMobile {...sharedProps} />
-      ) : (
-        <EmployeeDashboardDesktop {...sharedProps} />
-      )}
+      <SaveChangesButton
+        pendingChanges={pendingChanges}
+        isSaving={isSaving}
+        onSave={handleSaveAllChanges}
+        onCancel={handleCancelChanges}
+      />
+
+      {/* DESKTOP VERSION */}
+      <div className="hidden md:block space-y-6 p-6">
+        <EmployeeStats
+          profile={profile}
+          greeting={greeting}
+          shiftsCount={shiftsForMonth.length}
+          scheduleCount={scheduleForMonth.length}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <EmployeeCalendar
+              currentDate={currentDate}
+              setCurrentDate={setCurrentDate}
+              mergedAvailability={mergedAvailability}
+              occupiedDates={occupiedDates}
+              pendingChanges={pendingChanges}
+              dataManager={dataManager}
+              openAddModal={openAddModal}
+              openViewModal={openViewModal}
+            />
+
+            <EmployeeShiftsTable
+              shiftsForMonth={shiftsForMonth}
+              pendingChanges={pendingChanges}
+              dataManager={dataManager}
+              openViewModal={openViewModal}
+            />
+
+            <EmployeeScheduleTable
+              scheduleForMonth={scheduleForMonth}
+              dataManager={dataManager}
+              openTimeLogModal={openTimeLogModal}
+            />
+
+            <EmployeeSalary
+              salaryPeriod={salaryPeriod}
+              setSalaryPeriod={setSalaryPeriod}
+              salaryData={salaryData}
+              loadingSalary={loadingSalary}
+            />
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            <EmployeePriorities
+              priorities={priorities}
+              attractions={attractions}
+            />
+
+            <EmployeeStudyGoal
+              studyGoal={studyGoal}
+              availableAttractions={availableAttractionsForGoal}
+              selectedAttractionId={selectedAttractionId}
+              setSelectedAttractionId={setSelectedAttractionId}
+              handleSetStudyGoal={handleSetStudyGoal}
+              savingGoal={savingGoal}
+              goalError={goalError}
+            />
+
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Опрос</h3>
+              </div>
+              <div className="relative h-[400px] overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+                <iframe
+                  src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
+                  className="absolute inset-0 w-full h-full"
+                  frameBorder="0"
+                  title="Google Form"
+                />
+              </div>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* MOBILE VERSION */}
+      <div className="md:hidden">
+        <div className="has-mobile-bottom-nav">
+          {activeTab === 'home' && (
+            <div className="space-y-3 p-3">
+              <EmployeeStats
+                profile={profile}
+                greeting={greeting}
+                shiftsCount={shiftsForMonth.length}
+                scheduleCount={scheduleForMonth.length}
+                now={now}
+              />
+
+              <EmployeePriorities
+                priorities={priorities}
+                attractions={attractions}
+              />
+
+              <EmployeeStudyGoal
+                studyGoal={studyGoal}
+                availableAttractions={availableAttractionsForGoal}
+                selectedAttractionId={selectedAttractionId}
+                setSelectedAttractionId={setSelectedAttractionId}
+                handleSetStudyGoal={handleSetStudyGoal}
+                savingGoal={savingGoal}
+                goalError={goalError}
+              />
+            </div>
+          )}
+
+          {activeTab === 'calendar' && (
+            <div className="space-y-3 p-3">
+              <EmployeeCalendar
+                currentDate={currentDate}
+                setCurrentDate={setCurrentDate}
+                mergedAvailability={mergedAvailability}
+                occupiedDates={occupiedDates}
+                pendingChanges={pendingChanges}
+                dataManager={dataManager}
+                openAddModal={openAddModal}
+                openViewModal={openViewModal}
+              />
+
+              <EmployeeShiftsTable
+                shiftsForMonth={shiftsForMonth}
+                pendingChanges={pendingChanges}
+                dataManager={dataManager}
+                openViewModal={openViewModal}
+              />
+            </div>
+          )}
+
+          {activeTab === 'schedule' && (
+            <div className="p-3">
+              <EmployeeScheduleTable
+                scheduleForMonth={scheduleForMonth}
+                dataManager={dataManager}
+                openTimeLogModal={openTimeLogModal}
+              />
+            </div>
+          )}
+
+          {activeTab === 'salary' && (
+            <div className="p-3">
+              <EmployeeSalary
+                salaryPeriod={salaryPeriod}
+                setSalaryPeriod={setSalaryPeriod}
+                salaryData={salaryData}
+                loadingSalary={loadingSalary}
+              />
+            </div>
+          )}
+
+          {activeTab === 'form' && (
+            <div className="p-3">
+              <Card padding="sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Опрос</h3>
+                </div>
+                <div className="relative rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)', height: 'calc(100vh - 180px)' }}>
+                  <iframe
+                    src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
+                    className="absolute inset-0 w-full h-full"
+                    frameBorder="0"
+                    title="Form"
+                  />
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        <MobileBottomNav
+          activeTab={activeTab}
+          items={[
+            {
+              id: 'home',
+              label: 'Главная',
+              icon: <Home className="w-6 h-6" />,
+              onClick: () => setActiveTab('home')
+            },
+            {
+              id: 'calendar',
+              label: 'Календарь',
+              icon: <Calendar className="w-6 h-6" />,
+              onClick: () => setActiveTab('calendar')
+            },
+            {
+              id: 'schedule',
+              label: 'График',
+              icon: <Clock className="w-6 h-6" />,
+              onClick: () => setActiveTab('schedule')
+            },
+            {
+              id: 'salary',
+              label: 'Зарплата',
+              icon: <DollarSign className="w-6 h-6" />,
+              onClick: () => setActiveTab('salary')
+            },
+            {
+              id: 'form',
+              label: 'Опрос',
+              icon: <FileText className="w-6 h-6" />,
+              onClick: () => setActiveTab('form')
+            },
+          ]}
+        />
+      </div>
 
       <EmployeeDashboardModals
         isAddModalOpen={isAddModalOpen}
