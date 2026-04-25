@@ -13,16 +13,16 @@
  * @param {function} onEmployeeUpdate - Callback при изменении данных
  */
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Employee } from '../types';
+import { supabase } from '../../lib/supabase';
+import { Employee } from '../../types';
 import { Plus, Trash2, Loader2, X, AlertCircle, UserPlus, Users, Phone, Mail } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Button } from './ui/Button';
-import { Card } from './ui/Card';
-import { Input } from './ui/Input';
-import { Modal } from './ui/Modal';
-import { Badge } from './ui/Badge';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Input } from '../ui/Input';
+import { Modal } from '../ui/Modal';
+import { Badge } from '../ui/Badge';
 
 interface EmployeesListProps {
   isSuperAdmin: boolean;
