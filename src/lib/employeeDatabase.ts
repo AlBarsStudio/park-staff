@@ -1,5 +1,18 @@
 import { supabase } from './supabase';
-import { logActivity } from './activityLog';
+
+// ======================== КОНСТАНТЫ ========================
+const CACHE_VERSION = 1;
+const ATTRACTIONS_CACHE_KEY = 'attractions_cache_v1';
+const ATTRACTIONS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 часа
+
+// Временные диапазоны для загрузки данных
+const DATA_RANGE = {
+  AVAILABILITY_PAST_DAYS: 30,      // История доступности: 30 дней назад
+  AVAILABILITY_FUTURE_DAYS: 90,    // Будущие смены: 3 месяца вперед
+  SCHEDULE_PAST_MONTHS: 2,         // История расписания: 2 месяца назад
+  SCHEDULE_FUTURE_MONTHS: 2,       // Будущее расписание: 2 месяца вперед
+  ACTUAL_LOGS_MONTHS: 3,           // Фактические отметки: 3 месяца назад
+};
 
 // ======================== ТИПЫ ========================
 export interface Employee {
@@ -79,9 +92,137 @@ export interface EmployeeAttractionPriority {
   attractions?: Attraction[];
 }
 
+export interface ActivityLog {
+  id: number;
+  action_type: string;
+  description: string;
+  created_at: string;
+  employee_id: number | null;
+  admin_id: number | null;
+}
+
+// ======================== УТИЛИТЫ ДЛЯ ЛОГИРОВАНИЯ ========================
+
+/**
+ * Получить текущую дату и время в формате ISO с учетом временной зоны
+ */
+function getCurrentDateTime(): string {
+  return new Date().toISOString();
+}
+
+/**
+ * Форматировать дату и время для читаемого отображения
+ */
+function formatDateTime(isoString: string): string {
+  const date = new Date(isoString);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  
+  return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * Логирование действий сотрудника в activity_log
+ */
+async function logEmployeeActivity(
+  employeeId: number,
+  actionType: string,
+  description: string
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('activity_log')
+      .insert([
+        {
+          employee_id: employeeId,
+          admin_id: null,
+          action_type: actionType,
+          description: description,
+          created_at: getCurrentDateTime(),
+        },
+      ]);
+
+    if (error) {
+      console.error('❌ Ошибка логирования:', error);
+    } else {
+      console.log(`📝 Залогировано: [${actionType}] ${description}`);
+    }
+  } catch (error) {
+    console.error('❌ Критическая ошибка логирования:', error);
+  }
+}
+
+// ======================== УТИЛИТЫ ДЛЯ ДАТ ========================
+function getDateRange(pastDays: number, futureDays: number): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(start.getDate() - pastDays);
+  const end = new Date(now);
+  end.setDate(end.getDate() + futureDays);
+  
+  return {
+    start: start.toISOString().split('T')[0],
+    end: end.toISOString().split('T')[0],
+  };
+}
+
+function getMonthRange(pastMonths: number, futureMonths: number): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - pastMonths, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + futureMonths + 1, 0);
+  
+  return {
+    start: start.toISOString().split('T')[0],
+    end: end.toISOString().split('T')[0],
+  };
+}
+
+// ======================== КЭШИРОВАНИЕ АТТРАКЦИОНОВ ========================
+interface AttractionsCacheData {
+  version: number;
+  timestamp: number;
+  data: Attraction[];
+}
+
+function getCachedAttractions(): Attraction[] | null {
+  try {
+    const cached = localStorage.getItem(ATTRACTIONS_CACHE_KEY);
+    if (!cached) return null;
+
+    const parsed: AttractionsCacheData = JSON.parse(cached);
+    
+    // Проверка версии и TTL
+    if (parsed.version !== CACHE_VERSION) return null;
+    if (Date.now() - parsed.timestamp > ATTRACTIONS_CACHE_TTL) return null;
+
+    return parsed.data;
+  } catch (error) {
+    console.error('❌ Ошибка чтения кэша аттракционов:', error);
+    return null;
+  }
+}
+
+function setCachedAttractions(data: Attraction[]): void {
+  try {
+    const cacheData: AttractionsCacheData = {
+      version: CACHE_VERSION,
+      timestamp: Date.now(),
+      data,
+    };
+    localStorage.setItem(ATTRACTIONS_CACHE_KEY, JSON.stringify(cacheData));
+  } catch (error) {
+    console.error('❌ Ошибка сохранения кэша аттракционов:', error);
+  }
+}
+
 // ======================== КЛАСС ДЛЯ УПРАВЛЕНИЯ ДАННЫМИ ========================
 class EmployeeDataManager {
   private employeeId: number;
+  private employeeName: string = '';
   
   // Кэш данных
   private cache = {
@@ -95,8 +236,8 @@ class EmployeeDataManager {
     lastUpdate: 0,
   };
 
-  // Подписки Realtime
-  private subscriptions: any[] = [];
+  // Подписка Realtime (один канал для всех таблиц)
+  private realtimeChannel: any = null;
 
   constructor(employeeId: number) {
     this.employeeId = employeeId;
@@ -104,22 +245,43 @@ class EmployeeDataManager {
 
   // ==================== ИНИЦИАЛИЗАЦИЯ ====================
   async initialize(): Promise<void> {
+    const startTime = Date.now();
     console.log('🔄 Инициализация данных сотрудника:', this.employeeId);
     
-    await Promise.all([
-      this.loadEmployee(),
-      this.loadAttractions(),
-      this.loadAvailability(),
-      this.loadScheduleAssignments(),
-      this.loadActualWorkLogs(),
-      this.loadStudyGoal(),
-      this.loadPriorities(),
-    ]);
+    try {
+      // Параллельная загрузка критичных данных
+      await Promise.all([
+        this.loadEmployee(),
+        this.loadAttractions(),
+      ]);
 
-    this.setupRealtimeSubscriptions();
-    this.cache.lastUpdate = Date.now();
-    
-    console.log('✅ Данные сотрудника загружены');
+      // Загрузка данных, зависящих от временных диапазонов
+      await Promise.all([
+        this.loadAvailability(),
+        this.loadScheduleAssignments(),
+        this.loadStudyGoal(),
+        this.loadPriorities(),
+      ]);
+
+      // Загрузка фактических отметок (зависит от расписания)
+      await this.loadActualWorkLogs();
+
+      this.setupRealtimeSubscription();
+      this.cache.lastUpdate = Date.now();
+      
+      const loadTime = Date.now() - startTime;
+      console.log(`✅ Данные сотрудника загружены за ${loadTime}ms`);
+
+      // Логируем вход в систему
+      await logEmployeeActivity(
+        this.employeeId,
+        'system_login',
+        `Сотрудник ${this.employeeName} вошел в систему`
+      );
+    } catch (error) {
+      console.error('❌ Ошибка инициализации:', error);
+      throw error;
+    }
   }
 
   // ==================== ЗАГРУЗКА ДАННЫХ ====================
@@ -137,10 +299,23 @@ class EmployeeDataManager {
     }
 
     this.cache.employee = data;
-    console.log('✅ Сотрудник загружен:', data.full_name);
+    this.employeeName = data.full_name || `Сотрудник #${this.employeeId}`;
+    console.log('✅ Сотрудник загружен:', this.employeeName);
   }
 
   private async loadAttractions(): Promise<void> {
+    // Пытаемся загрузить из кэша
+    const cached = getCachedAttractions();
+    if (cached) {
+      this.cache.attractions.clear();
+      cached.forEach(attraction => {
+        this.cache.attractions.set(attraction.id, attraction);
+      });
+      console.log('✅ Аттракционы загружены из кэша:', cached.length);
+      return;
+    }
+
+    // Загружаем из БД
     const { data, error } = await supabase
       .from('attractions')
       .select('*')
@@ -156,14 +331,26 @@ class EmployeeDataManager {
       this.cache.attractions.set(attraction.id, attraction);
     });
 
-    console.log('✅ Загружено аттракционов:', data?.length || 0);
+    // Сохраняем в кэш
+    if (data) {
+      setCachedAttractions(data);
+    }
+
+    console.log('✅ Загружено аттракционов из БД:', data?.length || 0);
   }
 
   private async loadAvailability(): Promise<void> {
+    const range = getDateRange(
+      DATA_RANGE.AVAILABILITY_PAST_DAYS,
+      DATA_RANGE.AVAILABILITY_FUTURE_DAYS
+    );
+
     const { data, error } = await supabase
       .from('employee_availability')
       .select('*')
       .eq('employee_id', this.employeeId)
+      .gte('work_date', range.start)
+      .lte('work_date', range.end)
       .order('work_date', { ascending: true });
 
     if (error) {
@@ -172,14 +359,31 @@ class EmployeeDataManager {
     }
 
     this.cache.availability = data || [];
-    console.log('✅ Загружено смен доступности:', data?.length || 0);
+    console.log(`✅ Загружено смен доступности: ${data?.length || 0} (${range.start} - ${range.end})`);
   }
 
   private async loadScheduleAssignments(): Promise<void> {
+    const range = getMonthRange(
+      DATA_RANGE.SCHEDULE_PAST_MONTHS,
+      DATA_RANGE.SCHEDULE_FUTURE_MONTHS
+    );
+
+    // ОПТИМИЗАЦИЯ: Используем JOIN для получения данных об аттракционах за один запрос
     const { data, error } = await supabase
       .from('schedule_assignments')
-      .select('*')
+      .select(`
+        *,
+        attraction:attractions (
+          id,
+          name,
+          min_staff_weekday,
+          min_staff_weekend,
+          coefficient
+        )
+      `)
       .eq('employee_id', this.employeeId)
+      .gte('work_date', range.start)
+      .lte('work_date', range.end)
       .order('work_date', { ascending: true });
 
     if (error) {
@@ -187,38 +391,56 @@ class EmployeeDataManager {
       return;
     }
 
-    // Обогащаем данными об аттракционах
-    const enrichedData = (data || []).map(schedule => ({
-      ...schedule,
-      attraction: this.cache.attractions.get(schedule.attraction_id),
-    })) as ScheduleAssignment[];
-
-    this.cache.scheduleAssignments = enrichedData;
-    console.log('✅ Загружено смен по расписанию:', data?.length || 0);
+    // Данные уже обогащены благодаря JOIN
+    this.cache.scheduleAssignments = (data || []) as ScheduleAssignment[];
+    console.log(`✅ Загружено смен по расписанию: ${data?.length || 0} (${range.start} - ${range.end})`);
   }
 
   private async loadActualWorkLogs(): Promise<void> {
-    // Получаем ID всех смен сотрудника
-    const scheduleIds = this.cache.scheduleAssignments.map(s => s.id);
+    // Получаем ID смен только за последние N месяцев
+    const rangeDate = new Date();
+    rangeDate.setMonth(rangeDate.getMonth() - DATA_RANGE.ACTUAL_LOGS_MONTHS);
+    const minDate = rangeDate.toISOString().split('T')[0];
+
+    const recentScheduleIds = this.cache.scheduleAssignments
+      .filter(s => s.work_date >= minDate)
+      .map(s => s.id);
     
-    if (scheduleIds.length === 0) {
+    if (recentScheduleIds.length === 0) {
       this.cache.actualWorkLogs = [];
+      console.log('ℹ️ Нет смен для загрузки фактических отметок');
       return;
     }
 
-    const { data, error } = await supabase
-      .from('actual_work_log')
-      .select('*')
-      .in('schedule_assignment_id', scheduleIds)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('❌ Ошибка загрузки фактических отметок:', error);
-      return;
+    // ОПТИМИЗАЦИЯ: Батчинг запросов по 1000 ID (лимит Supabase для IN)
+    const batchSize = 1000;
+    const batches: number[][] = [];
+    
+    for (let i = 0; i < recentScheduleIds.length; i += batchSize) {
+      batches.push(recentScheduleIds.slice(i, i + batchSize));
     }
 
-    this.cache.actualWorkLogs = data || [];
-    console.log('✅ Загружено фактических отметок:', data?.length || 0);
+    const allLogs: ActualWorkLog[] = [];
+
+    for (const batch of batches) {
+      const { data, error } = await supabase
+        .from('actual_work_log')
+        .select('*')
+        .in('schedule_assignment_id', batch)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Ошибка загрузки фактических отметок:', error);
+        continue;
+      }
+
+      if (data) {
+        allLogs.push(...data);
+      }
+    }
+
+    this.cache.actualWorkLogs = allLogs;
+    console.log(`✅ Загружено фактических отметок: ${allLogs.length} (за последние ${DATA_RANGE.ACTUAL_LOGS_MONTHS} мес.)`);
   }
 
   private async loadStudyGoal(): Promise<void> {
@@ -257,7 +479,7 @@ class EmployeeDataManager {
       return;
     }
 
-    // Обогащаем данными об аттракционах
+    // Обогащаем данными об аттракционах из кэша
     const enrichedData = (data || []).map(priority => {
       const attractions = priority.attraction_ids
         .map(id => this.cache.attractions.get(id))
@@ -273,12 +495,14 @@ class EmployeeDataManager {
     console.log('✅ Загружено уровней приоритетов:', data?.length || 0);
   }
 
-  // ==================== REALTIME ПОДПИСКИ ====================
+  // ==================== REALTIME ПОДПИСКА (ОПТИМИЗИРОВАННАЯ) ====================
   
-  private setupRealtimeSubscriptions(): void {
-    // Подписка на изменения доступности
-    const availabilitySub = supabase
-      .channel('employee_availability_changes')
+  private setupRealtimeSubscription(): void {
+    // ОПТИМИЗАЦИЯ: Один канал для всех таблиц вместо 5 отдельных
+    this.realtimeChannel = supabase
+      .channel(`employee_data_${this.employeeId}`)
+      
+      // Подписка на доступность
       .on(
         'postgres_changes',
         {
@@ -287,16 +511,10 @@ class EmployeeDataManager {
           table: 'employee_availability',
           filter: `employee_id=eq.${this.employeeId}`,
         },
-        () => {
-          console.log('🔄 Обновление доступности');
-          this.loadAvailability();
-        }
+        (payload) => this.handleAvailabilityChange(payload)
       )
-      .subscribe();
-
-    // Подписка на изменения расписания
-    const scheduleSub = supabase
-      .channel('schedule_assignments_changes')
+      
+      // Подписка на расписание
       .on(
         'postgres_changes',
         {
@@ -305,17 +523,10 @@ class EmployeeDataManager {
           table: 'schedule_assignments',
           filter: `employee_id=eq.${this.employeeId}`,
         },
-        () => {
-          console.log('🔄 Обновление расписания');
-          this.loadScheduleAssignments();
-          this.loadActualWorkLogs();
-        }
+        (payload) => this.handleScheduleChange(payload)
       )
-      .subscribe();
-
-    // Подписка на изменения фактических отметок
-    const actualLogsSub = supabase
-      .channel('actual_work_log_changes')
+      
+      // Подписка на фактические отметки (без фильтра, т.к. schedule_assignment_id динамический)
       .on(
         'postgres_changes',
         {
@@ -323,16 +534,10 @@ class EmployeeDataManager {
           schema: 'public',
           table: 'actual_work_log',
         },
-        () => {
-          console.log('🔄 Обновление фактических отметок');
-          this.loadActualWorkLogs();
-        }
+        (payload) => this.handleActualLogChange(payload)
       )
-      .subscribe();
-
-    // Подписка на изменения целей обучения
-    const studyGoalSub = supabase
-      .channel('study_goals_changes')
+      
+      // Подписка на цели обучения
       .on(
         'postgres_changes',
         {
@@ -341,16 +546,10 @@ class EmployeeDataManager {
           table: 'employee_study_goals',
           filter: `employee_id=eq.${this.employeeId}`,
         },
-        () => {
-          console.log('🔄 Обновление цели обучения');
-          this.loadStudyGoal();
-        }
+        (payload) => this.handleStudyGoalChange(payload)
       )
-      .subscribe();
-
-    // Подписка на изменения приоритетов
-    const prioritiesSub = supabase
-      .channel('priorities_changes')
+      
+      // Подписка на приоритеты
       .on(
         'postgres_changes',
         {
@@ -359,22 +558,191 @@ class EmployeeDataManager {
           table: 'employee_attraction_priorities',
           filter: `employee_id=eq.${this.employeeId}`,
         },
-        () => {
-          console.log('🔄 Обновление приоритетов');
-          this.loadPriorities();
-        }
+        (payload) => this.handlePriorityChange(payload)
       )
-      .subscribe();
+      
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime подписка установлена (unified channel)');
+        }
+      });
+  }
 
-    this.subscriptions.push(
-      availabilitySub,
-      scheduleSub,
-      actualLogsSub,
-      studyGoalSub,
-      prioritiesSub
-    );
+  // ==================== ОБРАБОТЧИКИ REALTIME (ИНКРЕМЕНТАЛЬНОЕ ОБНОВЛЕНИЕ) ====================
 
-    console.log('✅ Realtime подписки установлены');
+  private handleAvailabilityChange(payload: any): void {
+    console.log('🔄 Изменение доступности:', payload.eventType);
+
+    switch (payload.eventType) {
+      case 'INSERT':
+        if (payload.new) {
+          this.cache.availability.push(payload.new);
+          this.cache.availability.sort((a, b) => a.work_date.localeCompare(b.work_date));
+        }
+        break;
+
+      case 'UPDATE':
+        if (payload.new) {
+          const index = this.cache.availability.findIndex(av => av.id === payload.new.id);
+          if (index !== -1) {
+            this.cache.availability[index] = payload.new;
+          }
+        }
+        break;
+
+      case 'DELETE':
+        if (payload.old) {
+          this.cache.availability = this.cache.availability.filter(av => av.id !== payload.old.id);
+        }
+        break;
+    }
+
+    this.cache.lastUpdate = Date.now();
+  }
+
+  private async handleScheduleChange(payload: any): Promise<void> {
+    console.log('🔄 Изменение расписания:', payload.eventType);
+
+    switch (payload.eventType) {
+      case 'INSERT':
+        if (payload.new) {
+          // Обогащаем данными об аттракционе
+          const enriched = {
+            ...payload.new,
+            attraction: this.cache.attractions.get(payload.new.attraction_id),
+          } as ScheduleAssignment;
+          this.cache.scheduleAssignments.push(enriched);
+          this.cache.scheduleAssignments.sort((a, b) => a.work_date.localeCompare(b.work_date));
+        }
+        break;
+
+      case 'UPDATE':
+        if (payload.new) {
+          const index = this.cache.scheduleAssignments.findIndex(s => s.id === payload.new.id);
+          if (index !== -1) {
+            this.cache.scheduleAssignments[index] = {
+              ...payload.new,
+              attraction: this.cache.attractions.get(payload.new.attraction_id),
+            } as ScheduleAssignment;
+          }
+        }
+        break;
+
+      case 'DELETE':
+        if (payload.old) {
+          this.cache.scheduleAssignments = this.cache.scheduleAssignments.filter(
+            s => s.id !== payload.old.id
+          );
+          // Удаляем связанные фактические отметки
+          this.cache.actualWorkLogs = this.cache.actualWorkLogs.filter(
+            log => log.schedule_assignment_id !== payload.old.id
+          );
+        }
+        break;
+    }
+
+    this.cache.lastUpdate = Date.now();
+  }
+
+  private handleActualLogChange(payload: any): void {
+    console.log('🔄 Изменение фактических отметок:', payload.eventType);
+
+    // Проверяем, относится ли это к нашим сменам
+    const isOurSchedule = (scheduleId: number) => 
+      this.cache.scheduleAssignments.some(s => s.id === scheduleId);
+
+    switch (payload.eventType) {
+      case 'INSERT':
+        if (payload.new && isOurSchedule(payload.new.schedule_assignment_id)) {
+          this.cache.actualWorkLogs.push(payload.new);
+          this.cache.actualWorkLogs.sort((a, b) => 
+            b.created_at.localeCompare(a.created_at)
+          );
+        }
+        break;
+
+      case 'UPDATE':
+        if (payload.new && isOurSchedule(payload.new.schedule_assignment_id)) {
+          const index = this.cache.actualWorkLogs.findIndex(log => log.id === payload.new.id);
+          if (index !== -1) {
+            this.cache.actualWorkLogs[index] = payload.new;
+          }
+        }
+        break;
+
+      case 'DELETE':
+        if (payload.old) {
+          this.cache.actualWorkLogs = this.cache.actualWorkLogs.filter(
+            log => log.id !== payload.old.id
+          );
+        }
+        break;
+    }
+
+    this.cache.lastUpdate = Date.now();
+  }
+
+  private handleStudyGoalChange(payload: any): void {
+    console.log('🔄 Изменение цели обучения:', payload.eventType);
+
+    switch (payload.eventType) {
+      case 'INSERT':
+      case 'UPDATE':
+        if (payload.new) {
+          this.cache.studyGoal = {
+            ...payload.new,
+            attraction: this.cache.attractions.get(payload.new.attraction_id),
+          };
+        }
+        break;
+
+      case 'DELETE':
+        this.cache.studyGoal = null;
+        break;
+    }
+
+    this.cache.lastUpdate = Date.now();
+  }
+
+  private handlePriorityChange(payload: any): void {
+    console.log('🔄 Изменение приоритетов:', payload.eventType);
+
+    switch (payload.eventType) {
+      case 'INSERT':
+        if (payload.new) {
+          const enriched = {
+            ...payload.new,
+            attractions: payload.new.attraction_ids
+              .map((id: number) => this.cache.attractions.get(id))
+              .filter(Boolean) as Attraction[],
+          } as EmployeeAttractionPriority;
+          this.cache.priorities.push(enriched);
+          this.cache.priorities.sort((a, b) => a.priority_level - b.priority_level);
+        }
+        break;
+
+      case 'UPDATE':
+        if (payload.new) {
+          const index = this.cache.priorities.findIndex(p => p.id === payload.new.id);
+          if (index !== -1) {
+            this.cache.priorities[index] = {
+              ...payload.new,
+              attractions: payload.new.attraction_ids
+                .map((id: number) => this.cache.attractions.get(id))
+                .filter(Boolean) as Attraction[],
+            } as EmployeeAttractionPriority;
+          }
+        }
+        break;
+
+      case 'DELETE':
+        if (payload.old) {
+          this.cache.priorities = this.cache.priorities.filter(p => p.id !== payload.old.id);
+        }
+        break;
+    }
+
+    this.cache.lastUpdate = Date.now();
   }
 
   // ==================== ГЕТТЕРЫ ====================
@@ -441,7 +809,6 @@ class EmployeeDataManager {
     return this.cache.priorities.find(p => p.priority_level === level);
   }
 
-  // Аттракционы, доступные для выбора (не в приоритетах)
   getAvailableAttractions(): Attraction[] {
     const priorityAttractionIds = new Set(
       this.cache.priorities.flatMap(p => p.attraction_ids)
@@ -450,6 +817,24 @@ class EmployeeDataManager {
     return Array.from(this.cache.attractions.values()).filter(
       attraction => !priorityAttractionIds.has(attraction.id)
     );
+  }
+
+  // Получение времени последнего обновления
+  getLastUpdate(): number {
+    return this.cache.lastUpdate;
+  }
+
+  // Получение текущего времени
+  getCurrentTime(): Date {
+    return new Date();
+  }
+
+  // Форматирование времени для отображения
+  formatTime(date: Date | string): string {
+    if (typeof date === 'string') {
+      return formatDateTime(date);
+    }
+    return formatDateTime(date.toISOString());
   }
 
   // ==================== ОПЕРАЦИИ ЗАПИСИ ====================
@@ -499,18 +884,31 @@ class EmployeeDataManager {
 
     if (error) {
       console.error('❌ Ошибка добавления смены:', error);
+      
+      // Логируем ошибку
+      await logEmployeeActivity(
+        this.employeeId,
+        'availability_add_error',
+        `Ошибка добавления смены на ${data.work_date}: ${error.message}`
+      );
+      
       return { success: false, error: error.message };
     }
 
-    // Логирование
-    await logActivity(
-      'employee',
+    // Формируем описание для лога
+    const timeInfo = data.is_full_day 
+      ? 'весь день' 
+      : `с ${data.start_time} до ${data.end_time}`;
+    const commentInfo = data.comment ? ` (комментарий: ${data.comment})` : '';
+    
+    // Логирование успешного добавления
+    await logEmployeeActivity(
       this.employeeId,
-      'shift_add',
-      `Добавлена смена на ${data.work_date}`
+      'availability_add',
+      `Добавлена желаемая смена на ${data.work_date}, ${timeInfo}${commentInfo}`
     );
 
-    // Обновление кэша произойдет через Realtime
+    // Realtime автоматически обновит кэш
     console.log('✅ Смена добавлена:', inserted.id);
     return { success: true, data: inserted };
   }
@@ -524,6 +922,13 @@ class EmployeeDataManager {
     // Валидация: можно ли удалить
     const validation = this.canDeleteAvailability(availability);
     if (!validation.allowed) {
+      // Логируем попытку удаления
+      await logEmployeeActivity(
+        this.employeeId,
+        'availability_delete_denied',
+        `Попытка удалить смену на ${availability.work_date} отклонена: ${validation.reason}`
+      );
+      
       return { success: false, error: validation.reason };
     }
 
@@ -534,15 +939,27 @@ class EmployeeDataManager {
 
     if (error) {
       console.error('❌ Ошибка удаления смены:', error);
+      
+      // Логируем ошибку
+      await logEmployeeActivity(
+        this.employeeId,
+        'availability_delete_error',
+        `Ошибка удаления смены на ${availability.work_date}: ${error.message}`
+      );
+      
       return { success: false, error: error.message };
     }
 
-    // Логирование
-    await logActivity(
-      'employee',
+    // Формируем описание
+    const timeInfo = availability.is_full_day 
+      ? 'весь день' 
+      : `с ${availability.start_time} до ${availability.end_time}`;
+    
+    // Логирование успешного удаления
+    await logEmployeeActivity(
       this.employeeId,
-      'shift_delete',
-      `Удалена смена на ${availability.work_date}`
+      'availability_delete',
+      `Удалена желаемая смена на ${availability.work_date}, ${timeInfo}`
     );
 
     console.log('✅ Смена удалена:', availabilityId);
@@ -573,9 +990,16 @@ class EmployeeDataManager {
       return { success: false, error: 'Время окончания должно быть позже начала' };
     }
 
-    // Валидация: можно ли отметить (после 22:00 в день смены или позже)
+    // Валидация: можно ли отметить
     const validation = this.canLogActualTime(schedule);
     if (!validation.allowed) {
+      // Логируем попытку
+      await logEmployeeActivity(
+        this.employeeId,
+        'actual_time_log_denied',
+        `Попытка отметить время для смены ${schedule.work_date} отклонена: ${validation.reason}`
+      );
+      
       return { success: false, error: validation.reason };
     }
 
@@ -593,15 +1017,25 @@ class EmployeeDataManager {
 
     if (error) {
       console.error('❌ Ошибка добавления фактического времени:', error);
+      
+      // Логируем ошибку
+      await logEmployeeActivity(
+        this.employeeId,
+        'actual_time_log_error',
+        `Ошибка отметки времени для смены ${schedule.work_date}: ${error.message}`
+      );
+      
       return { success: false, error: error.message };
     }
 
-    // Логирование
-    await logActivity(
-      'employee',
+    // Получаем название аттракциона
+    const attractionName = schedule.attraction?.name || 'Неизвестный аттракцион';
+    
+    // Логирование успешной отметки
+    await logEmployeeActivity(
       this.employeeId,
       'actual_time_log',
-      `Отмечено фактическое время для смены ${schedule.work_date}`
+      `Отмечено фактическое время для смены ${schedule.work_date} на "${attractionName}": ${data.actual_start} - ${data.actual_end}`
     );
 
     console.log('✅ Фактическое время добавлено:', inserted.id);
@@ -609,7 +1043,8 @@ class EmployeeDataManager {
   }
 
   async setStudyGoal(attractionId: number): Promise<{ success: boolean; error?: string }> {
-    if (!this.cache.attractions.has(attractionId)) {
+    const attraction = this.cache.attractions.get(attractionId);
+    if (!attraction) {
       return { success: false, error: 'Аттракцион не найден' };
     }
 
@@ -619,7 +1054,7 @@ class EmployeeDataManager {
         {
           employee_id: this.employeeId,
           attraction_id: attractionId,
-          updated_at: new Date().toISOString(),
+          updated_at: getCurrentDateTime(),
         },
         { onConflict: 'employee_id' }
       )
@@ -628,16 +1063,22 @@ class EmployeeDataManager {
 
     if (error) {
       console.error('❌ Ошибка установки цели обучения:', error);
+      
+      // Логируем ошибку
+      await logEmployeeActivity(
+        this.employeeId,
+        'study_goal_set_error',
+        `Ошибка установки цели обучения "${attraction.name}": ${error.message}`
+      );
+      
       return { success: false, error: error.message };
     }
 
-    // Логирование
-    const attractionName = this.cache.attractions.get(attractionId)?.name || 'Неизвестный';
-    await logActivity(
-      'employee',
+    // Логирование успешной установки
+    await logEmployeeActivity(
       this.employeeId,
       'study_goal_set',
-      `Установлена цель обучения: ${attractionName}`
+      `Установлена цель обучения: "${attraction.name}"`
     );
 
     console.log('✅ Цель обучения установлена:', attractionId);
@@ -649,6 +1090,8 @@ class EmployeeDataManager {
       return { success: false, error: 'Цель обучения не установлена' };
     }
 
+    const goalAttractionName = this.cache.studyGoal.attraction?.name || 'Неизвестный аттракцион';
+
     const { error } = await supabase
       .from('employee_study_goals')
       .delete()
@@ -656,15 +1099,22 @@ class EmployeeDataManager {
 
     if (error) {
       console.error('❌ Ошибка удаления цели обучения:', error);
+      
+      // Логируем ошибку
+      await logEmployeeActivity(
+        this.employeeId,
+        'study_goal_delete_error',
+        `Ошибка удаления цели обучения "${goalAttractionName}": ${error.message}`
+      );
+      
       return { success: false, error: error.message };
     }
 
-    // Логирование
-    await logActivity(
-      'employee',
+    // Логирование успешного удаления
+    await logEmployeeActivity(
       this.employeeId,
       'study_goal_delete',
-      'Удалена цель обучения'
+      `Удалена цель обучения: "${goalAttractionName}"`
     );
 
     console.log('✅ Цель обучения удалена');
@@ -717,7 +1167,6 @@ class EmployeeDataManager {
     };
   }
 
-  // Активна ли дата для добавления смены
   isDateActive(dateStr: string): boolean {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
@@ -763,10 +1212,17 @@ class EmployeeDataManager {
     const startStr = startDate.toISOString().split('T')[0];
     const endStr = endDate.toISOString().split('T')[0];
 
-    // Получаем смены за период
+    // Получаем смены за период из кэша
     const schedules = this.getScheduleAssignments(startStr, endStr);
 
     if (schedules.length === 0) {
+      // Логируем просмотр зарплаты
+      await logEmployeeActivity(
+        this.employeeId,
+        'salary_view',
+        `Просмотр зарплаты за ${period === 'first' ? 'первую' : 'вторую'} половину месяца (${startStr} - ${endStr}): нет смен`
+      );
+      
       return { days: [], total: 0 };
     }
 
@@ -821,18 +1277,124 @@ class EmployeeDataManager {
     const daysArray = Array.from(daysMap.values()).sort((a, b) => a.date.localeCompare(b.date));
     const totalSalary = daysArray.reduce((sum, day) => sum + day.total, 0);
 
+    // Логируем просмотр зарплаты
+    await logEmployeeActivity(
+      this.employeeId,
+      'salary_view',
+      `Просмотр зарплаты за ${period === 'first' ? 'первую' : 'вторую'} половину месяца (${startStr} - ${endStr}): ${totalSalary.toFixed(2)} руб.`
+    );
+
     return { days: daysArray, total: totalSalary };
+  }
+
+  // ==================== МЕТОДЫ ДЛЯ ЗАГРУЗКИ ИСТОРИЧЕСКИХ ДАННЫХ ====================
+
+  /**
+   * Загрузить историческую доступность за указанный период
+   */
+  async loadHistoricalAvailability(startDate: string, endDate: string): Promise<EmployeeAvailability[]> {
+    console.log(`📚 Загрузка исторической доступности: ${startDate} - ${endDate}`);
+
+    const { data, error } = await supabase
+      .from('employee_availability')
+      .select('*')
+      .eq('employee_id', this.employeeId)
+      .gte('work_date', startDate)
+      .lte('work_date', endDate)
+      .order('work_date', { ascending: true });
+
+    if (error) {
+      console.error('❌ Ошибка загрузки исторической доступности:', error);
+      return [];
+    }
+
+    // Логируем загрузку истории
+    await logEmployeeActivity(
+      this.employeeId,
+      'history_load',
+      `Загружена историческая доступность за период ${startDate} - ${endDate}: ${data?.length || 0} записей`
+    );
+
+    console.log(`✅ Загружено исторических записей: ${data?.length || 0}`);
+    return data || [];
+  }
+
+  /**
+   * Загрузить историческое расписание за указанный период
+   */
+  async loadHistoricalSchedule(startDate: string, endDate: string): Promise<ScheduleAssignment[]> {
+    console.log(`📚 Загрузка исторического расписания: ${startDate} - ${endDate}`);
+
+    const { data, error } = await supabase
+      .from('schedule_assignments')
+      .select(`
+        *,
+        attraction:attractions (
+          id,
+          name,
+          min_staff_weekday,
+          min_staff_weekend,
+          coefficient
+        )
+      `)
+      .eq('employee_id', this.employeeId)
+      .gte('work_date', startDate)
+      .lte('work_date', endDate)
+      .order('work_date', { ascending: true });
+
+    if (error) {
+      console.error('❌ Ошибка загрузки исторического расписания:', error);
+      return [];
+    }
+
+    // Логируем загрузку истории
+    await logEmployeeActivity(
+      this.employeeId,
+      'history_load',
+      `Загружено историческое расписание за период ${startDate} - ${endDate}: ${data?.length || 0} смен`
+    );
+
+    console.log(`✅ Загружено исторических смен: ${data?.length || 0}`);
+    return (data || []) as ScheduleAssignment[];
+  }
+
+  // ==================== ПРИНУДИТЕЛЬНОЕ ОБНОВЛЕНИЕ ====================
+
+  /**
+   * Принудительно обновить все данные (при перезагрузке страницы)
+   */
+  async refreshAllData(): Promise<void> {
+    console.log('🔄 Принудительное обновление всех данных');
+    
+    // Очищаем кэш аттракционов для гарантии актуальности
+    localStorage.removeItem(ATTRACTIONS_CACHE_KEY);
+    
+    await this.initialize();
+
+    // Логируем обновление
+    await logEmployeeActivity(
+      this.employeeId,
+      'data_refresh',
+      'Выполнено принудительное обновление всех данных'
+    );
   }
 
   // ==================== ОЧИСТКА ====================
   
-  destroy(): void {
+  async destroy(): Promise<void> {
+    // Логируем выход
+    await logEmployeeActivity(
+      this.employeeId,
+      'system_logout',
+      `Сотрудник ${this.employeeName} вышел из системы`
+    );
+
     // Отписываемся от Realtime
-    this.subscriptions.forEach(sub => {
-      supabase.removeChannel(sub);
-    });
-    this.subscriptions = [];
-    console.log('🧹 Подписки очищены');
+    if (this.realtimeChannel) {
+      supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
+    console.log('🧹 Realtime подписка очищена');
   }
 }
 
@@ -843,7 +1405,7 @@ let currentManager: EmployeeDataManager | null = null;
 export async function initializeEmployeeData(employeeId: number): Promise<EmployeeDataManager> {
   // Если уже есть менеджер для другого сотрудника, очищаем
   if (currentManager) {
-    currentManager.destroy();
+    await currentManager.destroy();
   }
 
   currentManager = new EmployeeDataManager(employeeId);
@@ -855,9 +1417,32 @@ export function getEmployeeDataManager(): EmployeeDataManager | null {
   return currentManager;
 }
 
-export function destroyEmployeeData(): void {
+export async function destroyEmployeeData(): Promise<void> {
   if (currentManager) {
-    currentManager.destroy();
+    await currentManager.destroy();
     currentManager = null;
   }
+}
+
+/**
+ * Принудительное обновление данных текущего сотрудника
+ */
+export async function refreshEmployeeData(): Promise<void> {
+  if (currentManager) {
+    await currentManager.refreshAllData();
+  }
+}
+
+/**
+ * Получить текущее время сервера (для синхронизации)
+ */
+export function getCurrentServerTime(): Date {
+  return new Date();
+}
+
+/**
+ * Форматировать время для отображения пользователю
+ */
+export function formatDisplayTime(date: Date | string): string {
+  return formatDateTime(typeof date === 'string' ? date : date.toISOString());
 }
