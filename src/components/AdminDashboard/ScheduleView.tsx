@@ -38,13 +38,13 @@ import {
   isWeekend,
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Employee, Attraction, ScheduleAssignment } from '../lib/DatabaseService';
-import { Button } from './ui/Button';
-import { Card } from './ui/Card';
-import { Badge } from './ui/Badge';
-import { Input } from './ui/Input';
-import { cn } from '../utils/cn';
-import { useIsMobile, useIsTablet } from '../hooks/useMediaQuery';
+import { Employee, Attraction, ScheduleAssignment } from '../../lib/DatabaseService';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { Input } from '../ui/Input';
+import { cn } from '../../utils/cn';
+import { useIsMobile, useIsTablet } from '../../hooks/useMediaQuery';
 import SwipeableList from './ui/SwipeableList';
 import MobileModal from './ui/MobileModal';
 
