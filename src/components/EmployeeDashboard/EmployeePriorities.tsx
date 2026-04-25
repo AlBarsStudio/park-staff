@@ -1,9 +1,7 @@
 import { Award, Zap, TrendingUp } from 'lucide-react';
 import { Card } from '../ui';
 import { useIsMobile } from '../../hooks/useMediaQuery';
-import type { Employee } from '../../lib/employeeDatabase';
 
-// Используем минимальные типы для того что нам нужно
 interface Priority {
   priority_level: number;
   attraction_ids: number[] | number | string[] | string | null;
@@ -19,35 +17,35 @@ interface EmployeePrioritiesProps {
   attractions: Attraction[];
 }
 
+const LEVEL_CONFIG = {
+  1: {
+    label: 'Высокий',
+    mobileLabel: '🏆 Высокий',
+    bg: 'var(--success-light)',
+    text: 'var(--success)',
+    icon: Zap,
+  },
+  2: {
+    label: 'Средний',
+    mobileLabel: '⚡ Средний',
+    bg: 'var(--warning-light)',
+    text: 'var(--warning)',
+    icon: TrendingUp,
+  },
+  3: {
+    label: 'Низкий',
+    mobileLabel: '📊 Низкий',
+    bg: 'var(--info-light)',
+    text: 'var(--info)',
+    icon: Award,
+  },
+} as const;
+
 export function EmployeePriorities({
   priorities,
   attractions,
 }: EmployeePrioritiesProps) {
   const isMobile = useIsMobile();
-
-  const levelConfig = {
-    1: {
-      label: 'Высокий',
-      mobileLabel: '🏆 Высокий',
-      bg: 'var(--success-light)',
-      text: 'var(--success)',
-      icon: Zap,
-    },
-    2: {
-      label: 'Средний',
-      mobileLabel: '⚡ Средний',
-      bg: 'var(--warning-light)',
-      text: 'var(--warning)',
-      icon: TrendingUp,
-    },
-    3: {
-      label: 'Низкий',
-      mobileLabel: '📊 Низкий',
-      bg: 'var(--info-light)',
-      text: 'var(--info)',
-      icon: Award,
-    },
-  } as const;
 
   const getAttractionNames = (priority: Priority | undefined): string => {
     if (!priority) return 'Не задан';
@@ -62,7 +60,7 @@ export function EmployeePriorities({
 
     return ids
       .map(id => {
-        const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+        const numId = typeof id === 'string' ? parseInt(id, 10) : (id as number);
         return attractions.find(a => a.id === numId)?.name || 'Неизвестный';
       })
       .join(', ');
@@ -73,14 +71,17 @@ export function EmployeePriorities({
       <Card padding="md">
         <div className="flex items-center gap-2 mb-3">
           <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
-          <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Приоритеты</h3>
+          <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>
+            Приоритеты
+          </h3>
         </div>
         <div className="space-y-2">
           {([1, 2, 3] as const).map(level => {
             const priority = priorities.find(p => p.priority_level === level);
-            const config = levelConfig[level];
+            const config = LEVEL_CONFIG[level];
             const names = getAttractionNames(priority);
-            const truncated = names.length > 30 ? names.slice(0, 30) + '...' : names;
+            const truncated =
+              names.length > 30 ? names.slice(0, 30) + '...' : names;
 
             return (
               <div
@@ -88,14 +89,12 @@ export function EmployeePriorities({
                 className="p-2 rounded-lg"
                 style={{ backgroundColor: config.bg }}
               >
-                <div className="flex items-center justify-between">
-                  <span
-                    className="text-xs font-semibold"
-                    style={{ color: config.text }}
-                  >
-                    {config.mobileLabel}
-                  </span>
-                </div>
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: config.text }}
+                >
+                  {config.mobileLabel}
+                </span>
                 <p className="text-xs mt-1" style={{ color: 'var(--text)' }}>
                   {truncated}
                 </p>
@@ -111,12 +110,14 @@ export function EmployeePriorities({
     <Card padding="md">
       <div className="flex items-center gap-2 mb-4">
         <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
-        <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Приоритеты</h3>
+        <h3 className="font-semibold" style={{ color: 'var(--text)' }}>
+          Приоритеты
+        </h3>
       </div>
       <div className="space-y-3">
         {([1, 2, 3] as const).map(level => {
           const priority = priorities.find(p => p.priority_level === level);
-          const config = levelConfig[level];
+          const config = LEVEL_CONFIG[level];
           const Icon = config.icon;
           const names = getAttractionNames(priority);
 
