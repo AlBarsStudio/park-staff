@@ -16,7 +16,7 @@ import {
   DollarSign, Home, Target, Award, TrendingUp,
   Users, Zap, BarChart3, Save, AlertTriangle
 } from 'lucide-react';
-import { Card, Badge, Button, Modal, BottomSheet, IOSSelect } from './ui';
+import { Card, Badge, Button, Modal } from './ui';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import MobileBottomNav from './MobileBottomNav';
 
@@ -76,7 +76,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     deletions: [],
   });
   const [isSaving, setIsSaving] = useState(false);
-  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   
   // UI state
   const [now, setNow] = useState(new Date());
@@ -256,16 +255,12 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
   // ======================== ОБЪЕДИНЕННЫЕ ДАННЫЕ (БД + PENDING) ========================
   const mergedAvailability = useMemo(() => {
-    // Начинаем с данных из БД
     let merged = [...allAvailability];
-
-    // Удаляем те, что в pending deletions
     const deletionIds = new Set(pendingChanges.deletions.map(d => d.id));
     merged = merged.filter(shift => !deletionIds.has(shift.id));
 
-    // Добавляем pending additions (с временными ID)
     const pendingShifts: EmployeeAvailability[] = pendingChanges.additions.map((pending, index) => ({
-      id: -(index + 1), // Временный отрицательный ID
+      id: -(index + 1),
       employee_id: profile.id,
       work_date: pending.work_date,
       is_full_day: pending.is_full_day,
@@ -315,7 +310,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       return;
     }
 
-    // Проверка: уже есть в pending или БД
     if (occupiedDates.has(modalDate)) {
       setModalError('На эту дату уже добавлена смена');
       return;
@@ -331,7 +325,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       return;
     }
 
-    // Добавляем в pending
     const newPending: PendingShift = {
       work_date: modalDate,
       is_full_day: isFullDayModal,
@@ -352,7 +345,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const handleDeleteShiftToPending = useCallback((shift: EmployeeAvailability) => {
     if (!dataManager) return;
 
-    // Если это pending addition (ID < 0), просто удаляем из additions
     if (shift.id < 0) {
       setPendingChanges(prev => ({
         ...prev,
@@ -363,7 +355,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       return;
     }
 
-    // Проверяем валидацию
     const validation = dataManager.canDeleteAvailability(shift);
     if (!validation.allowed) {
       alert(validation.reason);
@@ -372,7 +363,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
     if (!confirm('Удалить смену? (Изменения применятся после нажатия "Сохранить")')) return;
 
-    // Добавляем в pending deletions
     setPendingChanges(prev => ({
       ...prev,
       deletions: [...prev.deletions, { id: shift.id, shift }],
@@ -393,7 +383,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       let errorCount = 0;
       const errors: string[] = [];
 
-      // 1. Сохраняем additions
       for (const pending of pendingChanges.additions) {
         const result = await dataManager.addAvailability(pending);
         if (result.success) {
@@ -404,7 +393,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         }
       }
 
-      // 2. Сохраняем deletions
       for (const deletion of pendingChanges.deletions) {
         const result = await dataManager.deleteAvailability(deletion.id);
         if (result.success) {
@@ -415,13 +403,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
         }
       }
 
-      // Очищаем pending changes
       setPendingChanges({ additions: [], deletions: [] });
-
-      // Обновляем UI
       setUpdateTrigger(prev => prev + 1);
 
-      // Показываем результат
       if (errorCount === 0) {
         alert(`✅ Все изменения сохранены успешно! (${successCount} операций)`);
       } else {
@@ -615,9 +599,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     );
   };
 
-  /* ============================================================
-     📅 RENDER: CALENDAR
-     ============================================================ */
   const renderCalendar = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -636,8 +617,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       const isToday = dateStr === todayStr;
       const shift = mergedAvailability.find(s => s.work_date === dateStr);
       const active = dataManager?.isDateActive(dateStr) && !occupiedDates.has(dateStr);
-      
-      // Проверяем, является ли смена pending
       const isPending = shift && shift.id < 0;
       const isPendingDeletion = pendingChanges.deletions.some(d => d.shift.work_date === dateStr);
 
@@ -756,9 +735,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     );
   };
 
-  /* ============================================================
-     📋 RENDER: SHIFTS TABLE
-     ============================================================ */
   const renderShiftsTable = () => {
     if (shiftsForMonth.length === 0) {
       return (
@@ -840,7 +816,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       );
     }
 
-    // Desktop table (аналогично с индикаторами pending)
     return (
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -912,11 +887,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     );
   };
 
-  // ... (остальные render функции остаются без изменений: renderScheduleTable, renderSalary)
-  
-  /* [ЗДЕСЬ ВСТАВИТЬ renderScheduleTable и renderSalary из предыдущего кода] */
-
-const renderScheduleTable = () => {
+  const renderScheduleTable = () => {
     if (scheduleForMonth.length === 0) {
       return (
         <div className="text-center py-12">
@@ -1155,20 +1126,503 @@ const renderScheduleTable = () => {
 
   return (
     <>
-      {/* Save button (fixed) */}
       {renderSaveButton()}
 
-      {/* Desktop version */}
+      {/* DESKTOP VERSION */}
       <div className="hidden md:block space-y-6 p-6">
-        {/* [ВСЯ DESKTOP ВЕРСТКА ИЗ ПРЕДЫДУЩЕГО КОДА БЕЗ ИЗМЕНЕНИЙ] */}
+        {/* Header cards */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card padding="lg" className="lg:col-span-2 card-hover">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 
+                  className="font-bold mb-2" 
+                  style={{ 
+                    color: 'var(--text)',
+                    fontSize: 'clamp(1.25rem, 2vw, 1.5rem)',
+                  }}
+                >
+                  {greeting || `Здравствуйте, ${profile.full_name?.split(' ')[0]}!`}
+                </h2>
+                <div className="flex flex-wrap gap-4 text-sm" style={{ color: 'var(--text-muted)' }}>
+                  <div className="flex items-center gap-1.5">
+                    <Users className="h-4 w-4" />
+                    <span>Возраст: {profile.age ?? 'Не указан'}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4" />
+                    <span>Ставка: {profile.base_hourly_rate || 250}₽/ч</span>
+                  </div>
+                </div>
+              </div>
+              <div 
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold"
+                style={{
+                  background: 'linear-gradient(135deg, var(--primary), var(--primary-hover))',
+                  color: 'white',
+                }}
+              >
+                {profile.full_name?.charAt(0).toUpperCase()}
+              </div>
+            </div>
+          </Card>
+
+          <Card padding="md" className="card-hover">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
+                </div>
+                <span className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>{shiftsForMonth.length}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg" style={{ backgroundColor: 'var(--success-light)' }}>
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" style={{ color: 'var(--success)' }} />
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>По графику</span>
+                </div>
+                <span className="text-2xl font-bold" style={{ color: 'var(--success)' }}>{scheduleForMonth.length}</span>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Main content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="flex items-center justify-center gap-4">
+              <Button 
+                onClick={() => setCurrentDate(prev => subMonths(prev, 1))} 
+                variant="ghost" 
+                icon={<ChevronLeft className="h-5 w-5" />}
+                aria-label="Предыдущий месяц"
+              />
+              <h3 
+                className="font-semibold capitalize min-w-[200px] text-center" 
+                style={{ 
+                  color: 'var(--text)',
+                  fontSize: 'clamp(1.125rem, 2vw, 1.25rem)',
+                }}
+              >
+                {currentMonthLabel}
+              </h3>
+              <Button 
+                onClick={() => setCurrentDate(prev => addMonths(prev, 1))} 
+                variant="ghost" 
+                icon={<ChevronRight className="h-5 w-5" />}
+                aria-label="Следующий месяц"
+              />
+            </div>
+
+            <Card padding="md" className="w-full">
+              {renderCalendar()}
+            </Card>
+
+            <Card padding="md" className="w-full">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Мои смены</h3>
+              </div>
+              {renderShiftsTable()}
+            </Card>
+
+            <Card padding="md" className="w-full">
+              <div className="flex items-center gap-2 mb-4">
+                <Clock className="h-5 w-5" style={{ color: 'var(--info)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>График от администратора</h3>
+              </div>
+              {renderScheduleTable()}
+            </Card>
+
+            <Card padding="md" className="w-full">
+              <div className="flex items-center gap-2 mb-4">
+                <DollarSign className="h-5 w-5" style={{ color: 'var(--success)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Зарплата</h3>
+              </div>
+              {renderSalary()}
+            </Card>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Приоритеты</h3>
+              </div>
+              <div className="space-y-3">
+                {[1, 2, 3].map(level => {
+                  const priority = priorities.find(p => p.priority_level === level);
+                  const attractionIds = Array.isArray(priority?.attraction_ids) 
+                    ? priority.attraction_ids 
+                    : (priority?.attraction_ids ? [priority.attraction_ids] : []);
+                  
+                  const attractionNames = attractionIds
+                    .map(id => {
+                      const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+                      return attractions.find(a => a.id === numId)?.name || 'Неизвестный';
+                    })
+                    .join(', ') || 'Не задан';
+
+                  const colors = {
+                    1: { bg: 'var(--success-light)', text: 'var(--success)', icon: Zap },
+                    2: { bg: 'var(--warning-light)', text: 'var(--warning)', icon: TrendingUp },
+                    3: { bg: 'var(--info-light)', text: 'var(--info)', icon: Award },
+                  };
+
+                  const { bg, text, icon: Icon } = colors[level as 1 | 2 | 3];
+
+                  return (
+                    <div 
+                      key={level} 
+                      className="p-3 rounded-lg"
+                      style={{ backgroundColor: bg }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Icon className="h-4 w-4" style={{ color: text }} />
+                        <span className="text-xs font-semibold" style={{ color: text }}>
+                          {level === 1 ? 'Высокий' : level === 2 ? 'Средний' : 'Низкий'}
+                        </span>
+                      </div>
+                      <p className="text-sm" style={{ color: 'var(--text)' }}>
+                        {attractionNames}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Цель изучения</h3>
+              </div>
+              {goalError && (
+                <div className="mb-3 p-3 rounded-lg text-sm animate-shake" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+                  {goalError}
+                </div>
+              )}
+              <select 
+                value={selectedAttractionId || ''} 
+                onChange={e => setSelectedAttractionId(Number(e.target.value))} 
+                className="input mb-3"
+                style={{
+                  borderRadius: '12px',
+                  padding: '0.75rem 1rem',
+                }}
+              >
+                <option value="">-- Выберите аттракцион --</option>
+                {availableAttractionsForGoal.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <Button
+                onClick={handleSetStudyGoal}
+                disabled={savingGoal || !selectedAttractionId}
+                variant="primary"
+                size="sm"
+                loading={savingGoal}
+                className="w-full"
+              >
+                Сохранить цель
+              </Button>
+              {studyGoal && studyGoal.attraction && (
+                <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                  <p className="text-sm font-medium" style={{ color: 'var(--primary)' }}>
+                    <strong>Текущая:</strong> {studyGoal.attraction.name}
+                  </p>
+                </div>
+              )}
+            </Card>
+
+            <Card padding="md">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                <h3 className="font-semibold" style={{ color: 'var(--text)' }}>Опрос</h3>
+              </div>
+              <div className="relative h-[400px] overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+                <iframe
+                  src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
+                  className="absolute inset-0 w-full h-full"
+                  frameBorder="0"
+                  title="Google Form"
+                />
+              </div>
+            </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Mobile version */}
+      {/* MOBILE VERSION */}
       <div className="md:hidden">
-        {/* [ВСЯ MOBILE ВЕРСТКА ИЗ ПРЕДЫДУЩЕГО КОДА БЕЗ ИЗМЕНЕНИЙ] */}
+        <div className="has-mobile-bottom-nav">
+          {activeTab === 'home' && (
+            <div className="space-y-3 p-3">
+              <Card padding="md">
+                <h2 
+                  className="font-bold mb-3" 
+                  style={{ 
+                    color: 'var(--text)',
+                    fontSize: 'clamp(1.125rem, 4vw, 1.25rem)',
+                  }}
+                >
+                  {greeting || 'Здравствуйте!'}
+                </h2>
+                <div className="text-center mt-4">
+                  <div 
+                    className="font-bold" 
+                    style={{ 
+                      color: 'var(--primary)',
+                      fontSize: 'clamp(2rem, 10vw, 2.5rem)',
+                    }}
+                  >
+                    {now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  <div 
+                    className="mt-1" 
+                    style={{ 
+                      color: 'var(--text-muted)',
+                      fontSize: 'clamp(0.75rem, 3vw, 0.875rem)',
+                    }}
+                  >
+                    {format(now, 'dd MMMM yyyy, EEEE', { locale: ru })}
+                  </div>
+                </div>
+              </Card>
+              
+              <Card padding="md">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between p-2 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" style={{ color: 'var(--primary)' }} />
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Мои смены</span>
+                    </div>
+                    <span className="text-lg font-bold" style={{ color: 'var(--primary)' }}>{shiftsForMonth.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded-lg" style={{ backgroundColor: 'var(--success-light)' }}>
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" style={{ color: 'var(--success)' }} />
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>По графику</span>
+                    </div>
+                    <span className="text-lg font-bold" style={{ color: 'var(--success)' }}>{scheduleForMonth.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded-lg" style={{ backgroundColor: 'var(--info-light)' }}>
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" style={{ color: 'var(--info)' }} />
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Ставка</span>
+                    </div>
+                    <span className="text-lg font-bold" style={{ color: 'var(--info)' }}>{profile.base_hourly_rate || 250}₽/ч</span>
+                  </div>
+                </div>
+              </Card>
+
+              <Card padding="md">
+                <div className="flex items-center gap-2 mb-3">
+                  <Award className="h-5 w-5" style={{ color: 'var(--warning)' }} />
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Приоритеты</h3>
+                </div>
+                <div className="space-y-2">
+                  {[1, 2, 3].map(level => {
+                    const priority = priorities.find(p => p.priority_level === level);
+                    const attractionIds = Array.isArray(priority?.attraction_ids) 
+                      ? priority.attraction_ids 
+                      : (priority?.attraction_ids ? [priority.attraction_ids] : []);
+                    
+                    const attractionNames = attractionIds
+                      .map(id => {
+                        const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+                        return attractions.find(a => a.id === numId)?.name || 'Неизвестный';
+                      })
+                      .join(', ') || 'Не задан';
+
+                    const colors = {
+                      1: { bg: 'var(--success-light)', text: 'var(--success)' },
+                      2: { bg: 'var(--warning-light)', text: 'var(--warning)' },
+                      3: { bg: 'var(--info-light)', text: 'var(--info)' },
+                    };
+
+                    const { bg, text } = colors[level as 1 | 2 | 3];
+
+                    return (
+                      <div 
+                        key={level} 
+                        className="p-2 rounded-lg"
+                        style={{ backgroundColor: bg }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold" style={{ color: text }}>
+                            {level === 1 ? '🏆 Высокий' : level === 2 ? '⚡ Средний' : '📊 Низкий'}
+                          </span>
+                        </div>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text)' }}>
+                          {attractionNames.length > 30 ? attractionNames.slice(0, 30) + '...' : attractionNames}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              <Card padding="md">
+                <div className="flex items-center gap-2 mb-3">
+                  <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Цель изучения</h3>
+                </div>
+                {goalError && (
+                  <div className="mb-3 p-2 rounded-lg text-xs animate-shake" style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}>
+                    {goalError}
+                  </div>
+                )}
+                <select 
+                  value={selectedAttractionId || ''} 
+                  onChange={e => setSelectedAttractionId(Number(e.target.value))} 
+                  className="input mb-3"
+                  style={{
+                    borderRadius: '12px',
+                  }}
+                >
+                  <option value="">-- Выберите аттракцион --</option>
+                  {availableAttractionsForGoal.map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <Button
+                  onClick={handleSetStudyGoal}
+                  disabled={savingGoal || !selectedAttractionId}
+                  variant="primary"
+                  size="sm"
+                  loading={savingGoal}
+                  className="w-full"
+                >
+                  Сохранить
+                </Button>
+                {studyGoal && studyGoal.attraction && (
+                  <div className="mt-3 p-2 rounded-lg" style={{ backgroundColor: 'var(--primary-light)' }}>
+                    <p className="text-xs font-medium" style={{ color: 'var(--primary)' }}>
+                      <strong>Текущая:</strong> {studyGoal.attraction.name}
+                    </p>
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'calendar' && (
+            <div className="space-y-3 p-3">
+              <div className="flex items-center justify-center gap-3 mb-3">
+                <Button 
+                  onClick={() => setCurrentDate(prev => subMonths(prev, 1))} 
+                  variant="ghost" 
+                  size="sm" 
+                  icon={<ChevronLeft className="h-4 w-4" />}
+                  aria-label="Предыдущий месяц"
+                />
+                <h3 
+                  className="font-semibold capitalize min-w-[150px] text-center" 
+                  style={{ 
+                    color: 'var(--text)',
+                    fontSize: 'clamp(1rem, 4vw, 1.125rem)',
+                  }}
+                >
+                  {currentMonthLabel}
+                </h3>
+                <Button 
+                  onClick={() => setCurrentDate(prev => addMonths(prev, 1))} 
+                  variant="ghost" 
+                  size="sm" 
+                  icon={<ChevronRight className="h-4 w-4" />}
+                  aria-label="Следующий месяц"
+                />
+              </div>
+              
+              <Card padding="sm">
+                {renderCalendar()}
+              </Card>
+              
+              <Card padding="sm">
+                <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text)' }}>Мои смены</h3>
+                {renderShiftsTable()}
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'schedule' && (
+            <div className="p-3">
+              <Card padding="sm">
+                <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text)' }}>График от администратора</h3>
+                {renderScheduleTable()}
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'salary' && (
+            <div className="p-3">
+              <Card padding="sm">
+                <h3 className="font-semibold mb-3 text-sm" style={{ color: 'var(--text)' }}>Зарплата</h3>
+                {renderSalary()}
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'form' && (
+            <div className="p-3">
+              <Card padding="sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Опрос</h3>
+                </div>
+                <div className="relative rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)', height: 'calc(100vh - 180px)' }}>
+                  <iframe
+                    src="https://docs.google.com/forms/d/e/1FAIpQLSczZC5_pSsbgQrjhKpfis9K0kBD6qLMWa6gWn11brFQ-v-YNQ/viewform?embedded=true"
+                    className="absolute inset-0 w-full h-full"
+                    frameBorder="0"
+                    title="Form"
+                  />
+                </div>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        <MobileBottomNav
+          activeTab={activeTab}
+          items={[
+            {
+              id: 'home',
+              label: 'Главная',
+              icon: <Home className="w-6 h-6" />,
+              onClick: () => setActiveTab('home')
+            },
+            {
+              id: 'calendar',
+              label: 'Календарь',
+              icon: <Calendar className="w-6 h-6" />,
+              onClick: () => setActiveTab('calendar')
+            },
+            {
+              id: 'schedule',
+              label: 'График',
+              icon: <Clock className="w-6 h-6" />,
+              onClick: () => setActiveTab('schedule')
+            },
+            {
+              id: 'salary',
+              label: 'Зарплата',
+              icon: <DollarSign className="w-6 h-6" />,
+              onClick: () => setActiveTab('salary')
+            },
+            {
+              id: 'form',
+              label: 'Опрос',
+              icon: <FileText className="w-6 h-6" />,
+              onClick: () => setActiveTab('form')
+            },
+          ]}
+        />
       </div>
 
-      {/* Modals */}
+      {/* MODALS */}
       <Modal 
         isOpen={isAddModalOpen} 
         onClose={() => setIsAddModalOpen(false)} 
@@ -1244,7 +1698,6 @@ const renderScheduleTable = () => {
         </div>
       </Modal>
 
-      {/* View shift modal */}
       <Modal 
         isOpen={isViewModalOpen} 
         onClose={() => setIsViewModalOpen(false)} 
@@ -1312,7 +1765,6 @@ const renderScheduleTable = () => {
         )}
       </Modal>
 
-      {/* Time log modal */}
       <Modal 
         isOpen={isTimeLogModalOpen} 
         onClose={() => setIsTimeLogModalOpen(false)} 
