@@ -22,13 +22,12 @@ import {
   addMonths, subMonths, isWeekend, getDay, isSameDay
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { dbService, Employee, Attraction, ScheduleAssignment } from '../lib/DatabaseService';
-import { Button } from './ui/Button';
-import { Card } from './ui/Card';
-import { Badge } from './ui/Badge';
-import { Modal } from './ui/Modal';
-import { cn } from '../utils/cn';
-
+import { dbService, Employee, Attraction, ScheduleAssignment } from '../../lib/DatabaseService';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { Modal } from '../ui/Modal';
+import { cn } from '../../utils/cn';
 // ============================================================
 // Типы
 // ============================================================
