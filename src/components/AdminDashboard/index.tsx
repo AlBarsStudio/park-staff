@@ -12,13 +12,19 @@ import { ScheduleView } from './ScheduleView';
 import { EmployeesList } from './EmployeesList';
 import { AttractionsList } from '../AttractionsList';
 
-type TabType = 'shifts' | 'schedule' | 'manual' | 'scheduleView' | 'employees' | 'attractions';
+// ============================================================
+// Типы (экспортируем для совместимости)
+// ============================================================
+export type TabType = 'shifts' | 'schedule' | 'manual' | 'scheduleView' | 'employees' | 'attractions';
 
-interface AdminDashboardProps {
+export interface AdminDashboardProps {
   profile: UserProfile;
   isSuperAdmin?: boolean;
 }
 
+// ============================================================
+// Основной компонент
+// ============================================================
 export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboardProps) {
   // ============================================================
   // Состояния навигации
