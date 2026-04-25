@@ -36,7 +36,7 @@ export function EmployeeStudyGoal({
   const isMobile = useIsMobile();
 
   return (
-    <Card padding={isMobile ? 'md' : 'md'}>
+    <Card padding="md">
       <div className="flex items-center gap-2 mb-3">
         <Target className="h-5 w-5" style={{ color: 'var(--primary)' }} />
         <h3
@@ -49,8 +49,12 @@ export function EmployeeStudyGoal({
 
       {goalError && (
         <div
-          className={`mb-3 p-${isMobile ? '2' : '3'} rounded-lg text-${isMobile ? 'xs' : 'sm'} animate-shake`}
-          style={{ backgroundColor: 'var(--error-light)', color: 'var(--error)' }}
+          className="mb-3 p-3 rounded-lg text-sm animate-shake"
+          style={{
+            backgroundColor: 'var(--error-light)',
+            color: 'var(--error)',
+            ...(isMobile && { padding: '0.5rem', fontSize: '0.75rem' }),
+          }}
         >
           {goalError}
         </div>
@@ -58,16 +62,20 @@ export function EmployeeStudyGoal({
 
       <select
         value={selectedAttractionId || ''}
-        onChange={e => setSelectedAttractionId(e.target.value ? Number(e.target.value) : null)}
+        onChange={e =>
+          setSelectedAttractionId(e.target.value ? Number(e.target.value) : null)
+        }
         className="input mb-3"
         style={{
           borderRadius: '12px',
-          padding: isMobile ? undefined : '0.75rem 1rem',
+          ...(!isMobile && { padding: '0.75rem 1rem' }),
         }}
       >
         <option value="">-- Выберите аттракцион --</option>
         {availableAttractions.map(a => (
-          <option key={a.id} value={a.id}>{a.name}</option>
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
         ))}
       </select>
 
@@ -88,7 +96,7 @@ export function EmployeeStudyGoal({
           style={{ backgroundColor: 'var(--primary-light)' }}
         >
           <p
-            className={`${isMobile ? 'text-xs' : 'text-sm'} font-medium`}
+            className={`font-medium ${isMobile ? 'text-xs' : 'text-sm'}`}
             style={{ color: 'var(--primary)' }}
           >
             <strong>Текущая:</strong> {studyGoal.attraction.name}
