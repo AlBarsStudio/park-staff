@@ -47,13 +47,13 @@ import {
   isWeekend,
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { dbService, Employee, EmployeeAvailability } from '../lib/DatabaseService';
-import { Button } from './ui/Button';
-import { Card } from './ui/Card';
-import { Badge } from './ui/Badge';
-import { Modal } from './ui/Modal';
-import { Input } from './ui/Input';
-import { cn } from '../utils/cn';
+import { dbService, Employee, EmployeeAvailability } from '../../lib/DatabaseService';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { Modal } from '../ui/Modal';
+import { Input } from '../ui/Input';
+import { cn } from '../../utils/cn';
 
 // ============================================================
 // Типы
