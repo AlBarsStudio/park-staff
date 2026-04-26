@@ -553,13 +553,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
   return (
     <>
-      <SaveChangesButton
-        pendingChanges={pendingChanges}
-        isSaving={isSaving}
-        onSave={handleSaveAllChanges}
-        onCancel={handleCancelChanges}
-      />
-
       {/* DESKTOP VERSION */}
       <div className="hidden md:block space-y-6 p-6">
         <EmployeeStats
@@ -580,6 +573,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               dataManager={dataManager}
               openAddModal={openAddModal}
               openViewModal={openViewModal}
+              isSaving={isSaving}
+              onSave={handleSaveAllChanges}
+              onCancel={handleCancelChanges}
             />
 
             <EmployeeShiftsTable
@@ -679,6 +675,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                 dataManager={dataManager}
                 openAddModal={openAddModal}
                 openViewModal={openViewModal}
+                isSaving={isSaving}
+                onSave={handleSaveAllChanges}
+                onCancel={handleCancelChanges}
               />
 
               <EmployeeShiftsTable
