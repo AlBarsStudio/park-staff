@@ -283,7 +283,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     [mergedAvailability]
   );
 
-  // НОВОЕ: Расчет scheduleWithLogs для выбранного периода зарплаты
+  // Расчет scheduleWithLogs для выбранного периода зарплаты
   const scheduleWithLogs = useMemo(() => {
     if (!dataManager) return [];
 
@@ -517,7 +517,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingTimeLog(false);
   };
 
-  // НОВОЕ: Обработчик обновления фактического времени
+  // Обработчик обновления фактического времени
   const handleUpdateActualTime = async (logId: number, actualStart: string, actualEnd: string) => {
     if (!dataManager) return;
 
@@ -531,24 +531,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
       setUpdateTrigger(prev => prev + 1);
     } else {
       alert(result.error || 'Ошибка обновления');
-      throw new Error(result.error);
-    }
-  };
-
-  // НОВОЕ: Обработчик добавления фактического времени
-  const handleAddActualTime = async (scheduleId: number, actualStart: string, actualEnd: string) => {
-    if (!dataManager) return;
-
-    const result = await dataManager.addActualWorkLog({
-      schedule_assignment_id: scheduleId,
-      actual_start: actualStart + ':00',
-      actual_end: actualEnd + ':00',
-    });
-
-    if (result.success) {
-      setUpdateTrigger(prev => prev + 1);
-    } else {
-      alert(result.error || 'Ошибка добавления');
       throw new Error(result.error);
     }
   };
@@ -569,11 +551,12 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     }
   };
 
+  // ИСПРАВЛЕНО: убран updateTrigger из зависимостей
   useEffect(() => {
     if (activeTab === 'salary' && dataManager) {
       calculateSalary();
     }
-  }, [activeTab, selectedYear, selectedMonth, salaryPeriod, dataManager, updateTrigger]);
+  }, [activeTab, selectedYear, selectedMonth, salaryPeriod, dataManager]);
 
   const handleSetStudyGoal = async () => {
     if (!dataManager || !selectedAttractionId) {
@@ -654,6 +637,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               scheduleForMonth={scheduleForMonth}
               dataManager={dataManager}
               openTimeLogModal={openTimeLogModal}
+              onUpdateActualTime={handleUpdateActualTime}
             />
 
             <EmployeeSalary
@@ -666,8 +650,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
               salaryData={salaryData}
               loadingSalary={loadingSalary}
               scheduleWithLogs={scheduleWithLogs}
-              onUpdateActualTime={handleUpdateActualTime}
-              onAddActualTime={handleAddActualTime}
             />
           </div>
 
@@ -767,6 +749,7 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                 scheduleForMonth={scheduleForMonth}
                 dataManager={dataManager}
                 openTimeLogModal={openTimeLogModal}
+                onUpdateActualTime={handleUpdateActualTime}
               />
             </div>
           )}
@@ -783,8 +766,6 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
                 salaryData={salaryData}
                 loadingSalary={loadingSalary}
                 scheduleWithLogs={scheduleWithLogs}
-                onUpdateActualTime={handleUpdateActualTime}
-                onAddActualTime={handleAddActualTime}
               />
             </div>
           )}
