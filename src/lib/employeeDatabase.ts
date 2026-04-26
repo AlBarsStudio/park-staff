@@ -1045,67 +1045,68 @@ class EmployeeDataManager {
     return { success: true, data: inserted };
   }
 
-  async updateActualWorkLog(data: {
-    id: number;
-    actual_start: string;
-    actual_end: string;
-  }): Promise<{ success: boolean; error?: string; data?: ActualWorkLog }> {
-    // Проверка существования записи
-    const existing = this.cache.actualWorkLogs.find(log => log.id === data.id);
-    if (!existing) {
-      return { success: false, error: 'Запись не найдена' };
-    }
+// В методе updateActualWorkLog убираем updated_at
 
-    // Валидация времени
-    if (data.actual_start >= data.actual_end) {
-      return { success: false, error: 'Время окончания должно быть позже начала' };
-    }
-
-    // Находим расписание для логирования
-    const schedule = this.cache.scheduleAssignments.find(
-      s => s.id === existing.schedule_assignment_id
-    );
-
-    const updateData = {
-      actual_start: data.actual_start,
-      actual_end: data.actual_end,
-      updated_at: getCurrentDateTime(),
-    };
-
-    const { data: updated, error } = await supabase
-      .from('actual_work_log')
-      .update(updateData)
-      .eq('id', data.id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('❌ Ошибка обновления фактического времени:', error);
-      
-      // Логируем ошибку
-      await logEmployeeActivity(
-        this.employeeId,
-        'actual_time_update_error',
-        `Ошибка обновления времени для смены ${schedule?.work_date}: ${error.message}`
-      );
-      
-      return { success: false, error: error.message };
-    }
-
-    // Получаем название аттракциона
-    const attractionName = schedule?.attraction?.name || 'Неизвестный аттракцион';
-    
-    // Логирование успешного обновления
-    await logEmployeeActivity(
-      this.employeeId,
-      'actual_time_update',
-      `Обновлено фактическое время для смены ${schedule?.work_date} на "${attractionName}": ${data.actual_start} - ${data.actual_end}`
-    );
-
-    console.log('✅ Фактическое время обновлено:', updated.id);
-    return { success: true, data: updated };
+async updateActualWorkLog(data: {
+  id: number;
+  actual_start: string;
+  actual_end: string;
+}): Promise<{ success: boolean; error?: string; data?: ActualWorkLog }> {
+  // Проверка существования записи
+  const existing = this.cache.actualWorkLogs.find(log => log.id === data.id);
+  if (!existing) {
+    return { success: false, error: 'Запись не найдена' };
   }
 
+  // Валидация времени
+  if (data.actual_start >= data.actual_end) {
+    return { success: false, error: 'Время окончания должно быть позже начала' };
+  }
+
+  // Находим расписание для логирования
+  const schedule = this.cache.scheduleAssignments.find(
+    s => s.id === existing.schedule_assignment_id
+  );
+
+  const updateData = {
+    actual_start: data.actual_start,
+    actual_end: data.actual_end,
+    // УБРАЛИ updated_at, так как его нет в таблице
+  };
+
+  const { data: updated, error } = await supabase
+    .from('actual_work_log')
+    .update(updateData)
+    .eq('id', data.id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('❌ Ошибка обновления фактического времени:', error);
+    
+    // Логируем ошибку
+    await logEmployeeActivity(
+      this.employeeId,
+      'actual_time_update_error',
+      `Ошибка обновления времени для смены ${schedule?.work_date}: ${error.message}`
+    );
+    
+    return { success: false, error: error.message };
+  }
+
+  // Получаем название аттракциона
+  const attractionName = schedule?.attraction?.name || 'Неизвестный аттракцион';
+  
+  // Логирование успешного обновления
+  await logEmployeeActivity(
+    this.employeeId,
+    'actual_time_update',
+    `Обновлено фактическое время для смены ${schedule?.work_date} на "${attractionName}": ${data.actual_start} - ${data.actual_end}`
+  );
+
+  console.log('✅ Фактическое время обновлено:', updated.id);
+  return { success: true, data: updated };
+}
   async setStudyGoal(attractionId: number): Promise<{ success: boolean; error?: string }> {
     const attraction = this.cache.attractions.get(attractionId);
     if (!attraction) {
