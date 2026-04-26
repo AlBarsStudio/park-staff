@@ -1,4 +1,4 @@
-// EmployeeSalary.tsx
+// EmployeeSalary.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -35,12 +35,12 @@ interface EmployeeSalaryProps {
   setSalaryPeriod: (period: 'first' | 'second') => void;
   salaryData: SalaryData | null;
   loadingSalary: boolean;
-  scheduleWithLogs: Array<{
+  scheduleWithLogs?: Array<{
     schedule: any;
     log: any | null;
   }>;
-  onUpdateActualTime: (logId: number, actualStart: string, actualEnd: string) => Promise<void>;
-  onAddActualTime: (scheduleId: number, actualStart: string, actualEnd: string) => Promise<void>;
+  onUpdateActualTime?: (logId: number, actualStart: string, actualEnd: string) => Promise<void>;
+  onAddActualTime?: (scheduleId: number, actualStart: string, actualEnd: string) => Promise<void>;
 }
 
 export function EmployeeSalary({
@@ -52,7 +52,7 @@ export function EmployeeSalary({
   setSalaryPeriod,
   salaryData,
   loadingSalary,
-  scheduleWithLogs,
+  scheduleWithLogs = [], // Значение по умолчанию
   onUpdateActualTime,
   onAddActualTime,
 }: EmployeeSalaryProps) {
@@ -86,7 +86,7 @@ export function EmployeeSalary({
   };
 
   const handleEditSave = async (logId: number) => {
-    if (!editStart || !editEnd) return;
+    if (!editStart || !editEnd || !onUpdateActualTime) return;
     
     setUpdating(true);
     try {
@@ -96,19 +96,6 @@ export function EmployeeSalary({
       setEditEnd('');
     } catch (error) {
       console.error('Ошибка обновления времени:', error);
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const handleAddTime = async (scheduleId: number, start: string, end: string) => {
-    if (!start || !end) return;
-    
-    setUpdating(true);
-    try {
-      await onAddActualTime(scheduleId, start, end);
-    } catch (error) {
-      console.error('Ошибка добавления времени:', error);
     } finally {
       setUpdating(false);
     }
@@ -196,16 +183,12 @@ export function EmployeeSalary({
         </div>
 
         {/* Work logs list with edit functionality */}
-        <div className="space-y-2">
-          <h4 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>
-            Отработанное время
-          </h4>
-          {scheduleWithLogs.length === 0 ? (
-            <div className="text-center py-6" style={{ color: 'var(--text-muted)' }}>
-              Нет смен
-            </div>
-          ) : (
-            scheduleWithLogs.map(({ schedule, log }) => (
+        {scheduleWithLogs && scheduleWithLogs.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>
+              Отработанное время
+            </h4>
+            {scheduleWithLogs.map(({ schedule, log }) => (
               <Card
                 key={schedule.id}
                 padding="sm"
@@ -290,7 +273,7 @@ export function EmployeeSalary({
                     )}
                   </div>
 
-                  {log && editingLogId !== log.id && (
+                  {log && editingLogId !== log.id && onUpdateActualTime && (
                     <button
                       onClick={() => handleEditStart(log)}
                       className="p-1 rounded hover:bg-black/5"
@@ -301,9 +284,9 @@ export function EmployeeSalary({
                   )}
                 </div>
               </Card>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Loading */}
         {loadingSalary && (
