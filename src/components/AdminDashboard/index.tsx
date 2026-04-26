@@ -6,7 +6,7 @@ import { Card } from '../ui';
 import { AdminStats } from './AdminStats';
 import { AdminTabs } from './AdminTabs';
 import { ShiftsManagement } from './ShiftsManagement';
-import { ScheduleGenerator } from '../ScheduleGenerator';
+import { ScheduleGenerator } from './ScheduleGenerator';
 import { ManualScheduleComposer } from './ManualScheduleComposer';
 import { ScheduleView } from './ScheduleView';
 import { EmployeesList } from './EmployeesList';
