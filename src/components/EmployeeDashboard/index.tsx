@@ -95,6 +95,8 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
   const [goalError, setGoalError] = useState('');
   
   // Salary
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [salaryPeriod, setSalaryPeriod] = useState<'first' | 'second'>('first');
   const [salaryData, setSalaryData] = useState<any>(null);
   const [loadingSalary, setLoadingSalary] = useState(false);
@@ -280,6 +282,33 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     new Set(mergedAvailability.map(s => s.work_date)), 
     [mergedAvailability]
   );
+
+  // НОВОЕ: Расчет scheduleWithLogs для выбранного периода зарплаты
+  const scheduleWithLogs = useMemo(() => {
+    if (!dataManager) return [];
+
+    let startDate: Date, endDate: Date;
+
+    if (salaryPeriod === 'first') {
+      startDate = new Date(selectedYear, selectedMonth, 7);
+      endDate = new Date(selectedYear, selectedMonth, 21);
+    } else {
+      startDate = new Date(selectedYear, selectedMonth, 22);
+      endDate = new Date(selectedYear, selectedMonth + 1, 6);
+    }
+
+    const startStr = startDate.toISOString().split('T')[0];
+    const endStr = endDate.toISOString().split('T')[0];
+
+    const schedulesInPeriod = allSchedules.filter(s => {
+      return s.work_date >= startStr && s.work_date <= endStr;
+    });
+
+    return schedulesInPeriod.map(schedule => ({
+      schedule,
+      log: dataManager.getActualWorkLog(schedule.id) || null,
+    }));
+  }, [dataManager, allSchedules, selectedYear, selectedMonth, salaryPeriod, updateTrigger]);
 
   // Handlers
   const handleAddShiftToPending = useCallback(() => {
@@ -488,13 +517,49 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
     setSavingTimeLog(false);
   };
 
-  const calculateSalary = async (period: 'first' | 'second') => {
+  // НОВОЕ: Обработчик обновления фактического времени
+  const handleUpdateActualTime = async (logId: number, actualStart: string, actualEnd: string) => {
+    if (!dataManager) return;
+
+    const result = await dataManager.updateActualWorkLog({
+      id: logId,
+      actual_start: actualStart + ':00',
+      actual_end: actualEnd + ':00',
+    });
+
+    if (result.success) {
+      setUpdateTrigger(prev => prev + 1);
+    } else {
+      alert(result.error || 'Ошибка обновления');
+      throw new Error(result.error);
+    }
+  };
+
+  // НОВОЕ: Обработчик добавления фактического времени
+  const handleAddActualTime = async (scheduleId: number, actualStart: string, actualEnd: string) => {
+    if (!dataManager) return;
+
+    const result = await dataManager.addActualWorkLog({
+      schedule_assignment_id: scheduleId,
+      actual_start: actualStart + ':00',
+      actual_end: actualEnd + ':00',
+    });
+
+    if (result.success) {
+      setUpdateTrigger(prev => prev + 1);
+    } else {
+      alert(result.error || 'Ошибка добавления');
+      throw new Error(result.error);
+    }
+  };
+
+  const calculateSalary = async () => {
     if (!dataManager) return;
 
     setLoadingSalary(true);
     
     try {
-      const result = await dataManager.calculateSalary(period);
+      const result = await dataManager.calculateSalary(selectedYear, selectedMonth, salaryPeriod);
       setSalaryData(result);
     } catch (error) {
       console.error('❌ Ошибка расчёта зарплаты:', error);
@@ -506,9 +571,9 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
 
   useEffect(() => {
     if (activeTab === 'salary' && dataManager) {
-      calculateSalary(salaryPeriod);
+      calculateSalary();
     }
-  }, [activeTab, salaryPeriod, dataManager]);
+  }, [activeTab, selectedYear, selectedMonth, salaryPeriod, dataManager, updateTrigger]);
 
   const handleSetStudyGoal = async () => {
     if (!dataManager || !selectedAttractionId) {
@@ -592,10 +657,17 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
             />
 
             <EmployeeSalary
+              selectedYear={selectedYear}
+              setSelectedYear={setSelectedYear}
+              selectedMonth={selectedMonth}
+              setSelectedMonth={setSelectedMonth}
               salaryPeriod={salaryPeriod}
               setSalaryPeriod={setSalaryPeriod}
               salaryData={salaryData}
               loadingSalary={loadingSalary}
+              scheduleWithLogs={scheduleWithLogs}
+              onUpdateActualTime={handleUpdateActualTime}
+              onAddActualTime={handleAddActualTime}
             />
           </div>
 
@@ -702,10 +774,17 @@ export function EmployeeDashboard({ profile }: EmployeeDashboardProps) {
           {activeTab === 'salary' && (
             <div className="p-3">
               <EmployeeSalary
+                selectedYear={selectedYear}
+                setSelectedYear={setSelectedYear}
+                selectedMonth={selectedMonth}
+                setSelectedMonth={setSelectedMonth}
                 salaryPeriod={salaryPeriod}
                 setSalaryPeriod={setSalaryPeriod}
                 salaryData={salaryData}
                 loadingSalary={loadingSalary}
+                scheduleWithLogs={scheduleWithLogs}
+                onUpdateActualTime={handleUpdateActualTime}
+                onAddActualTime={handleAddActualTime}
               />
             </div>
           )}
