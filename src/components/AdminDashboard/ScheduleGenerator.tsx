@@ -25,9 +25,9 @@ import {
 } from 'lucide-react';
 import { format, addDays, parseISO, isWeekend } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Button } from './ui/Button';
-import { Card } from './ui/Card';
-import { Badge } from './ui/Badge';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
 import { cn } from '../utils/cn';
 
 // ============================================================
