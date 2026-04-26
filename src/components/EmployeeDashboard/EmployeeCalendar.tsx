@@ -1,6 +1,6 @@
 import { format, addMonths, subMonths } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Save, AlertTriangle } from 'lucide-react';
 import { Card, Button } from '../ui';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import type { EmployeeAvailability, EmployeeDataManager } from '../../lib/employeeDatabase';
@@ -15,6 +15,9 @@ interface EmployeeCalendarProps {
   dataManager: EmployeeDataManager;
   openAddModal: (dateStr: string) => void;
   openViewModal: (shift: EmployeeAvailability) => void;
+  isSaving: boolean;
+  onSave: () => void;
+  onCancel: () => void;
 }
 
 export function EmployeeCalendar({
@@ -26,6 +29,9 @@ export function EmployeeCalendar({
   dataManager,
   openAddModal,
   openViewModal,
+  isSaving,
+  onSave,
+  onCancel,
 }: EmployeeCalendarProps) {
   const isMobile = useIsMobile();
 
@@ -38,6 +44,8 @@ export function EmployeeCalendar({
   const days = [];
 
   const currentMonthLabel = format(currentDate, 'LLLL yyyy', { locale: ru });
+  const hasChanges = pendingChanges.additions.length > 0 || pendingChanges.deletions.length > 0;
+  const changesText = `${pendingChanges.additions.length > 0 ? `+${pendingChanges.additions.length}` : ''}${pendingChanges.deletions.length > 0 ? ` -${pendingChanges.deletions.length}` : ''}`;
 
   // Empty cells before first day
   for (let i = 0; i < (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1); i++) {
@@ -149,6 +157,24 @@ export function EmployeeCalendar({
         />
       </div>
 
+      {/* Optimization Tip */}
+      <div 
+        className="mb-3 p-3 rounded-lg border"
+        style={{
+          backgroundColor: 'var(--info-light)',
+          borderColor: 'var(--info)',
+          fontSize: 'clamp(0.75rem, 2vw, 0.875rem)',
+          color: 'var(--text-muted)',
+        }}
+      >
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'var(--info)' }} />
+          <p>
+            Для оптимизации запросов к базе данных рекомендуется добавить необходимое количество смен, а затем нажать кнопку "Сохранить".
+          </p>
+        </div>
+      </div>
+
       {/* Calendar Card */}
       <Card padding={isMobile ? 'sm' : 'md'} className="w-full">
         <div className="space-y-3 w-full">
@@ -191,13 +217,60 @@ export function EmployeeCalendar({
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--warning)' }} />
               <span>Неполная</span>
             </div>
-            {(pendingChanges.additions.length > 0 || pendingChanges.deletions.length > 0) && (
+            {hasChanges && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'var(--warning)', boxShadow: '0 0 0 2px var(--warning)' }} />
                 <span>Не сохранено</span>
               </div>
             )}
           </div>
+
+          {/* Save Button Section */}
+          {hasChanges && (
+            <div 
+              className="mt-4 p-4 rounded-lg border-2"
+              style={{
+                background: 'linear-gradient(135deg, var(--warning-light), var(--warning-light))',
+                borderColor: 'var(--warning)',
+              }}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <AlertTriangle className="h-5 w-5 animate-pulse" style={{ color: 'var(--warning)' }} />
+                <div>
+                  <p className="font-bold text-sm" style={{ color: 'var(--text)' }}>
+                    Несохраненные изменения
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {changesText} операций
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={onCancel}
+                  variant="secondary"
+                  size={isMobile ? 'sm' : 'md'}
+                  className="flex-1"
+                >
+                  Отменить
+                </Button>
+                <Button
+                  onClick={onSave}
+                  variant="primary"
+                  size={isMobile ? 'sm' : 'md'}
+                  loading={isSaving}
+                  icon={<Save className="h-4 w-4" />}
+                  className="flex-1"
+                  style={{
+                    backgroundColor: 'var(--warning)',
+                    borderColor: 'var(--warning)',
+                  }}
+                >
+                  Сохранить
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     </>
