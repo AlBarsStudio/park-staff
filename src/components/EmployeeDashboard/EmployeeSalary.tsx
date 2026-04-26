@@ -61,6 +61,12 @@ export function EmployeeSalary({
     'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
   ];
 
+  // Безопасное получение времени
+  const formatTime = (time: string | null | undefined): string => {
+    if (!time) return '00:00';
+    return time.slice(0, 5);
+  };
+
   return (
     <Card padding={isMobile ? 'sm' : 'md'} className="w-full">
       {isMobile ? (
@@ -168,12 +174,12 @@ export function EmployeeSalary({
                       {schedule.attraction?.name || 'Аттракцион'}
                     </div>
                     <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                      По расписанию: {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
+                      По расписанию: {formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}
                     </div>
                     
                     {log && (
                       <div className="text-xs mt-1 font-medium" style={{ color: 'var(--success)' }}>
-                        Фактически: {log.actual_start.slice(0, 5)} - {log.actual_end.slice(0, 5)}
+                        Фактически: {formatTime(log.actual_start)} - {formatTime(log.actual_end)}
                       </div>
                     )}
 
