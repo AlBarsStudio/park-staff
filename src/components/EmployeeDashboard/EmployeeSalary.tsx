@@ -1,9 +1,6 @@
-// EmployeeSalary.tsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
-
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { DollarSign, Loader2, Edit2, Check, X } from 'lucide-react';
-import { useState } from 'react';
+import { DollarSign, Loader2 } from 'lucide-react';
 import { Card, Button } from '../ui';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 
@@ -39,8 +36,6 @@ interface EmployeeSalaryProps {
     schedule: any;
     log: any | null;
   }>;
-  onUpdateActualTime?: (logId: number, actualStart: string, actualEnd: string) => Promise<void>;
-  onAddActualTime?: (scheduleId: number, actualStart: string, actualEnd: string) => Promise<void>;
 }
 
 export function EmployeeSalary({
@@ -52,16 +47,9 @@ export function EmployeeSalary({
   setSalaryPeriod,
   salaryData,
   loadingSalary,
-  scheduleWithLogs = [], // Значение по умолчанию
-  onUpdateActualTime,
-  onAddActualTime,
+  scheduleWithLogs = [],
 }: EmployeeSalaryProps) {
   const isMobile = useIsMobile();
-  
-  const [editingLogId, setEditingLogId] = useState<number | null>(null);
-  const [editStart, setEditStart] = useState('');
-  const [editEnd, setEditEnd] = useState('');
-  const [updating, setUpdating] = useState(false);
 
   // Генерация списка годов (текущий +/- 2 года)
   const currentYear = new Date().getFullYear();
@@ -72,34 +60,6 @@ export function EmployeeSalary({
     'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
     'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
   ];
-
-  const handleEditStart = (log: any) => {
-    setEditingLogId(log.id);
-    setEditStart(log.actual_start);
-    setEditEnd(log.actual_end);
-  };
-
-  const handleEditCancel = () => {
-    setEditingLogId(null);
-    setEditStart('');
-    setEditEnd('');
-  };
-
-  const handleEditSave = async (logId: number) => {
-    if (!editStart || !editEnd || !onUpdateActualTime) return;
-    
-    setUpdating(true);
-    try {
-      await onUpdateActualTime(logId, editStart, editEnd);
-      setEditingLogId(null);
-      setEditStart('');
-      setEditEnd('');
-    } catch (error) {
-      console.error('Ошибка обновления времени:', error);
-    } finally {
-      setUpdating(false);
-    }
-  };
 
   return (
     <Card padding={isMobile ? 'sm' : 'md'} className="w-full">
@@ -182,7 +142,7 @@ export function EmployeeSalary({
           </Button>
         </div>
 
-        {/* Work logs list with edit functionality */}
+        {/* Work logs list - ТОЛЬКО ПРОСМОТР */}
         {scheduleWithLogs && scheduleWithLogs.length > 0 && (
           <div className="space-y-2">
             <h4 className="font-semibold text-sm" style={{ color: 'var(--text)' }}>
@@ -208,61 +168,12 @@ export function EmployeeSalary({
                       {schedule.attraction?.name || 'Аттракцион'}
                     </div>
                     <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                      По расписанию: {schedule.start_time} - {schedule.end_time}
+                      По расписанию: {schedule.start_time.slice(0, 5)} - {schedule.end_time.slice(0, 5)}
                     </div>
                     
-                    {log && editingLogId !== log.id && (
+                    {log && (
                       <div className="text-xs mt-1 font-medium" style={{ color: 'var(--success)' }}>
-                        Фактически: {log.actual_start} - {log.actual_end}
-                      </div>
-                    )}
-
-                    {log && editingLogId === log.id && (
-                      <div className="mt-2 space-y-2">
-                        <div className="flex gap-2">
-                          <input
-                            type="time"
-                            value={editStart}
-                            onChange={(e) => setEditStart(e.target.value)}
-                            className="flex-1 px-2 py-1 rounded border text-xs"
-                            style={{
-                              backgroundColor: 'var(--surface)',
-                              borderColor: 'var(--border)',
-                              color: 'var(--text)',
-                            }}
-                          />
-                          <input
-                            type="time"
-                            value={editEnd}
-                            onChange={(e) => setEditEnd(e.target.value)}
-                            className="flex-1 px-2 py-1 rounded border text-xs"
-                            style={{
-                              backgroundColor: 'var(--surface)',
-                              borderColor: 'var(--border)',
-                              color: 'var(--text)',
-                            }}
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => handleEditSave(log.id)}
-                            variant="primary"
-                            size="sm"
-                            className="flex-1"
-                            disabled={updating}
-                          >
-                            {updating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                          </Button>
-                          <Button
-                            onClick={handleEditCancel}
-                            variant="secondary"
-                            size="sm"
-                            className="flex-1"
-                            disabled={updating}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
+                        Фактически: {log.actual_start.slice(0, 5)} - {log.actual_end.slice(0, 5)}
                       </div>
                     )}
 
@@ -272,16 +183,6 @@ export function EmployeeSalary({
                       </div>
                     )}
                   </div>
-
-                  {log && editingLogId !== log.id && onUpdateActualTime && (
-                    <button
-                      onClick={() => handleEditStart(log)}
-                      className="p-1 rounded hover:bg-black/5"
-                      style={{ color: 'var(--primary)' }}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                  )}
                 </div>
               </Card>
             ))}
