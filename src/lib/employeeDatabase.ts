@@ -1,3 +1,5 @@
+// employeeData.ts
+
 import { supabase } from './supabase';
 
 // ======================== КОНСТАНТЫ ========================
@@ -11,7 +13,7 @@ const DATA_RANGE = {
   AVAILABILITY_FUTURE_DAYS: 90,    // Будущие смены: 3 месяца вперед
   SCHEDULE_PAST_MONTHS: 2,         // История расписания: 2 месяца назад
   SCHEDULE_FUTURE_MONTHS: 2,       // Будущее расписание: 2 месяца вперед
-  ACTUAL_LOGS_MONTHS: 3,           // Фактические отметки: 3 месяца назад
+  ACTUAL_LOGS_MONTHS: 6,           // Фактические отметки: 6 месяцев назад (увеличено для истории зарплаты)
 };
 
 // ======================== ТИПЫ ========================
@@ -71,6 +73,7 @@ export interface ActualWorkLog {
   actual_start: string;
   actual_end: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface EmployeeStudyGoal {
@@ -1042,6 +1045,67 @@ class EmployeeDataManager {
     return { success: true, data: inserted };
   }
 
+  async updateActualWorkLog(data: {
+    id: number;
+    actual_start: string;
+    actual_end: string;
+  }): Promise<{ success: boolean; error?: string; data?: ActualWorkLog }> {
+    // Проверка существования записи
+    const existing = this.cache.actualWorkLogs.find(log => log.id === data.id);
+    if (!existing) {
+      return { success: false, error: 'Запись не найдена' };
+    }
+
+    // Валидация времени
+    if (data.actual_start >= data.actual_end) {
+      return { success: false, error: 'Время окончания должно быть позже начала' };
+    }
+
+    // Находим расписание для логирования
+    const schedule = this.cache.scheduleAssignments.find(
+      s => s.id === existing.schedule_assignment_id
+    );
+
+    const updateData = {
+      actual_start: data.actual_start,
+      actual_end: data.actual_end,
+      updated_at: getCurrentDateTime(),
+    };
+
+    const { data: updated, error } = await supabase
+      .from('actual_work_log')
+      .update(updateData)
+      .eq('id', data.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Ошибка обновления фактического времени:', error);
+      
+      // Логируем ошибку
+      await logEmployeeActivity(
+        this.employeeId,
+        'actual_time_update_error',
+        `Ошибка обновления времени для смены ${schedule?.work_date}: ${error.message}`
+      );
+      
+      return { success: false, error: error.message };
+    }
+
+    // Получаем название аттракциона
+    const attractionName = schedule?.attraction?.name || 'Неизвестный аттракцион';
+    
+    // Логирование успешного обновления
+    await logEmployeeActivity(
+      this.employeeId,
+      'actual_time_update',
+      `Обновлено фактическое время для смены ${schedule?.work_date} на "${attractionName}": ${data.actual_start} - ${data.actual_end}`
+    );
+
+    console.log('✅ Фактическое время обновлено:', updated.id);
+    return { success: true, data: updated };
+  }
+
   async setStudyGoal(attractionId: number): Promise<{ success: boolean; error?: string }> {
     const attraction = this.cache.attractions.get(attractionId);
     if (!attraction) {
@@ -1167,6 +1231,11 @@ class EmployeeDataManager {
     };
   }
 
+  canEditActualTime(log: ActualWorkLog): { allowed: boolean; reason?: string } {
+    // Сотрудник может редактировать свои отметки в любое время
+    return { allowed: true };
+  }
+
   isDateActive(dateStr: string): boolean {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
@@ -1182,7 +1251,7 @@ class EmployeeDataManager {
 
   // ==================== РАСЧЁТ ЗАРПЛАТЫ ====================
 
-  async calculateSalary(period: 'first' | 'second'): Promise<{
+  async calculateSalary(year: number, month: number, period: 'first' | 'second'): Promise<{
     days: Array<{
       date: string;
       attractions: Array<{
@@ -1196,31 +1265,35 @@ class EmployeeDataManager {
     }>;
     total: number;
   }> {
-    const now = new Date();
     let startDate: Date, endDate: Date;
 
     if (period === 'first') {
-      // 7-21 число текущего месяца
-      startDate = new Date(now.getFullYear(), now.getMonth(), 7);
-      endDate = new Date(now.getFullYear(), now.getMonth(), 21);
+      // 7-21 число выбранного месяца
+      startDate = new Date(year, month, 7);
+      endDate = new Date(year, month, 21);
     } else {
-      // 22 число текущего месяца - 6 число следующего
-      startDate = new Date(now.getFullYear(), now.getMonth(), 22);
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 6);
+      // 22 число выбранного месяца - 6 число следующего
+      startDate = new Date(year, month, 22);
+      endDate = new Date(year, month + 1, 6);
     }
 
     const startStr = startDate.toISOString().split('T')[0];
     const endStr = endDate.toISOString().split('T')[0];
 
     // Получаем смены за период из кэша
-    const schedules = this.getScheduleAssignments(startStr, endStr);
+    let schedules = this.getScheduleAssignments(startStr, endStr);
+
+    // Если в кэше нет данных за этот период, загружаем из БД
+    if (schedules.length === 0) {
+      schedules = await this.loadHistoricalSchedule(startStr, endStr);
+    }
 
     if (schedules.length === 0) {
       // Логируем просмотр зарплаты
       await logEmployeeActivity(
         this.employeeId,
         'salary_view',
-        `Просмотр зарплаты за ${period === 'first' ? 'первую' : 'вторую'} половину месяца (${startStr} - ${endStr}): нет смен`
+        `Просмотр зарплаты за ${period === 'first' ? 'первую' : 'вторую'} половину ${month + 1}.${year} (${startStr} - ${endStr}): нет смен`
       );
       
       return { days: [], total: 0 };
@@ -1281,7 +1354,7 @@ class EmployeeDataManager {
     await logEmployeeActivity(
       this.employeeId,
       'salary_view',
-      `Просмотр зарплаты за ${period === 'first' ? 'первую' : 'вторую'} половину месяца (${startStr} - ${endStr}): ${totalSalary.toFixed(2)} руб.`
+      `Просмотр зарплаты за ${period === 'first' ? 'первую' : 'вторую'} половину ${month + 1}.${year} (${startStr} - ${endStr}): ${totalSalary.toFixed(2)} руб.`
     );
 
     return { days: daysArray, total: totalSalary };
