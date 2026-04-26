@@ -15,9 +15,9 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { dbService } from '../lib/DatabaseService';
-import type { Employee, Attraction } from '../lib/DatabaseService';
-import { UserProfile } from '../types';
+import { dbService } from '../../lib/DatabaseService';
+import type { Employee, Attraction } from '../../lib/DatabaseService';
+import { UserProfile } from '../../types';
 import {
   Loader2, Wand2, Save, GripVertical, Plus, X, CheckSquare, Square,
   AlertCircle, Calendar, Users, Filter, Clock, Sparkles, TrendingUp,
@@ -28,7 +28,7 @@ import { ru } from 'date-fns/locale';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { cn } from '../utils/cn';
+import { cn } from '../../utils/cn';
 
 // ============================================================
 // ТИПЫ ДАННЫХ
