@@ -12,7 +12,6 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 import { EmployeeDashboardModals } from './EmployeeDashboardModals';
-import { SaveChangesButton } from './SaveChangesButton';
 import { EmployeeCalendar } from './EmployeeCalendar';
 import { EmployeeShiftsTable } from './EmployeeShiftsTable';
 import { EmployeeScheduleTable } from './EmployeeScheduleTable';
