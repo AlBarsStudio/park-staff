@@ -8,6 +8,7 @@
  * - Управление работающими аттракционами
  * - Назначение сотрудников на аттракционы с учетом приоритетов
  * - Сохранение графика на выбранную дату
+ * - Обход временных ограничений для супер-админа
  * =====================================================================
  */
 
@@ -15,7 +16,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar, ChevronLeft, ChevronRight, CalendarDays, Loader2,
   AlertCircle, Gamepad2, Users, MessageSquare, Save, X,
-  PlusCircle, MinusCircle, CheckCircle
+  PlusCircle, MinusCircle, CheckCircle, Shield
 } from 'lucide-react';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval,
@@ -28,6 +29,7 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Modal } from '../ui/Modal';
 import { cn } from '../../utils/cn';
+
 // ============================================================
 // Типы
 // ============================================================
@@ -36,6 +38,7 @@ interface ManualScheduleComposerProps {
   attractions: Attraction[];
   scheduleAssignments: ScheduleAssignment[];
   onRefreshData: () => Promise<void>;
+  isSuperAdmin?: boolean;
 }
 
 interface EnrichedEmployee extends Employee {
@@ -58,7 +61,12 @@ interface AvailableEmployeesByPriority {
 // ============================================================
 // Вспомогательные функции
 // ============================================================
-function canEditSchedule(workDate: string): boolean {
+function canEditSchedule(workDate: string, isSuperAdmin: boolean = false): boolean {
+  // Супер-админ может редактировать всегда
+  if (isSuperAdmin) {
+    return true;
+  }
+
   const now = new Date();
   const date = new Date(workDate);
   const deadline = new Date(date);
@@ -74,6 +82,7 @@ export function ManualScheduleComposer({
   attractions,
   scheduleAssignments,
   onRefreshData,
+  isSuperAdmin = false,
 }: ManualScheduleComposerProps) {
   // ============================================================
   // Состояния календаря
@@ -292,12 +301,16 @@ export function ManualScheduleComposer({
 
     const dateStr = format(selectedDay, 'yyyy-MM-dd');
 
-    if (!canEditSchedule(dateStr)) {
+    if (!canEditSchedule(dateStr, isSuperAdmin)) {
       setError('Редактирование невозможно: прошло 23:00 предыдущего дня');
       return;
     }
 
-    if (!confirm(`Сохранить график на ${format(selectedDay, 'dd.MM.yyyy', { locale: ru })}?`)) {
+    const confirmMessage = isSuperAdmin 
+      ? `Сохранить график на ${format(selectedDay, 'dd.MM.yyyy', { locale: ru })}?\n\n⚠️ Режим супер-админа: редактирование без временных ограничений`
+      : `Сохранить график на ${format(selectedDay, 'dd.MM.yyyy', { locale: ru })}?`;
+
+    if (!confirm(confirmMessage)) {
       return;
     }
 
@@ -375,6 +388,12 @@ export function ManualScheduleComposer({
     return scheduleAssignments.some((a) => a.work_date === dateStr);
   };
 
+  // Проверка возможности редактирования выбранного дня
+  const canEditSelectedDay = useMemo(() => {
+    if (!selectedDay) return false;
+    return canEditSchedule(format(selectedDay, 'yyyy-MM-dd'), isSuperAdmin);
+  }, [selectedDay, isSuperAdmin]);
+
   // ============================================================
   // Рендер
   // ============================================================
@@ -389,6 +408,21 @@ export function ManualScheduleComposer({
             <Calendar className="h-5 w-5" style={{ color: 'var(--primary)' }} />
             Выбор даты
           </h3>
+
+          {/* Индикатор режима супер-админа */}
+          {isSuperAdmin && (
+            <div 
+              className="mb-4 p-3 rounded-lg flex items-center gap-2 text-sm"
+              style={{ 
+                backgroundColor: 'var(--warning-light)',
+                color: 'var(--warning)',
+                border: '1px solid var(--warning)'
+              }}
+            >
+              <Shield className="h-4 w-4 flex-shrink-0" />
+              <span className="font-medium">Режим супер-админа</span>
+            </div>
+          )}
 
           {/* Навигация по месяцам */}
           <div className="flex items-center justify-between mb-4">
@@ -471,9 +505,19 @@ export function ManualScheduleComposer({
           </div>
 
           {/* Легенда */}
-          <div className="mt-4 text-sm flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
-            <CheckCircle className="h-4 w-4" style={{ color: 'var(--success)' }} /> 
-            — график составлен
+          <div className="mt-4 space-y-2">
+            <div className="text-sm flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+              <CheckCircle className="h-4 w-4" style={{ color: 'var(--success)' }} /> 
+              — график составлен
+            </div>
+            {!isSuperAdmin && (
+              <div className="text-xs p-2 rounded" style={{ 
+                backgroundColor: 'var(--bg-tertiary)',
+                color: 'var(--text-subtle)'
+              }}>
+                Редактирование доступно до 23:00 предыдущего дня
+              </div>
+            )}
           </div>
         </Card>
 
@@ -494,13 +538,28 @@ export function ManualScheduleComposer({
             <Card className="space-y-6">
               {/* Заголовок и кнопка сохранения */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <h3 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
-                  График на {format(selectedDay, 'd MMMM yyyy', { locale: ru })}
-                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>
+                    График на {format(selectedDay, 'd MMMM yyyy', { locale: ru })}
+                  </h3>
+                  {isSuperAdmin && (
+                    <Badge variant="warning" className="flex items-center gap-1">
+                      <Shield className="h-3 w-3" />
+                      Супер-админ
+                    </Badge>
+                  )}
+                  {!canEditSelectedDay && !isSuperAdmin && (
+                    <Badge variant="error">
+                      <AlertCircle className="h-3 w-3 mr-1" />
+                      Редактирование недоступно
+                    </Badge>
+                  )}
+                </div>
                 <Button
                   variant="success"
                   onClick={handleSaveSchedule}
                   loading={saving}
+                  disabled={!canEditSelectedDay && !isSuperAdmin}
                   icon={<Save className="h-4 w-4" />}
                 >
                   Сохранить график
@@ -521,6 +580,26 @@ export function ManualScheduleComposer({
                 </div>
               )}
 
+              {/* Предупреждение о недоступности редактирования */}
+              {!canEditSelectedDay && !isSuperAdmin && (
+                <div 
+                  className="p-3 rounded-lg text-sm flex items-start gap-2" 
+                  style={{ 
+                    backgroundColor: 'var(--warning-light)',
+                    color: 'var(--warning)',
+                    border: '1px solid var(--warning)'
+                  }}
+                >
+                  <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium">Редактирование недоступно</p>
+                    <p className="text-xs mt-1">
+                      График можно редактировать только до 23:00 предыдущего дня
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Работающие аттракционы */}
               <div>
                 <h4 className="font-medium mb-3 flex items-center gap-2" style={{ color: 'var(--text)' }}>
@@ -531,10 +610,15 @@ export function ManualScheduleComposer({
                   {attractions.map((attr) => (
                     <label
                       key={attr.id}
-                      className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition"
+                      className={cn(
+                        "flex items-center gap-2 p-2 rounded-lg cursor-pointer transition",
+                        (!canEditSelectedDay && !isSuperAdmin) && "opacity-50 cursor-not-allowed"
+                      )}
                       style={{ border: '1px solid var(--border)' }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                        if (canEditSelectedDay || isSuperAdmin) {
+                          e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                        }
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = 'transparent';
@@ -544,6 +628,7 @@ export function ManualScheduleComposer({
                         type="checkbox"
                         checked={workingAttractions.has(attr.id)}
                         onChange={() => toggleAttractionWorking(attr.id)}
+                        disabled={!canEditSelectedDay && !isSuperAdmin}
                         className="rounded focus:ring-2"
                         style={{ 
                           accentColor: 'var(--primary)',
@@ -658,6 +743,7 @@ export function ManualScheduleComposer({
                                 attractionName: attr.name,
                               })
                             }
+                            disabled={!canEditSelectedDay && !isSuperAdmin}
                             icon={<PlusCircle className="h-4 w-4" />}
                           >
                             Добавить
@@ -683,6 +769,7 @@ export function ManualScheduleComposer({
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => removeEmployeeFromAttraction(attrId, emp.id)}
+                                  disabled={!canEditSelectedDay && !isSuperAdmin}
                                   icon={<MinusCircle className="h-4 w-4" style={{ color: 'var(--error)' }} />}
                                 />
                               </div>
