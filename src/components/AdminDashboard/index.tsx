@@ -26,6 +26,9 @@ export interface AdminDashboardProps {
 // Основной компонент
 // ============================================================
 export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboardProps) {
+  // 🔍 ОТЛАДКА - можно удалить после проверки
+  console.log('🔐 AdminDashboard - isSuperAdmin:', isSuperAdmin);
+
   // ============================================================
   // Состояния навигации
   // ============================================================
@@ -180,6 +183,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
               attractions={attractions}
               scheduleAssignments={scheduleAssignments}
               onRefreshData={refreshData}
+              isSuperAdmin={isSuperAdmin}  {/* ✅ ИСПРАВЛЕНО */}
             />
           </Card>
         )}
