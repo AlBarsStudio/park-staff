@@ -183,7 +183,7 @@ export function AdminDashboard({ profile, isSuperAdmin = false }: AdminDashboard
               attractions={attractions}
               scheduleAssignments={scheduleAssignments}
               onRefreshData={refreshData}
-              isSuperAdmin={isSuperAdmin}  {/* ✅ ИСПРАВЛЕНО */}
+              isSuperAdmin={isSuperAdmin}
             />
           </Card>
         )}
