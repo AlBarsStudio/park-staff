@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 
 // ============================================================
-// ТИПЫ ДАННЫХ (согласно новой структуре YDB)
+// ТИПЫ ДАННЫХ (соответствуют твоей структуре в YDB)
 // ============================================================
 
 export interface Employee {
@@ -13,9 +13,8 @@ export interface Employee {
   telegram: string | null;
   vk: string | null;
   max: string | null;
-  access_level: number; // 1 - Super, 2 - Admin, 3 - Staff
+  access_level: number; // 1 - SuperAdmin, 2 - Admin, 3 - Staff
   created_at: string;
-  last_login?: string | null;
 }
 
 export interface Attraction {
@@ -34,12 +33,10 @@ export interface ScheduleAssignment {
   end_time: string | null;
   version_type: 'original' | 'edited';
   created_at: string;
-  // Данные из JOIN (заполняются на фронте или бэке)
+  // Обогащенные данные для UI
   employees?: { id: number; full_name: string } | null;
   attractions?: { id: number; name: string } | null;
 }
-
-// ... другие интерфейсы (Availability, ActivityLog) остаются похожими
 
 export class DatabaseService {
   private apiUrl = 'https://functions.yandexcloud.net/d4eg35h41j02l527l7jg';
@@ -53,28 +50,35 @@ export class DatabaseService {
 
   private isInitialized = false;
 
-  // Вспомогательный метод для запросов к Яндекс Функции
+  constructor() {
+    // При создании сервиса пытаемся восстановить пользователя из памяти
+    const saved = localStorage.getItem('park_staff_user');
+    if (saved) {
+      try {
+        this.data.currentEmployee = JSON.parse(saved);
+      } catch (e) {
+        localStorage.removeItem('park_staff_user');
+      }
+    }
+  }
+
+  // Универсальный метод запроса к Яндекс Функции
   private async fetchApi(action: string, payload: any = {}) {
     try {
       const response = await fetch(this.apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action,
-          ...payload
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...payload }),
       });
 
       if (!response.ok) {
         if (response.status === 401) return null;
-        throw new Error(`API Error: ${response.status}`);
+        throw new Error(`Ошибка API: ${response.status}`);
       }
 
       return await response.json();
     } catch (error) {
-      console.error(`[DB] Error performing action ${action}:`, error);
+      console.error(`[DatabaseService] Ошибка действия ${action}:`, error);
       return null;
     }
   }
@@ -84,52 +88,81 @@ export class DatabaseService {
   // ============================================================
 
   async login(login: string, password_hash: string): Promise<Employee | null> {
-    console.log('[DB] Попытка входа для:', login);
-    
+    console.log('[DB] Вход в систему...');
     const userData = await this.fetchApi('login', { login, password: password_hash });
 
     if (userData) {
-      // YDB возвращает ключи в разном регистре в зависимости от настроек, 
-      // приводим к нашему интерфейсу если нужно
-      this.data.currentEmployee = userData;
-      localStorage.setItem('park_staff_user', JSON.stringify(userData));
+      // Важно: приводим ID и уровень доступа к числу (YDB может вернуть строки)
+      const user: Employee = {
+        ...userData,
+        id: Number(userData.id),
+        access_level: Number(userData.access_level)
+      };
+
+      this.data.currentEmployee = user;
+      localStorage.setItem('park_staff_user', JSON.stringify(user));
       
-      // После успешного входа загружаем все данные
+      // Сразу загружаем все данные таблиц
       await this.refresh();
       this.isInitialized = true;
-      return userData;
+      return user;
     }
-
     return null;
   }
 
   // ============================================================
-  // ЗАГРУЗКА ДАННЫХ
+  // ЗАГРУЗКА И ОБРАБОТКА ДАННЫХ
   // ============================================================
 
   async refresh(): Promise<boolean> {
-    console.log('[DB] Загрузка данных из YDB...');
-    
-    // Запрашиваем все данные одним махом (нужно будет добавить этот action в Python функцию)
+    console.log('[DB] Загрузка таблиц из YDB...');
     const allData = await this.fetchApi('get_all_data');
 
     if (allData) {
-      this.data.employees = allData.employees || [];
-      this.data.attractions = allData.attractions || [];
-      this.data.scheduleAssignments = allData.scheduleAssignments || [];
-      // Обогащаем расписание именами
+      // 1. Обработка сотрудников
+      this.data.employees = (allData.employees || []).map((e: any) => ({
+        ...e,
+        id: Number(e.id),
+        access_level: Number(e.access_level)
+      }));
+
+      // 2. Обработка аттракционов
+      this.data.attractions = (allData.attractions || []).map((a: any) => ({
+        ...a,
+        id: Number(a.id),
+        min_staff_weekday: a.min_staff_weekday ? Number(a.min_staff_weekday) : null,
+        min_staff_weekend: a.min_staff_weekend ? Number(a.min_staff_weekend) : null,
+      }));
+
+      // 3. Обработка расписания
+      this.data.scheduleAssignments = (allData.scheduleAssignments || []).map((s: any) => ({
+        ...s,
+        id: Number(s.id),
+        employee_id: Number(s.employee_id),
+        attraction_id: Number(s.attraction_id)
+      }));
+
+      // Связываем таблицы между собой
       this.enrichData();
+      
+      this.isInitialized = true;
+      console.log('[DB] Данные успешно синхронизированы');
       return true;
     }
     return false;
   }
 
   private enrichData() {
-    this.data.scheduleAssignments = this.data.scheduleAssignments.map(item => ({
-      ...item,
-      employees: this.data.employees.find(e => e.id === item.employee_id) || null,
-      attractions: this.data.attractions.find(a => a.id === item.attraction_id) || null,
-    }));
+    this.data.scheduleAssignments = this.data.scheduleAssignments.map(item => {
+      const emp = this.data.employees.find(e => e.id === item.employee_id);
+      const attr = this.data.attractions.find(a => a.id === item.attraction_id);
+      
+      return {
+        ...item,
+        employees: emp ? { id: emp.id, full_name: emp.full_name } : null,
+        attractions: attr ? { id: attr.id, name: attr.name } : null,
+      };
+    });
   }
 
   // ============================================================
@@ -148,18 +181,23 @@ export class DatabaseService {
   }
 
   // ============================================================
-  // CRUD ОПЕРАЦИИ (Примеры)
+  // ОПЕРАЦИИ (Заготовки)
   // ============================================================
 
-  async updateEmployee(id: number, data: any) {
-    return await this.fetchApi('update_employee', { id, data });
+  async updateEmployee(id: number, updateData: any) {
+    return await this.fetchApi('update_employee', { id, data: updateData });
   }
 
-  async createSchedule(data: any) {
-    // Важно: в YDB нужно генерировать ID самостоятельно
-    const newId = Date.now(); 
-    return await this.fetchApi('create_schedule', { id: newId, ...data });
+  async createSchedule(assignment: any) {
+    // Для YDB генерируем уникальный числовой ID
+    const newId = Date.now() + Math.floor(Math.random() * 1000);
+    return await this.fetchApi('create_schedule', { ...assignment, id: newId });
+  }
+
+  async deleteScheduleAssignment(id: number) {
+    return await this.fetchApi('delete_schedule', { id });
   }
 }
 
+// Экспортируем синглтон для всего приложения
 export const dbService = new DatabaseService();
