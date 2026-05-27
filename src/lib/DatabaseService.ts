@@ -1,5 +1,8 @@
-// src/lib/DatabaseService.ts
 import { format } from 'date-fns';
+
+// ============================================================
+// ТИПЫ ДАННЫХ (согласно новой структуре YDB)
+// ============================================================
 
 export interface Employee {
   id: number;
@@ -12,6 +15,7 @@ export interface Employee {
   max: string | null;
   access_level: number; // 1 - Super, 2 - Admin, 3 - Staff
   created_at: string;
+  last_login?: string | null;
 }
 
 export interface Attraction {
@@ -21,55 +25,141 @@ export interface Attraction {
   min_staff_weekend: number | null;
 }
 
-// ... остальные интерфейсы (ScheduleAssignment и т.д.) оставить, убрав coefficient и auth_uid
+export interface ScheduleAssignment {
+  id: number;
+  work_date: string;
+  employee_id: number;
+  attraction_id: number;
+  start_time: string;
+  end_time: string | null;
+  version_type: 'original' | 'edited';
+  created_at: string;
+  // Данные из JOIN (заполняются на фронте или бэке)
+  employees?: { id: number; full_name: string } | null;
+  attractions?: { id: number; name: string } | null;
+}
+
+// ... другие интерфейсы (Availability, ActivityLog) остаются похожими
 
 export class DatabaseService {
+  private apiUrl = 'https://functions.yandexcloud.net/d4eg35h41j02l527l7jg';
+  
   private data = {
     employees: [] as Employee[],
     attractions: [] as Attraction[],
-    scheduleAssignments: [] as any[],
+    scheduleAssignments: [] as ScheduleAssignment[],
     currentEmployee: null as Employee | null,
   };
 
   private isInitialized = false;
 
-  // Упрощенный вход
-  async login(login: string, pass: string): Promise<Employee | null> {
+  // Вспомогательный метод для запросов к Яндекс Функции
+  private async fetchApi(action: string, payload: any = {}) {
     try {
-      // Здесь будет запрос к твоему API, который проверит логин и пароль в YDB
-      // Пока имитируем получение данных
-      const response = await fetch('/api/login', { 
-        method: 'POST', 
-        body: JSON.stringify({ login, pass }) 
+      const response = await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action,
+          ...payload
+        }),
       });
-      const user = await response.json();
 
-      if (user) {
-        this.data.currentEmployee = user;
-        await this.refresh();
-        this.isInitialized = true;
-        return user;
+      if (!response.ok) {
+        if (response.status === 401) return null;
+        throw new Error(`API Error: ${response.status}`);
       }
-      return null;
-    } catch (e) {
-      console.error("Login error", e);
+
+      return await response.json();
+    } catch (error) {
+      console.error(`[DB] Error performing action ${action}:`, error);
       return null;
     }
   }
 
-  async refresh(): Promise<boolean> {
-    // Здесь будут запросы к API для загрузки всех таблиц из YDB
-    // Например: const employees = await api.query("SELECT * FROM employees");
-    console.log('[DB] Данные обновлены из YDB');
-    return true;
+  // ============================================================
+  // АВТОРИЗАЦИЯ
+  // ============================================================
+
+  async login(login: string, password_hash: string): Promise<Employee | null> {
+    console.log('[DB] Попытка входа для:', login);
+    
+    const userData = await this.fetchApi('login', { login, password: password_hash });
+
+    if (userData) {
+      // YDB возвращает ключи в разном регистре в зависимости от настроек, 
+      // приводим к нашему интерфейсу если нужно
+      this.data.currentEmployee = userData;
+      localStorage.setItem('park_staff_user', JSON.stringify(userData));
+      
+      // После успешного входа загружаем все данные
+      await this.refresh();
+      this.isInitialized = true;
+      return userData;
+    }
+
+    return null;
   }
 
-  // Геттеры
+  // ============================================================
+  // ЗАГРУЗКА ДАННЫХ
+  // ============================================================
+
+  async refresh(): Promise<boolean> {
+    console.log('[DB] Загрузка данных из YDB...');
+    
+    // Запрашиваем все данные одним махом (нужно будет добавить этот action в Python функцию)
+    const allData = await this.fetchApi('get_all_data');
+
+    if (allData) {
+      this.data.employees = allData.employees || [];
+      this.data.attractions = allData.attractions || [];
+      this.data.scheduleAssignments = allData.scheduleAssignments || [];
+      // Обогащаем расписание именами
+      this.enrichData();
+      return true;
+    }
+    return false;
+  }
+
+  private enrichData() {
+    this.data.scheduleAssignments = this.data.scheduleAssignments.map(item => ({
+      ...item,
+      employees: this.data.employees.find(e => e.id === item.employee_id) || null,
+      attractions: this.data.attractions.find(a => a.id === item.attraction_id) || null,
+    }));
+  }
+
+  // ============================================================
+  // ГЕТТЕРЫ
+  // ============================================================
+
   getEmployees() { return this.data.employees; }
   getAttractions() { return this.data.attractions; }
+  getScheduleAssignments() { return this.data.scheduleAssignments; }
   getCurrentUser() { return this.data.currentEmployee; }
-  
-  isReady(): boolean { return this.isInitialized; }
+  isReady() { return this.isInitialized; }
+
+  getScheduleByDate(date: Date): ScheduleAssignment[] {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return this.data.scheduleAssignments.filter(s => s.work_date === dateStr);
+  }
+
+  // ============================================================
+  // CRUD ОПЕРАЦИИ (Примеры)
+  // ============================================================
+
+  async updateEmployee(id: number, data: any) {
+    return await this.fetchApi('update_employee', { id, data });
+  }
+
+  async createSchedule(data: any) {
+    // Важно: в YDB нужно генерировать ID самостоятельно
+    const newId = Date.now(); 
+    return await this.fetchApi('create_schedule', { id: newId, ...data });
+  }
 }
 
 export const dbService = new DatabaseService();
